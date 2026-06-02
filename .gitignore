@@ -1,0 +1,40 @@
+# Build outputs
+node_modules/
+dist/
+build/
+*.o
+*.so
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Env / secrets
+.env
+.env.local
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs / runtime
+*.log
+/tmp/
+/data/
+*.sqlite
+*.sqlite-journal
+
+# Art intake — only commit approved frames + atlases, not raw generations
+art/raw/
+art/rejected/
+
+# World snapshot files — keep schema but not state dumps
+worlds/snapshots/*.bin
+
+# Claude Code session metadata
+.claude/
