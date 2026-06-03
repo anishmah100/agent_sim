@@ -20,6 +20,7 @@ import { connectViewer, type ViewerClient } from "../net/ws";
 import type { TileMapData } from "../render/Tilemap";
 import type { EntityState } from "../render/Entity";
 import { Inspector } from "./Inspector";
+import { WorldRulebook } from "./WorldRulebook";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
@@ -29,6 +30,7 @@ export function App() {
   const [liveTick, setLiveTick] = createSignal<number | null>(null);
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<EntityState | null>(null);
+  const [rulebookOpen, setRulebookOpen] = createSignal(false);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
@@ -162,6 +164,21 @@ export function App() {
         <span style={{ "margin-left": "auto", display: "flex", gap: "8px" }}>
           <button
             type="button"
+            onClick={() => setRulebookOpen(true)}
+            style={{
+              padding: "4px 10px",
+              background: "#3a4466",
+              color: "#ead4aa",
+              border: "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            rulebook
+          </button>
+          <button
+            type="button"
             onClick={fitToWorld}
             style={{
               padding: "4px 10px",
@@ -179,6 +196,8 @@ export function App() {
       </div>
 
       <Inspector entity={selectedSnapshot()} onClose={closeInspector} />
+
+      {rulebookOpen() && <WorldRulebook onClose={() => setRulebookOpen(false)} />}
 
       <div
         style={{

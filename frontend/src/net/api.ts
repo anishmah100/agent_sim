@@ -26,6 +26,60 @@ export async function fetchWorldInfo(): Promise<WorldInfo> {
  *  alongside the WS endpoint, so we get correct CORS + the same origin
  *  for both. Falls back to a same-origin path if VITE_ENGINE_URL is empty
  *  (useful for static-only dev with no engine running). */
+export interface AffordanceManifest {
+  world: string;
+  scenario: string;
+  schema_version: number;
+  systems: SystemDeclaration[];
+}
+
+export interface SystemDeclaration {
+  name: string;
+  description: string;
+  verbs: VerbDeclaration[];
+  state_fields: StateFieldDecl[];
+  sounds_emitted: SoundDecl[];
+  archetypes: ArchetypeDecl[];
+}
+
+export interface VerbDeclaration {
+  verb: string;
+  description: string;
+  params_schema: unknown;
+  preconditions: string[];
+  rejection_reasons: string[];
+  emits_events?: string[];
+  examples: { params: unknown; result: string }[];
+}
+
+export interface StateFieldDecl {
+  key: string;
+  type: string;
+  owner: string;
+  public_at_any_distance: boolean;
+  public_within_distance?: number;
+  meaning: string;
+}
+
+export interface SoundDecl {
+  kind: string;
+  description: string;
+  emitted_by: string;
+}
+
+export interface ArchetypeDecl {
+  archetype: string;
+  description: string;
+  default_extras?: unknown;
+  default_verbs_used?: string[];
+}
+
+export async function fetchAffordances(): Promise<AffordanceManifest> {
+  const r = await fetch(`${ENGINE_URL}/api/v1/world/affordances`);
+  if (!r.ok) throw new Error(`affordances ${r.status}`);
+  return (await r.json()) as AffordanceManifest;
+}
+
 export async function fetchWorldMap(name = "dev_test"): Promise<unknown> {
   // Try engine first; fall back to Vite static.
   for (const base of [ENGINE_URL, ""]) {

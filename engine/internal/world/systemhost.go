@@ -26,11 +26,12 @@ import (
 // world. Construct one per world; call Install with each composable
 // system before InstallInto.
 type SystemHost struct {
-	World    *World
-	Bus      *eventbus.Bus
-	Spatial  *spatial.Index
-	Adapter  *WorldAdapter
-	Registry *syscore.ConcreteRegistry
+	World      *World
+	Bus        *eventbus.Bus
+	Spatial    *spatial.Index
+	Adapter    *WorldAdapter
+	Registry   *syscore.ConcreteRegistry
+	Aggregator *manifest.Aggregator
 }
 
 // NewSystemHost builds the supporting infrastructure for a *World.
@@ -47,11 +48,12 @@ func NewSystemHost(w *World, agg *manifest.Aggregator) *SystemHost {
 	adapter := NewWorldAdapter(w, bus, spat)
 	reg := syscore.NewConcreteRegistry(bus, agg)
 	return &SystemHost{
-		World:    w,
-		Bus:      bus,
-		Spatial:  spat,
-		Adapter:  adapter,
-		Registry: reg,
+		World:      w,
+		Bus:        bus,
+		Spatial:    spat,
+		Adapter:    adapter,
+		Registry:   reg,
+		Aggregator: agg,
 	}
 }
 

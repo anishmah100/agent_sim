@@ -53,7 +53,6 @@ func main() {
 		host = fantasy_town.Install(w)
 		log.Printf("installed scenario: %s (%d verbs)", fantasy_town.Name, host.Registry.VerbCount())
 	}
-	_ = host // reserved: will be passed to /api/v1/world/affordances + historian hooks
 
 	startedAt := time.Now()
 	var tick atomic.Uint64
@@ -89,6 +88,7 @@ func main() {
 	mux.HandleFunc("/ws/agent", agents.HandleWS)
 	mux.HandleFunc("/api/v1/agent/register", agents.HandleRegister)
 	mux.HandleFunc("/api/v1/leaderboards", wire.LeaderboardsHandler(w))
+	mux.HandleFunc("/api/v1/world/affordances", wire.AffordanceManifestHandler(host))
 
 	// Static world JSON + art atlases. The engine serves these because:
 	// 1. Same-origin = no CORS pain.
