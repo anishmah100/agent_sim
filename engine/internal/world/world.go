@@ -113,6 +113,14 @@ type fileWorld struct {
 	TilesLegend  map[string]string  `json:"tiles_legend"`
 	Tiles        []string           `json:"tiles"`
 	Entities     []json.RawMessage  `json:"entities"`
+	Decorations  []fileDecoration   `json:"decorations,omitempty"`
+}
+
+type fileDecoration struct {
+	X        int    `json:"x"`
+	Y        int    `json:"y"`
+	Sprite   string `json:"sprite"`
+	Walkable *bool  `json:"walkable,omitempty"` // pointer so we can distinguish absent from false
 }
 
 type fileEntity struct {
@@ -167,6 +175,23 @@ func Load(path string) (*World, error) {
 				kind = fw.TilesLegend[ch]
 			}
 			w.walkable[y][x] = walkableKinds[kind]
+		}
+	}
+
+	// Decorations can declare themselves blocking (trees, stumps, rocks).
+	// Walkable defaults to FALSE if the field is missing — most veg in
+	// our sheet is solid scenery. Bushes/flowers/groundcover get
+	// walkable=true at placement time in the world generator.
+	for _, d := range fw.Decorations {
+		if d.X < 0 || d.X >= w.WidthTiles || d.Y < 0 || d.Y >= w.HeightTiles {
+			continue
+		}
+		walkable := false
+		if d.Walkable != nil {
+			walkable = *d.Walkable
+		}
+		if !walkable {
+			w.walkable[d.Y][d.X] = false
 		}
 	}
 

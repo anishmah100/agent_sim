@@ -18,23 +18,41 @@ DST = ART / "processed" / "objects" / "vegetation"
 
 
 def deep_halo_clean(im: Image.Image) -> Image.Image:
-    """Aggressive purple/magenta halo killer for sprites coming off a
-    magenta-padded sheet. Pixels whose R and B clearly exceed G are
-    pulled toward the nearest clean opaque neighbor's color. Repeats
-    until no halo remains."""
+    """Two-stage halo killer for sprites off a magenta-padded sheet.
+
+    Stage 1 — KILL pink pixels: any pixel whose RB-vs-G signature
+    looks pink/magenta gets alpha-zeroed entirely. We don't try to
+    recolor them; isolated pink dots inside the sprite became visible
+    horizontal bands at upscale, which is the artifact the maintainer flagged.
+
+    Stage 2 — Recolor remaining halo: after Stage 1 there may still
+    be a thin rim of pixels that are subtly pink-tinged but not
+    fully pink. Those get recolored toward the nearest clean neighbor.
+    """
     arr = np.array(im.convert("RGBA"))
-    for _ in range(5):
+    r = arr[..., 0].astype(np.int32)
+    g = arr[..., 1].astype(np.int32)
+    b = arr[..., 2].astype(np.int32)
+    rb_avg = (r + b) // 2
+
+    # Stage 1: kill anything clearly pink. Aggressive thresholds
+    # (lower than before). The danger is killing legitimate flowers,
+    # but we accept that — flowers can be re-added as decorations later.
+    strong_pink = ((rb_avg - g) > 20) & (r > 70) & (b > 70) & (arr[..., 3] > 0)
+    pure_magenta = (r > 200) & (b > 200) & (g < 130)
+    arr[strong_pink | pure_magenta, 3] = 0
+
+    # Stage 2: rim cleanup. Anything still vaguely pink + opaque gets
+    # recolored to nearest clean neighbor.
+    for _ in range(3):
         r = arr[..., 0].astype(np.int32)
         g = arr[..., 1].astype(np.int32)
         b = arr[..., 2].astype(np.int32)
         a = arr[..., 3]
-        # Two halo signatures: 1) pinkish (R+B >> G) and 2) very magenta
         rb_avg = (r + b) // 2
-        halo = (a > 100) & (((rb_avg - g) > 50) & (r > 110) & (b > 110)
-                            | ((r > 200) & (b > 200) & (g < 130)))
+        halo = (a > 100) & ((rb_avg - g) > 10) & (r > 80) & (b > 80)
         if not halo.any():
             break
-        # Any pixel that's clean (opaque, not halo) is a source.
         clean = (a > 100) & ~halo
         if not clean.any():
             break
@@ -42,9 +60,6 @@ def deep_halo_clean(im: Image.Image) -> Image.Image:
             ~clean, return_indices=True,
         )
         arr[halo, :3] = arr[iy[halo], ix[halo], :3]
-        # Also kill pure-magenta alpha so it doesn't reappear.
-        mag = (arr[..., 0] > 230) & (arr[..., 1] < 60) & (arr[..., 2] > 230)
-        arr[mag, 3] = 0
     return Image.fromarray(arr, "RGBA")
 
 # blob index → veg:NNN filename. Verified by visual inspection.

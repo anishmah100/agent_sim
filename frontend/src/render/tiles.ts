@@ -47,7 +47,10 @@ export const TILE_SIZE_PX = 16;
 const SUBTLE_VARIANTS: Record<string, string[]> = {
   grass: ["grass_tuft", "grass_pebble"],
   water: ["water_ripple"],
-  dirt: ["dirt_cracked", "dirt_pebbles"],
+  // dirt: variants disabled — the dirt clearing was breaking up into
+  // off-tone squares from the few legacy variants that didn't match
+  // the new painterly dirt base. Until we install matching variants
+  // we render dirt as solid.
   // stone/path: defaults already vary enough; no variant pool.
 };
 
@@ -143,9 +146,12 @@ const EDGE_PARTNERS: Partial<Record<TileKind, Set<TileKind>>> = {
   // asymmetric — the transition lives on whichever kind painted it.
   grass: new Set<TileKind>(["dirt"]),                  // grass_edge_* = grass→dirt
   dirt:  new Set<TileKind>(["grass"]),                 // dirt_edge_* = dirt→grass
-  water: new Set<TileKind>(["grass", "dirt", "path", "stone"]), // water→shore
+  // water_edge_* tiles depict a sandy GRASS shore — meaningless against
+  // stone or dirt (a stone bridge meeting water shouldn't show grass).
+  // Restrict water transitions to grass-adjacent only.
+  water: new Set<TileKind>(["grass"]),
   stone: new Set<TileKind>(["grass"]),                 // stone_edge_* = stone→grass
-  path:  new Set<TileKind>(["grass"]),                 // path uses stone_edge_* tiles too
+  path:  new Set<TileKind>(["grass"]),                 // path uses stone_edge_*
   // path/wall/floor_wood/void: no usable edge variants.
 };
 
