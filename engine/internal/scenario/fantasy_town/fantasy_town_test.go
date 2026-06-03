@@ -1,3 +1,9 @@
+// Tests for the fantasy_town composable system set.
+//
+// These mirror the original scenario-as-monolith tests but route
+// everything through the new SystemHost / ConcreteRegistry path —
+// proving the composable systems handle the same gameplay through
+// the live *World's SubmitAction surface.
 package fantasy_town
 
 import (
@@ -5,6 +11,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/anishmah100/agent_sim/engine/internal/systems/combat"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/money"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
 
@@ -39,14 +47,7 @@ func newScenarioWorld(t *testing.T) *world.World {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	s := New()
-	verbs := make(map[string]func(*world.World, *world.Entity, *world.ActionEnvelope) world.ActionResult)
-	for _, v := range s.Verbs() {
-		if h := s.Handler(v); h != nil {
-			verbs[v] = h
-		}
-	}
-	w.InstallScenario(verbs, func(w *world.World, t uint64) { s.OnTick(w, t) }, s.OnEntitySpawn)
+	Install(w)
 	return w
 }
 
@@ -78,8 +79,8 @@ func TestAttackDealsDamage(t *testing.T) {
 		t.Fatal("goblin gone")
 	}
 	hp, _ := g.Extras["hp"].(int)
-	if hp != DefaultMaxHP-DefaultAttackDamage {
-		t.Fatalf("expected hp=%d got %d", DefaultMaxHP-DefaultAttackDamage, hp)
+	if hp != combat.DefaultMaxHP-combat.DefaultAttackDamage {
+		t.Fatalf("expected hp=%d got %d", combat.DefaultMaxHP-combat.DefaultAttackDamage, hp)
 	}
 }
 
@@ -95,7 +96,7 @@ func TestDefendHalvesDamage(t *testing.T) {
 	})
 	g := w.EntityByID("goblin")
 	hp, _ := g.Extras["hp"].(int)
-	want := DefaultMaxHP - (DefaultAttackDamage / 2)
+	want := combat.DefaultMaxHP - (combat.DefaultAttackDamage / 2)
 	if hp != want {
 		t.Fatalf("defended damage: want %d got %d", want, hp)
 	}
@@ -103,38 +104,34 @@ func TestDefendHalvesDamage(t *testing.T) {
 
 func TestHealRestores(t *testing.T) {
 	w := newScenarioWorld(t)
-	// Hurt the goblin first.
 	w.SubmitAction("hero", &world.ActionEnvelope{
 		ActionID: "1", Verb: "attack",
 		Raw: []byte(`{"verb":"attack","target":"goblin"}`),
 	})
-	// Heal self (no target).
 	w.SubmitAction("goblin", &world.ActionEnvelope{
 		ActionID: "2", Verb: "heal",
 		Raw: []byte(`{"verb":"heal"}`),
 	})
 	g := w.EntityByID("goblin")
 	hp, _ := g.Extras["hp"].(int)
-	// After 12 damage then heal 25, capped at max.
-	if hp != DefaultMaxHP {
-		t.Fatalf("expected heal to cap at max %d, got %d", DefaultMaxHP, hp)
+	if hp != combat.DefaultMaxHP {
+		t.Fatalf("expected heal to cap at max %d, got %d", combat.DefaultMaxHP, hp)
 	}
 }
 
-func TestPayTransfersGold(t *testing.T) {
+func TestPayRejectsOutOfRange(t *testing.T) {
 	w := newScenarioWorld(t)
-	// Move hero adjacent to merchant — they're at (2,2) and (5,2). Use
-	// move action which has pathfinding. For test simplicity we just
-	// teleport via mutation by submitting moves through Dispatch.
-	// Instead, place hero adjacent in the JSON; redo with direct.
-	w.SubmitAction("merchant", &world.ActionEnvelope{
+	// Merchant at (5,2), hero at (2,2) — distance 3. Should reject.
+	res := w.SubmitAction("merchant", &world.ActionEnvelope{
 		ActionID: "1", Verb: "pay",
 		Raw: []byte(`{"verb":"pay","target":"hero","amount":5}`),
 	})
-	// Merchant at (5,2), hero at (2,2) — distance 3. Should reject.
+	if res.Accepted {
+		t.Fatal("pay should reject across 3 tiles")
+	}
 	m := w.EntityByID("merchant")
 	hgold, _ := m.Extras["gold"].(int)
-	if hgold != DefaultGold {
+	if hgold != money.DefaultStartingGold {
 		t.Fatalf("merchant gold should be unchanged; got %d", hgold)
 	}
 }
@@ -147,7 +144,48 @@ func TestWorkPaysGold(t *testing.T) {
 	})
 	hero := w.EntityByID("hero")
 	gold, _ := hero.Extras["gold"].(int)
-	if gold != DefaultGold+5 {
-		t.Fatalf("expected gold %d got %d", DefaultGold+5, gold)
+	if gold != money.DefaultStartingGold+money.WorkPayment {
+		t.Fatalf("expected gold %d got %d", money.DefaultStartingGold+money.WorkPayment, gold)
+	}
+}
+
+func TestLootRequiresDead(t *testing.T) {
+	w := newScenarioWorld(t)
+	// Place hero next to goblin (already at 2,2 and 3,2 — adjacent).
+	res := w.SubmitAction("hero", &world.ActionEnvelope{
+		ActionID: "1", Verb: "loot",
+		Raw: []byte(`{"verb":"loot","target":"goblin"}`),
+	})
+	if res.Accepted {
+		t.Fatal("loot should reject a live target")
+	}
+	if res.Reason != "target_alive" {
+		t.Fatalf("expected target_alive, got %s", res.Reason)
+	}
+}
+
+func TestLootTransfersGold(t *testing.T) {
+	w := newScenarioWorld(t)
+	// Kill goblin via repeated attacks (or just drive HP to 0 via mutation
+	// on the live world — simpler).
+	w.MutateEntity("goblin", func(real *world.Entity) {
+		real.Extras["hp"] = 0
+	})
+	res := w.SubmitAction("hero", &world.ActionEnvelope{
+		ActionID: "1", Verb: "loot",
+		Raw: []byte(`{"verb":"loot","target":"goblin"}`),
+	})
+	if !res.Accepted {
+		t.Fatalf("loot should accept on corpse: %s", res.Reason)
+	}
+	hero := w.EntityByID("hero")
+	gob := w.EntityByID("goblin")
+	heroGold, _ := hero.Extras["gold"].(int)
+	gobGold, _ := gob.Extras["gold"].(int)
+	if heroGold != money.DefaultStartingGold*2 {
+		t.Fatalf("hero should have absorbed goblin gold; got %d", heroGold)
+	}
+	if gobGold != 0 {
+		t.Fatalf("goblin gold should be 0; got %d", gobGold)
 	}
 }

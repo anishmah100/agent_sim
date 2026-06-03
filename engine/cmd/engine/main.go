@@ -45,20 +45,15 @@ func main() {
 		w.MapID, w.WidthTiles, w.HeightTiles,
 		len(w.Snapshot().Entities), *flagWorld)
 
-	// Install the chosen scenario. Currently only fantasy_town exists;
-	// future scenarios register here too.
+	// Install the chosen scenario. Each scenario package declares which
+	// composable systems to register; the SystemHost owns the verb
+	// registry, event bus, spatial index, and service table.
+	var host *world.SystemHost
 	if *flagScenario == "fantasy_town" {
-		s := fantasy_town.New()
-		verbs := make(map[string]func(*world.World, *world.Entity, *world.ActionEnvelope) world.ActionResult)
-		for _, v := range s.Verbs() {
-			h := s.Handler(v)
-			if h != nil {
-				verbs[v] = h
-			}
-		}
-		w.InstallScenario(verbs, func(w *world.World, t uint64) { s.OnTick(w, t) }, s.OnEntitySpawn)
-		log.Printf("installed scenario: %s (%d verbs)", s.Name(), len(verbs))
+		host = fantasy_town.Install(w)
+		log.Printf("installed scenario: %s (%d verbs)", fantasy_town.Name, host.Registry.VerbCount())
 	}
+	_ = host // reserved: will be passed to /api/v1/world/affordances + historian hooks
 
 	startedAt := time.Now()
 	var tick atomic.Uint64
