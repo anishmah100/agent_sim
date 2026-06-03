@@ -23,6 +23,7 @@ import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
 import { DecorationLayer } from "./Decoration";
 import { InteriorLayer } from "./Interior";
+import { DayNight } from "./DayNight";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
@@ -103,9 +104,15 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
   });
 
+  // Day/night ambient tint over the WORLD viewport (overworld layers
+  // only — the interior overlay sits outside the viewport so its
+  // visuals stay neutral).
+  const dayNight = new DayNight(viewport);
+
   // Per-frame tick for entity layer effects (selection ring pulse).
   app.ticker.add((delta) => {
     entities.tick(delta.deltaMS);
+    dayNight.tick();
   });
 
   // Kick off the character atlas load in the background.

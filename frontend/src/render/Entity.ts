@@ -15,9 +15,11 @@ export interface EntityState {
   pos: [number, number];
   facing: "N" | "S" | "E" | "W";
   display_name?: string;
-  /** Optional engine-driven animation state. When set, the renderer
-   *  plays this action's frames once instead of the walk cycle. */
   current_action?: "attack" | "interact" | "hit" | null;
+  /** When set, the entity is inside a building's interior and should
+   *  NOT render on the overworld. The value is the building sprite ID
+   *  the entity is currently inside. */
+  inside_building?: string;
 }
 
 // Footprint = 16x16 (one tile). Sprite container is anchored at top-left
@@ -153,6 +155,10 @@ export class EntityLayer {
       } else {
         this.items.set(e.entity_id, this.create(e));
       }
+      // Hide entities currently inside a building. Selection ring
+      // tick will skip them via the visible flag.
+      const r = this.items.get(e.entity_id);
+      if (r) r.container.visible = !e.inside_building;
     }
   }
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -45,6 +46,13 @@ type Entity struct {
 	CurrentAction string `json:"current_action,omitempty"`
 	actionTicks   int    // demo random action timer
 
+	// InsideBuilding — non-empty when the entity is inside a building's
+	// interior. While set, the entity is hidden from the overworld
+	// render. Set to building sprite ID (e.g. "bld:000") + footprint
+	// origin so the frontend can route renders to the right interior.
+	InsideBuilding string `json:"inside_building,omitempty"`
+	insideTicks    int    // remaining ticks until automatic exit
+
 	// targetTile is the original move-target; emitted in observations so
 	// the agent can confirm what it's walking toward.
 	targetTile Tile
@@ -59,18 +67,20 @@ func (e *Entity) MarshalJSON() ([]byte, error) {
 		EntityID      string     `json:"entity_id"`
 		Archetype     string     `json:"archetype"`
 		DisplayName   string     `json:"display_name,omitempty"`
-		Pos           [2]float64 `json:"pos"`
-		Facing        Facing     `json:"facing"`
-		CurrentAction string     `json:"current_action,omitempty"`
-		LogicalTile   [2]int     `json:"logical_tile"`
+		Pos            [2]float64 `json:"pos"`
+		Facing         Facing     `json:"facing"`
+		CurrentAction  string     `json:"current_action,omitempty"`
+		LogicalTile    [2]int     `json:"logical_tile"`
+		InsideBuilding string     `json:"inside_building,omitempty"`
 	}{
-		EntityID:      e.EntityID,
-		Archetype:     e.Archetype,
-		DisplayName:   e.DisplayName,
-		Pos:           e.renderPos,
-		Facing:        e.Facing,
-		CurrentAction: e.CurrentAction,
-		LogicalTile:   e.LogicalTile,
+		EntityID:       e.EntityID,
+		Archetype:      e.Archetype,
+		DisplayName:    e.DisplayName,
+		Pos:            e.renderPos,
+		Facing:         e.Facing,
+		CurrentAction:  e.CurrentAction,
+		LogicalTile:    e.LogicalTile,
+		InsideBuilding: e.InsideBuilding,
 	})
 }
 
@@ -104,6 +114,18 @@ type World struct {
 	// Per-tile dynamic occupancy by entities. Mid-walk an entity claims
 	// BOTH its WalkFromTile and LogicalTile.
 	occupants map[Tile]string
+
+	// Buildings the entity can enter. Key is the SOUTH-edge door tile
+	// (the tile DIRECTLY south of the building's footprint, at its
+	// horizontal centre). Value is the building's sprite ID + SW corner
+	// — the same fields the frontend uses to pick which interior to
+	// render. Entities at a door tile may switch to InsideBuilding.
+	buildingDoors map[Tile]buildingRef
+}
+
+type buildingRef struct {
+	Sprite string
+	X, Y   int
 }
 
 type fileWorld struct {
@@ -155,12 +177,13 @@ func Load(path string) (*World, error) {
 	}
 
 	w := &World{
-		MapID:       fw.MapID,
-		WidthTiles:  fw.WidthTiles,
-		HeightTiles: fw.HeightTiles,
-		entities:    make(map[string]*Entity, len(fw.Entities)),
-		rng:         rand.New(rand.NewPCG(1, 2)),
-		occupants:   make(map[Tile]string),
+		MapID:         fw.MapID,
+		WidthTiles:    fw.WidthTiles,
+		HeightTiles:   fw.HeightTiles,
+		entities:      make(map[string]*Entity, len(fw.Entities)),
+		rng:           rand.New(rand.NewPCG(1, 2)),
+		occupants:     make(map[Tile]string),
+		buildingDoors: make(map[Tile]buildingRef),
 	}
 
 	// Build walkability map from the tile legend.
@@ -233,6 +256,20 @@ func Load(path string) (*World, error) {
 						w.walkable[ny][nx] = false
 					}
 				}
+			}
+		}
+		// Buildings (multi-tile, blocking) register a door tile DIRECTLY
+		// south of the footprint at its horizontal centre. Entities at
+		// that tile can enter the interior.
+		if fpW >= 2 && strings.HasPrefix(d.Sprite, "bld:") {
+			doorX := d.X + fpW/2
+			doorY := d.Y + 1
+			if doorY < w.HeightTiles {
+				w.buildingDoors[Tile{doorX, doorY}] = buildingRef{
+					Sprite: d.Sprite, X: d.X, Y: d.Y,
+				}
+				// Make sure the door tile itself is walkable.
+				w.walkable[doorY][doorX] = true
 			}
 		}
 	}
@@ -396,6 +433,22 @@ func (w *World) Tick() {
 	w.tick++
 
 	for _, e := range w.entities {
+		// --- Inside a building: tick down, then exit. ---
+		if e.InsideBuilding != "" {
+			if e.insideTicks > 0 {
+				e.insideTicks--
+				continue
+			}
+			// Time to exit. Re-emerge at the door tile (the entity's
+			// LogicalTile was stored at entry).
+			e.InsideBuilding = ""
+			e.Facing = FacingS
+			if w.occupants[e.LogicalTile] == "" {
+				w.occupants[e.LogicalTile] = e.EntityID
+			}
+			continue
+		}
+
 		// Decrement action timer; clear action when done.
 		if e.actionTicks > 0 {
 			e.actionTicks--
@@ -403,6 +456,27 @@ func (w *World) Tick() {
 				e.CurrentAction = ""
 			}
 			continue
+		}
+
+		// --- Auto-enter when LogicalTile is a door (Pokemon HG style).
+		// Walking onto a registered door tile from any direction warps
+		// the entity inside the building. We rate-limit by requiring
+		// the entity be facing INTO the building (i.e. facing N — the
+		// door tile is directly south of the footprint), so agents
+		// just passing through don't accidentally enter when they didn't
+		// intend to. Also fires only when the entity finished its walk
+		// (WalkProgress >= 1) so we don't enter mid-step.
+		if e.WalkProgress >= 1 {
+			if ref, ok := w.buildingDoors[e.LogicalTile]; ok && e.Facing == FacingN {
+				e.InsideBuilding = ref.Sprite
+				e.insideTicks = 240 + w.rng.IntN(360) // 4-10 seconds
+				if w.occupants[e.LogicalTile] == e.EntityID {
+					delete(w.occupants, e.LogicalTile)
+				}
+				e.walkPath = nil
+				e.CurrentAction = ""
+				continue
+			}
 		}
 
 		// Idle: pick a wander target.
