@@ -88,6 +88,9 @@ export function App() {
     // layer is static and was already loaded from the JSON above.
     viewer = connectViewer({
       onConnState: setWsState,
+      onAudible: (events) => {
+        pixiHandle?.ingestAudible(events);
+      },
       onSnapshot: (snap) => {
         setLiveTick(snap.tick);
         setEntityCount(snap.entities.length);

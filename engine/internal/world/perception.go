@@ -78,6 +78,25 @@ func formatUint64(n uint64) string {
 	return string(buf)
 }
 
+// RecentAudibleAll returns every public (non-whisper) audible event
+// with tick >= sinceTick. The viewer hub broadcasts these to spectators
+// so the frontend can render floating speech bubbles above speakers.
+// Whispers are excluded — they're 1-on-1 conversation and not for
+// public consumption.
+func (w *World) RecentAudibleAll(sinceTick uint64) []AudibleEvent {
+	out := make([]AudibleEvent, 0, 8)
+	for _, ev := range w.audible {
+		if ev.Tick < sinceTick {
+			continue
+		}
+		if ev.whisperTo != "" {
+			continue
+		}
+		out = append(out, ev)
+	}
+	return out
+}
+
 // VisibleAudible returns audible events the given entity should hear
 // THIS observation. Filters by:
 //   - whisperTo (must match e or empty)

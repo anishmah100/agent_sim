@@ -23,7 +23,9 @@ import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
 import { DecorationLayer } from "./Decoration";
 import { InteriorLayer } from "./Interior";
+import { SpeechBubbleLayer } from "./SpeechBubble";
 import { DayNight } from "./DayNight";
+import type { AudibleEvent } from "../net/ws";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
@@ -40,6 +42,7 @@ export interface PixiHandle {
   fitToWorld(): void;
   setSelectedEntity(id: string | null): void;
   onClick(handler: (ev: ClickEvent) => void): () => void;
+  ingestAudible(events: AudibleEvent[]): void;
   destroy(): void;
 }
 
@@ -77,11 +80,13 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   const tilemap = new TilemapLayer(app);
   const decorations = new DecorationLayer();
   const entities = new EntityLayer();
+  const speechBubbles = new SpeechBubbleLayer();
   const fxAbove = new Container();          // particles, selection rings, day/night tint top
   fxAbove.label = "fx_above";
   viewport.addChild(tilemap.container);
   viewport.addChild(decorations.container);
   viewport.addChild(entities.container);
+  viewport.addChild(speechBubbles.container);
   viewport.addChild(fxAbove);
 
   // Interior overlay — fixed-position container on the stage (NOT in
@@ -112,6 +117,12 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   // Per-frame tick for entity layer effects (selection ring pulse).
   app.ticker.add((delta) => {
     entities.tick(delta.deltaMS);
+    // Build a quick map for the speech bubble layer to look up
+    // speakers by id. Map-walking per frame across ~50 entities is
+    // cheap; cache invalidation would complicate the simple model.
+    const byId = new Map<string, EntityState>();
+    for (const e of entities.getAll()) byId.set(e.entity_id, e);
+    speechBubbles.tick(byId);
     dayNight.tick();
   });
 
@@ -207,9 +218,14 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
       };
     },
 
+    ingestAudible(events) {
+      speechBubbles.ingest(events);
+    },
+
     destroy() {
       tilemap.destroy();
       entities.destroy();
+      speechBubbles.destroy();
       resetTileCache();
       app.destroy(true, { children: true, texture: true });
     },

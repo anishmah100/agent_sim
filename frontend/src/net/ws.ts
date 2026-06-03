@@ -18,7 +18,18 @@ export interface WorldSnapshot {
   entities: EntityState[];
 }
 
+export interface AudibleEvent {
+  event_id: string;
+  kind: "speech" | "shout" | "whisper" | "sound";
+  from_entity: string;
+  from_pos: [number, number];
+  text?: string;
+  sound_kind?: string;
+  tick: number;
+}
+
 export type WorldSnapshotListener = (snap: WorldSnapshot) => void;
+export type AudibleListener = (events: AudibleEvent[]) => void;
 export type ConnStateListener = (state: "connecting" | "open" | "closed") => void;
 
 export interface ViewerClient {
@@ -28,13 +39,15 @@ export interface ViewerClient {
 interface ServerEnvelope {
   type: "world_snapshot";
   snapshot?: WorldSnapshot;
+  audible?: AudibleEvent[];
 }
 
 export function connectViewer(opts: {
   onSnapshot: WorldSnapshotListener;
+  onAudible?: AudibleListener;
   onConnState?: ConnStateListener;
 }): ViewerClient {
-  const { onSnapshot, onConnState } = opts;
+  const { onSnapshot, onAudible, onConnState } = opts;
   let ws: WebSocket | null = null;
   let reconnectAttempt = 0;
   let closed = false;
@@ -59,6 +72,9 @@ export function connectViewer(opts: {
         const env = JSON.parse(ev.data) as ServerEnvelope;
         if (env.type === "world_snapshot" && env.snapshot) {
           onSnapshot(env.snapshot);
+          if (env.audible && env.audible.length && onAudible) {
+            onAudible(env.audible);
+          }
         }
       } catch (e) {
         console.warn("ws parse:", e);

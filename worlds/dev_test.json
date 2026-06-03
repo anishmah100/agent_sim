@@ -133,8 +133,8 @@
       "entity_id": "npc_blacksmith",
       "archetype": "blacksmith_npc",
       "pos": [
-        21,
-        10
+        16,
+        9
       ],
       "facing": "S",
       "display_name": "Brog the Smith"
@@ -144,7 +144,7 @@
       "archetype": "woodcutter",
       "pos": [
         9,
-        9
+        11
       ],
       "facing": "E",
       "display_name": "Tim the Woodcutter"
@@ -329,8 +329,8 @@
       "walkable": false
     },
     {
-      "x": 19,
-      "y": 8,
+      "x": 15,
+      "y": 7,
       "sprite": "bld:blacksmith",
       "height_tiles": 3.5,
       "footprint_w": 3,
@@ -338,8 +338,8 @@
       "walkable": false
     },
     {
-      "x": 36,
-      "y": 8,
+      "x": 42,
+      "y": 7,
       "sprite": "bld:granary",
       "height_tiles": 4.0,
       "footprint_w": 2,
@@ -3300,15 +3300,8 @@
     },
     {
       "x": 17,
-      "y": 5,
+      "y": 4,
       "sprite": "veg:000",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 14,
-      "y": 5,
-      "sprite": "veg:036",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -3348,23 +3341,9 @@
       "walkable": false
     },
     {
-      "x": 44,
-      "y": 5,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
       "x": 42,
       "y": 4,
       "sprite": "veg:000",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 43,
-      "y": 5,
-      "sprite": "veg:036",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -3681,13 +3660,6 @@
       "y": 9,
       "sprite": "veg:003",
       "height_tiles": 1.0,
-      "walkable": true
-    },
-    {
-      "x": 15,
-      "y": 9,
-      "sprite": "veg:025",
-      "height_tiles": 0.7,
       "walkable": true
     },
     {

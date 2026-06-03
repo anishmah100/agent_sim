@@ -269,8 +269,10 @@ def place_buildings(m: Map, decs: list[dict], placed: set[tuple[int, int]]) -> N
         ("bld:001", 44, 18, 5, 2, 4.0),    # dark cottage east of plaza
         # v2 named buildings — village centerpieces
         ("bld:town_hall",  26, 12, 6, 2, 4.0),   # north center civic anchor
-        ("bld:blacksmith", 19, 8,  3, 2, 3.5),   # NW forge
-        ("bld:granary",    36, 8,  2, 2, 4.0),   # NE silo
+        # Tucked back into the grass north meadow so the buildings
+        # don't straddle the plaza stone/grass boundary.
+        ("bld:blacksmith", 15, 7,  3, 2, 3.5),   # NW forge — on grass
+        ("bld:granary",    42, 7,  2, 2, 4.0),   # NE silo — on grass
         ("bld:watchtower", 4,  13, 2, 2, 5.0),   # FAR west tower
         ("bld:watchtower", 54, 13, 2, 2, 5.0),   # FAR east tower
         ("bld:well",       30, 21, 1, 1, 1.5),   # center plaza well
@@ -547,8 +549,8 @@ ENTITIES = [
     {"entity_id": "npc_cloaked_wanderer",   "archetype": "cloaked_wanderer",   "pos": [46, 32], "facing": "N", "display_name": "Hooded wanderer"},
 
     # === v2 NPCs — placed near their thematic buildings ===
-    {"entity_id": "npc_blacksmith",         "archetype": "blacksmith_npc", "pos": [21, 10], "facing": "S", "display_name": "Brog the Smith"},
-    {"entity_id": "npc_woodcutter",         "archetype": "woodcutter",     "pos": [9, 9],   "facing": "E", "display_name": "Tim the Woodcutter"},
+    {"entity_id": "npc_blacksmith",         "archetype": "blacksmith_npc", "pos": [16, 9],  "facing": "S", "display_name": "Brog the Smith"},
+    {"entity_id": "npc_woodcutter",         "archetype": "woodcutter",     "pos": [9, 11],  "facing": "E", "display_name": "Tim the Woodcutter"},
     {"entity_id": "npc_mason",              "archetype": "mason",          "pos": [30, 23], "facing": "N", "display_name": "Rina the Mason"},
     {"entity_id": "npc_mayor",              "archetype": "mayor",          "pos": [29, 15], "facing": "S", "display_name": "Mayor Halbrook"},
     {"entity_id": "npc_drifter",            "archetype": "drifter",        "pos": [51, 33], "facing": "W", "display_name": "Mira the Drifter"},

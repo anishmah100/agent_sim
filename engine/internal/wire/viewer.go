@@ -151,15 +151,25 @@ func (h *ViewerHub) broadcastLoop(ctx context.Context) {
 }
 
 type viewerMessage struct {
-	Type     string              `json:"type"`
-	Snapshot *world.WorldSnapshot `json:"snapshot,omitempty"`
+	Type     string                `json:"type"`
+	Snapshot *world.WorldSnapshot  `json:"snapshot,omitempty"`
+	Audible  []world.AudibleEvent  `json:"audible,omitempty"`
 }
 
 func (h *ViewerHub) encodeSnapshot() ([]byte, error) {
 	snap := h.w.Snapshot()
+	// Include all public audible events from the recent window so the
+	// frontend can render speech bubbles. We use a 2-second window —
+	// at 60Hz that's 120 ticks — to give the bubbles time to fade.
+	since := uint64(0)
+	if snap.Tick > 120 {
+		since = snap.Tick - 120
+	}
+	audible := h.w.RecentAudibleAll(since)
 	return json.Marshal(viewerMessage{
 		Type:     "world_snapshot",
 		Snapshot: &snap,
+		Audible:  audible,
 	})
 }
 
