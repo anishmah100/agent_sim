@@ -37,6 +37,25 @@
      "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
     {"id": "cloaked_wanderer",   "sheet": "cloaked_wanderer.png",
      "display_name": "Cloaked Wanderer",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+
+    {"id": "blacksmith_npc",     "sheet": "blacksmith_npc.png",
+     "display_name": "Blacksmith",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "woodcutter",         "sheet": "woodcutter.png",
+     "display_name": "Woodcutter",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "mason",              "sheet": "mason.png",
+     "display_name": "Mason",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "mayor",              "sheet": "mayor.png",
+     "display_name": "Mayor",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "drifter",            "sheet": "drifter.png",
+     "display_name": "Drifter",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "goblin",             "sheet": "goblin.png",
+     "display_name": "Goblin",
      "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]}
   ]
 }
