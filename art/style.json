@@ -1,0 +1,66 @@
+{
+  "$comment": "Style guide as code. Every AI-generated asset is validated against this. Locked 2026-06-02. Reference: art/references/heartgold_sample.png (TBD — captured during Milestone 0).",
+
+  "tile_px": 16,
+  "char_sprite_px": [16, 24],
+  "char_anchor_px": [8, 23],
+  "render_scale_default": 3,
+
+  "palette_name": "Endesga 32",
+  "palette_source": "https://lospec.com/palette-list/endesga-32 — CC0",
+  "palette": [
+    "#be4a2f", "#d77643", "#ead4aa", "#e4a672",
+    "#b86f50", "#733e39", "#3e2731", "#a22633",
+    "#e43b44", "#f77622", "#feae34", "#fee761",
+    "#63c74d", "#3e8948", "#265c42", "#193c3e",
+    "#124e89", "#0099db", "#2ce8f5", "#ffffff",
+    "#c0cbdc", "#8b9bb4", "#5a6988", "#3a4466",
+    "#262b44", "#181425", "#ff0044", "#68386c",
+    "#b55088", "#f6757a", "#e8b796", "#c28569"
+  ],
+
+  "transparency_key": "#FF00FF",
+
+  "character_sheet_layouts": {
+    "$comment": "Multiple supported sheet shapes. Walk-only sheet is generated at 8× scale (1024x384) to give the AI enough pixels for crisp detail; intake downsamples to native 128x48. Action/death sheets come in a separate prompt once walk is locked.",
+    "walk_v2_upscaled": {
+      "input_dims_px": [1024, 384],
+      "scale_factor": 8,
+      "native_dims_px": [128, 48],
+      "rows": {
+        "walk_down":  { "y_range_native": [0,  12], "frames": 4, "frame_w_native": 16, "cell_w_native": 32, "cell_pad_native": 8 },
+        "walk_up":    { "y_range_native": [12, 24], "frames": 4, "frame_w_native": 16, "cell_w_native": 32, "cell_pad_native": 8 },
+        "walk_left":  { "y_range_native": [24, 36], "frames": 4, "frame_w_native": 16, "cell_w_native": 32, "cell_pad_native": 8 },
+        "walk_right": { "y_range_native": [36, 48], "frames": 4, "frame_w_native": 16, "cell_w_native": 32, "cell_pad_native": 8 }
+      }
+    },
+    "character_full_v1_native": {
+      "$comment": "Legacy v1 native-resolution sheet — rejected because DALL-E/GPT-4o can't deliver crisp pixel art at this dim. Kept here as documentation.",
+      "input_dims_px": [128, 144],
+      "scale_factor": 1,
+      "native_dims_px": [128, 144]
+    }
+  },
+
+  "tile_sheet_layout": {
+    "$comment": "Per-terrain 47-tile blob autotile (RPGMaker A2 style). Defined per terrain in art/prompts/tile_*.md.",
+    "blob_tile_count": 47,
+    "blob_grid": [12, 4]
+  },
+
+  "animation_specs": {
+    "walk_fps": 8,
+    "attack_fps": 12,
+    "hit_fps": 10,
+    "death_fps": 6,
+    "interact_fps": 8,
+    "idle_breath_fps": 2
+  },
+
+  "intake_rules": {
+    "max_off_palette_pct": 5.0,
+    "$comment": "If >5% of non-transparent pixels are off-palette, asset is rejected. <5% = auto-snap to nearest.",
+    "halo_detect_threshold": 0.4,
+    "anti_alias_forbidden": true
+  }
+}
