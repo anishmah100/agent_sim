@@ -27,6 +27,12 @@
       "input_dims_px": [1024, 480],
       "scale_factor": 8,
       "native_dims_px": [128, 60],
+      "snap_palette_subset": [
+        "#e8b796", "#c28569", "#3e2731", "#e43b44",
+        "#a22633", "#ffffff", "#3a4466", "#181425",
+        "#733e39", "#b86f50", "#f77622", "#feae34"
+      ],
+      "$snap_palette_comment": "Subset of the master palette used ONLY for character intake. EXCLUDES pinks/purples (#b55088, #f6757a, #68386c) so DALL-E-painted edge shadows don't snap to halos. Includes warm browns + oranges as a fallback for skin-edge mixes.",
       "rows": {
         "walk_down":  { "y_range_native": [0,  12], "frames": 4, "frame_w_native": 16, "cell_w_native": 32, "cell_pad_native": 8 },
         "walk_up":    { "y_range_native": [12, 24], "frames": 4, "frame_w_native": 16, "cell_w_native": 32, "cell_pad_native": 8 },
