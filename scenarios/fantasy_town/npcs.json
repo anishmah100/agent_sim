@@ -1,0 +1,17 @@
+{
+  "npcs": [
+    {
+      "name": "wanderer",
+      "command": "python3",
+      "args": [
+        "examples/heuristic_bot.py",
+        "--server", "http://127.0.0.1:8080",
+        "--token", "dev",
+        "--name", "Wanderer"
+      ],
+      "cwd": "..",
+      "count": 2,
+      "auto_restart": true
+    }
+  ]
+}

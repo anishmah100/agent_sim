@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/anishmah100/agent_sim/engine/internal/historian"
+	"github.com/anishmah100/agent_sim/engine/internal/npc"
 	"github.com/anishmah100/agent_sim/engine/internal/scenario/fantasy_town"
 	"github.com/anishmah100/agent_sim/engine/internal/wire"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
@@ -35,6 +36,7 @@ var (
 	flagScenario  = flag.String("scenario", "fantasy_town", "scenario pack id")
 	flagEventLog  = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
 	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
+	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn (see internal/npc)")
 )
 
 func main() {
@@ -78,6 +80,19 @@ func main() {
 		context.Background(), os.Interrupt, syscall.SIGTERM,
 	)
 	defer cancel()
+
+	// NPC supervisor — start BEFORE the HTTP server so processes that
+	// register on boot find the engine listening.
+	var npcSup *npc.Supervisor
+	if *flagNPCConfig != "" {
+		cfg, err := npc.LoadConfig(*flagNPCConfig)
+		if err != nil {
+			log.Fatalf("npc config: %v", err)
+		}
+		npcSup = npc.New(cfg, log.Default())
+		npcSup.Start(ctx)
+		log.Printf("supervising %d NPC spec(s) from %s", len(cfg.NPCs), *flagNPCConfig)
+	}
 
 	hub := wire.NewViewerHub(ctx, w)
 	agents := wire.NewAgentHub(ctx, w)
@@ -148,6 +163,9 @@ func main() {
 			shutdownCtx, c := context.WithTimeout(context.Background(), 5*time.Second)
 			defer c()
 			_ = srv.Shutdown(shutdownCtx)
+			if npcSup != nil {
+				npcSup.Stop()
+			}
 			log.Println("clean exit")
 			return
 
