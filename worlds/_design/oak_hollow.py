@@ -202,19 +202,40 @@ def place_decorations(m: Map) -> list[dict]:
     #   veg:036 mushroom cluster (0.8-tile)
     # We mix these so a clump reads as a real forest.
     # Painterly forest sprites — installed from the GPT-generated forest
-    # sheet (art/install_forest_sheet.py). Style fully matches our
-    # painterly character art. Trees ~2 tiles tall so silhouettes read
-    # at HG-like zoom without crowding.
+    # sheet (art/install_forest_sheet.py). Each veg:NNN ID has ONE
+    # intended size and category — no reuse across categories at
+    # different scales.
     TREE_BIG = [
-        ("veg:000", 2.0), ("veg:004", 2.0), ("veg:036", 2.0), ("veg:037", 2.0),
+        ("veg:000", 2.0),  # round green oak
+        ("veg:004", 2.0),  # green pine
+        ("veg:036", 2.0),  # bright chunky oak
+        ("veg:037", 2.0),  # bright green chunky
     ]
-    TREE_ACCENT = [
-        ("veg:001", 2.0),   # autumn orange
-        ("veg:022", 2.0),   # apple/berry
-        ("veg:032", 2.0),   # snow pine
+    TREE_ACCENT = [        # used sparingly for variety
+        ("veg:001", 2.0),  # autumn orange
+        ("veg:022", 2.0),  # apple/berry tree
+        ("veg:032", 2.0),  # snow pine
     ]
-    BUSH = [("veg:008", 1.1), ("veg:009", 1.1), ("veg:025", 1.1)]
-    MUSH = [("veg:010", 0.8), ("veg:023", 0.8)]   # flowers + log accents
+    BUSH = [
+        ("veg:008", 1.1),  # blue-berry bush
+        ("veg:009", 1.1),  # pink-flower bush
+        ("veg:002", 1.0),  # berry small
+        ("veg:003", 1.0),  # flower small
+    ]
+    # Sub-tile ground accents — all walkable.
+    GROUND_FLOWERS = [
+        ("veg:010", 0.7),  # pink/magenta flowers
+        ("veg:042", 0.7),  # yellow+red flowers
+    ]
+    GROUND_PLANTS = [
+        ("veg:011", 0.8),  # big-leaf plant
+        ("veg:025", 0.7),  # leafy clump
+    ]
+    GROUND_PROPS = [
+        ("veg:040", 0.5),  # rock
+        ("veg:041", 0.8),  # tree stump
+        ("veg:023", 0.7),  # hollow log
+    ]
     TREE_SPACING = 2
     PLAZA_BUFFER = 1
 
@@ -308,15 +329,10 @@ def place_decorations(m: Map) -> list[dict]:
             spr, h = pick(TREE_BIG, cx + dx, cy + dy)
             add(cx + dx, cy + dy, spr, h)
 
-    # --- Groundcover in the meadow — flowers, mushrooms, small plants.
-    # More variety pulls the eye away from large blank grass plains.
-    GROUNDCOVER = [
-        ("veg:022", 0.8),  # flower
-        ("veg:023", 0.6),  # small plant
-        ("veg:025", 1.0),  # bush variant
-        ("veg:032", 0.7),  # mushroom cluster
-        ("veg:037", 0.8),  # plant variant
-    ]
+    # --- Groundcover in the meadow — flowers, plants, props.
+    # Three categories at different frequencies so the meadow has
+    # variety: flowers most common, plants medium, props (rocks/stumps)
+    # rare for that "look closer" detail.
     for y in range(H):
         for x in range(W):
             if (x, y) in placed or is_blocking(m, x, y):
@@ -327,11 +343,14 @@ def place_decorations(m: Map) -> list[dict]:
             if roll < 30:
                 spr, h = pick(BUSH, x, y)
                 add(x, y, spr, h, walkable=True)
-            elif roll < 50:
-                spr, h = pick(GROUNDCOVER, x, y)
-                add(x, y, spr, h, walkable=True)
             elif roll < 55:
-                spr, h = pick(MUSH, x, y)
+                spr, h = pick(GROUND_FLOWERS, x, y)
+                add(x, y, spr, h, walkable=True)
+            elif roll < 75:
+                spr, h = pick(GROUND_PLANTS, x, y)
+                add(x, y, spr, h, walkable=True)
+            elif roll < 80:
+                spr, h = pick(GROUND_PROPS, x, y)
                 add(x, y, spr, h, walkable=True)
 
     return decs

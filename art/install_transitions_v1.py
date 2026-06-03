@@ -16,20 +16,26 @@ DST = ART / "processed" / "tiles" / "overworld"
 
 # blob index → target file name in our tile atlas.
 MAPPING: dict[int, str] = {
-    # Stone (cobblestone path) — 8 cells from the sheet
-    5:  "stone.png",                  # pure cobblestone center
-    1:  "stone_edge_top.png",         # grass strip along TOP
-    7:  "stone_edge_bottom.png",      # grass strip along BOTTOM
-    4:  "stone_edge_left.png",        # grass strip along LEFT
-    3:  "stone_edge_right.png",       # grass strip along RIGHT
-    0:  "stone_corner_nw_outer.png",  # grass spilling from NW
-    2:  "stone_corner_ne_outer.png",  # grass from NE (similar to top, slight angle)
-    6:  "stone_corner_sw_outer.png",  # grass spilling from SW
-    # Water + sandy shoreline
-    8:  "water_edge_top.png",         # water tile, shore on N
-    9:  "water_edge_left.png",        # water tile, shore on W
-    10: "water_edge_right.png",       # water tile, shore on E
-    11: "water_edge_bottom.png",      # water tile, shore on S
+    # Verified by visual inspection 2026-06-02. Comments describe what
+    # I see in each blob and which autotile slot it fits.
+    5:  "stone.png",                  # blob_005: pure cobblestone w/ green tufts. Default.
+    1:  "stone_edge_top.png",         # blob_001: grass strip uniformly across TOP. Pure N edge.
+    6:  "stone_edge_bottom.png",      # blob_006: grass strip uniformly across BOTTOM. Pure S edge.
+    4:  "stone_edge_left.png",        # blob_004: stone on right, grass strip on LEFT.
+    3:  "stone_edge_right.png",       # blob_003: stone on left, grass strip on RIGHT.
+    # Corner variants — grass on N and slightly spills around the
+    # corresponding side. Only 2 corners are actually present in the sheet.
+    0:  "stone_corner_nw_outer.png",  # blob_000: grass N + slight LEFT-side spill = NW corner.
+    2:  "stone_corner_ne_outer.png",  # blob_002: grass N + slight RIGHT-side spill = NE corner.
+    7:  "stone_corner_se_outer.png",  # blob_007: grass S + slight RIGHT-side spill = SE corner.
+    # NB: NO stone_corner_sw_outer is available in this sheet — the
+    # autotile picker will fall back to stone_edge_bottom for SW corners.
+
+    # Water + sandy shoreline. 4 edges, no corners in this sheet.
+    8:  "water_edge_top.png",         # blob_008: water in S 2/3, sand+grass+flowers on N.
+    9:  "water_edge_left.png",        # blob_009: water on E 2/3, sand+grass on W.
+    10: "water_edge_right.png",       # blob_010: water on W 2/3, sand+grass on E.
+    11: "water_edge_bottom.png",      # blob_011: water on N 2/3, sand+grass on S.
 }
 
 
