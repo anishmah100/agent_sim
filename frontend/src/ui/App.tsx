@@ -23,6 +23,7 @@ import { Inspector } from "./Inspector";
 import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
 import { HUD } from "./HUD";
+import { Minimap } from "./Minimap";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
@@ -36,6 +37,8 @@ export function App() {
   const [rulebookOpen, setRulebookOpen] = createSignal(false);
   const [leaderboardsOpen, setLeaderboardsOpen] = createSignal(false);
   const [hudOpen, setHudOpen] = createSignal(true);
+  const [liveEntities, setLiveEntities] = createSignal<EntityState[]>([]);
+  const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
@@ -62,6 +65,7 @@ export function App() {
     try {
       const mapData = (await fetchWorldMap("dev_test")) as TileMapData;
       pixiHandle.loadWorld(mapData);
+      setWorldTiles((mapData as { tiles?: string[] }).tiles);
     } catch (e) {
       setWorldLoadError((e as Error).message);
     }
@@ -94,6 +98,7 @@ export function App() {
       onSnapshot: (snap) => {
         setLiveTick(snap.tick);
         setEntityCount(snap.entities.length);
+        setLiveEntities(snap.entities);
         pixiHandle?.setEntities(snap.entities);
         // Keep the inspector's data live for the selected entity.
         const sid = selectedId();
@@ -218,6 +223,27 @@ export function App() {
           </button>
           <button
             type="button"
+            onClick={() => {
+              const tick = liveTick() ?? 0;
+              const url = new URL(window.location.href);
+              url.searchParams.set("t", String(tick));
+              navigator.clipboard?.writeText(url.toString());
+            }}
+            title="Copy a share link pinned to the current tick"
+            style={{
+              padding: "4px 10px",
+              background: "#3a4466",
+              color: "#ead4aa",
+              border: "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            share moment
+          </button>
+          <button
+            type="button"
             onClick={fitToWorld}
             style={{
               padding: "4px 10px",
@@ -289,24 +315,13 @@ export function App() {
         </div>
       )}
 
-      <div
-        style={{
-          position: "absolute",
-          bottom: "16px",
-          left: "16px",
-          width: "200px",
-          height: "150px",
-          background: "rgba(24, 20, 37, 0.85)",
-          border: "1px solid #3a4466",
-          "border-radius": "4px",
-          padding: "8px",
-          color: "#8b9bb4",
-          "font-size": "12px",
-          "z-index": "10",
-        }}
-      >
-        minimap (Milestone 9)
-      </div>
+      <Minimap
+        worldDims={worldInfo()?.world_dims ?? [60, 40]}
+        tiles={worldTiles()}
+        entities={liveEntities()}
+        selfId={selectedId()}
+        onTileClick={(x, y) => pixiHandle?.centerOn(x, y)}
+      />
 
       <div
         style={{
