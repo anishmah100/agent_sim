@@ -142,17 +142,14 @@ export function getTileTextureAt(
 // shows a dirt strip) looks worse than no edge at all. So we only invoke
 // edge tiles when the neighbor's kind matches what the edge tile draws.
 const EDGE_PARTNERS: Partial<Record<TileKind, Set<TileKind>>> = {
-  // Each kind's edge tiles depict ONE transition. Pair lookup is
-  // asymmetric — the transition lives on whichever kind painted it.
-  grass: new Set<TileKind>(["dirt"]),                  // grass_edge_* = grass→dirt
-  dirt:  new Set<TileKind>(["grass"]),                 // dirt_edge_* = dirt→grass
-  // water_edge_* tiles depict a sandy GRASS shore — meaningless against
-  // stone or dirt (a stone bridge meeting water shouldn't show grass).
-  // Restrict water transitions to grass-adjacent only.
+  grass: new Set<TileKind>(["dirt"]),
+  dirt:  new Set<TileKind>(["grass"]),
   water: new Set<TileKind>(["grass"]),
-  stone: new Set<TileKind>(["grass"]),                 // stone_edge_* = stone→grass
-  path:  new Set<TileKind>(["grass"]),                 // path uses stone_edge_*
-  // path/wall/floor_wood/void: no usable edge variants.
+  // Stone now has TWO transition partners: grass (uses stone_edge_*) and
+  // water (uses stone_water_edge_* — synthesized wooden-plank-band edges
+  // that visually break up the stone↔water boundary on bridges).
+  stone: new Set<TileKind>(["grass", "water"]),
+  path:  new Set<TileKind>(["grass", "water"]),
 };
 
 function partnersFor(kind: TileKind): Set<TileKind> | null {
@@ -172,6 +169,22 @@ function lookupVariant(kind: TileKind, suffix: string): Texture | null {
       ?? (TILE_ALIAS[kind]
           ? atlas.byNameLookup(`${TILE_ALIAS[kind]}_${suffix}`)
           : null);
+}
+
+/** Partner-aware lookup. For stone, picks stone_water_edge_top when the
+ *  partner is water, otherwise stone_edge_top. Other kinds delegate to
+ *  the plain lookupVariant. */
+function lookupEdgeVariant(
+  kind: TileKind,
+  partner: TileKind | null,
+  suffix: string,
+): Texture | null {
+  if (!atlas) return null;
+  if ((kind === "stone" || kind === "path") && partner === "water") {
+    const t = atlas.byNameLookup(`stone_water_${suffix}`);
+    if (t) return t;
+  }
+  return lookupVariant(kind, suffix);
 }
 
 export function pickEdgeTexture(
@@ -220,10 +233,10 @@ export function pickEdgeTexture(
     if (t) return t;
   }
 
-  if (diffN) { const t = lookupVariant(kind, "edge_top");    if (t) return t; }
-  if (diffS) { const t = lookupVariant(kind, "edge_bottom"); if (t) return t; }
-  if (diffW) { const t = lookupVariant(kind, "edge_left");   if (t) return t; }
-  if (diffE) { const t = lookupVariant(kind, "edge_right");  if (t) return t; }
+  if (diffN) { const t = lookupEdgeVariant(kind, n, "edge_top");    if (t) return t; }
+  if (diffS) { const t = lookupEdgeVariant(kind, s, "edge_bottom"); if (t) return t; }
+  if (diffW) { const t = lookupEdgeVariant(kind, w, "edge_left");   if (t) return t; }
+  if (diffE) { const t = lookupEdgeVariant(kind, e, "edge_right");  if (t) return t; }
   return null;
 }
 

@@ -91,34 +91,60 @@ def river_predicate(cx: float, amplitude: float, half_width: float) -> Callable[
 
 
 def smooth_boundaries(m: Map, target: str, against: set[str], iterations: int = 2) -> None:
-    """Remove 1-tile spikes from a region. After stamping water (or
-    dirt, etc.), interior bumps where 3+ of the 4 neighbors are a
-    DIFFERENT kind get flipped to that other kind. Smooths stair-step
-    edges that result from sampling an analytic curve at integer
-    tile coordinates."""
+    """Round off stair-step boundaries. Two-tier flip rule:
 
-    for _ in range(iterations):
+      * Interior bumps with 3+ DIFFERENT-kind neighbors (orthogonal) →
+        flip to that kind (kills single-tile spikes).
+      * Convex corners with exactly 2 different-kind neighbors AND 2
+        different-kind diagonal neighbors → flip to that kind. Hits
+        the single-tile bulges at the pond/river merge where 2 out of
+        4 ortho neighbors disagree but the corner is acoustically
+        visible to the eye.
+
+    Both directions are smoothed (target→against and against→target)
+    so the boundary becomes locally smooth from either side."""
+
+    diag = [(-1, -1), (1, -1), (-1, 1), (1, 1)]
+
+    def step(active_target: str, active_against: set[str]) -> int:
         flips: list[tuple[int, int, str]] = []
         for y in range(m.h):
             for x in range(m.w):
-                t = m.grid[y][x]
-                if t != target:
+                if m.grid[y][x] != active_target:
                     continue
-                neigh_count = 0
-                neigh_kind = ""
+                ortho_diff = 0
+                ortho_kind = ""
                 for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < m.w and 0 <= ny < m.h:
                         nk = m.grid[ny][nx]
-                        if nk in against:
-                            neigh_count += 1
-                            neigh_kind = nk
-                if neigh_count >= 3:
-                    flips.append((x, y, neigh_kind))
-        if not flips:
-            break
+                        if nk in active_against:
+                            ortho_diff += 1
+                            ortho_kind = nk
+                if ortho_diff >= 3:
+                    flips.append((x, y, ortho_kind))
+                    continue
+                if ortho_diff >= 2:
+                    diag_diff = 0
+                    for (dx, dy) in diag:
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < m.w and 0 <= ny < m.h:
+                            if m.grid[ny][nx] in active_against:
+                                diag_diff += 1
+                    if diag_diff >= 2:
+                        flips.append((x, y, ortho_kind))
         for (x, y, k) in flips:
             m.set(x, y, k)
+        return len(flips)
+
+    for _ in range(iterations):
+        n1 = step(target, against)
+        # Also flip in the reverse direction so a bump from EITHER side
+        # gets smoothed out.
+        for opp in against:
+            step(opp, {target})
+        if n1 == 0:
+            break
 
 
 def build_oak_hollow() -> Map:

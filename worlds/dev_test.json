@@ -20,11 +20,11 @@
     "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
-    "ggggggggggggggggggggggggggggggggggggggggggggggggggggdddggggg",
-    "ggggggggggggggggggggggggggggggggggggggggggggggggggggdddggggg",
-    "ggggdddggggggggggggggpppppppppppppppppppggggggggggggdddggggg",
-    "ggggdddggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
-    "ggggdddggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
+    "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+    "gggggggggggggggggggggggggggggggggggggggggggggggggggggdgggggg",
+    "gggggggggggggggggggggpppppppppppppppppppgggggggggggggggggggg",
+    "gggggdgggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
+    "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
     "gggggggggggggggggggggpsssWWWWWWWWWWWssspgggggggggggggggggggg",
     "gggggggggggggggggggggpsssWfffffffffWssspgggggggggggggggggggg",
     "gggggggggggggggggggggpsssWfffffffffWssspgggggggggggggggggggg",
@@ -48,14 +48,14 @@
     "gggggggggggggggggggggggggggggggppggggggggggggggggggggggggggg",
     "gggggggggggggggggggggggggggggggppggggggggggggggggggggggggggg",
     "ggggggggggggggggggggggggggggggggppgggggggggggggggggggggggggg",
-    "ggggggggggggggggggggggggggggggggppggggggggddddddddgggggggggg",
-    "gggggggggggggggggggggggggggggggggggggggggddddddddddggggggggg",
-    "gggggggggggggggggggggggggggggggggggggggggddddddddddggggggggg",
+    "ggggggggggggggggggggggggggggggggppgggggggggddddddggggggggggg",
+    "ggggggggggggggggggggggggggggggggggggggggggddddddddgggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggddddddddddggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggddddddddddggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggddddddddddggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggddddddddddggggggggg",
     "ggggggggggggggggggggggggggggggggggggggggggddddddddgggggggggg",
+    "gggggggggggggggggggggggggggggggggggggggggggddddddggggggggggg",
     "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
   ],
   "entities": [
@@ -3247,6 +3247,13 @@
       "walkable": true
     },
     {
+      "x": 4,
+      "y": 5,
+      "sprite": "veg:003",
+      "height_tiles": 1.0,
+      "walkable": true
+    },
+    {
       "x": 20,
       "y": 5,
       "sprite": "veg:003",
@@ -3254,8 +3261,22 @@
       "walkable": true
     },
     {
+      "x": 54,
+      "y": 5,
+      "sprite": "veg:042",
+      "height_tiles": 0.7,
+      "walkable": true
+    },
+    {
       "x": 51,
       "y": 6,
+      "sprite": "veg:009",
+      "height_tiles": 1.1,
+      "walkable": true
+    },
+    {
+      "x": 6,
+      "y": 7,
       "sprite": "veg:009",
       "height_tiles": 1.1,
       "walkable": true
@@ -3818,6 +3839,13 @@
       "y": 37,
       "sprite": "veg:042",
       "height_tiles": 0.7,
+      "walkable": true
+    },
+    {
+      "x": 41,
+      "y": 37,
+      "sprite": "veg:011",
+      "height_tiles": 0.8,
       "walkable": true
     },
     {
