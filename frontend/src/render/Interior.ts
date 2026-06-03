@@ -26,16 +26,20 @@ interface InteriorTemplate {
   tiles: string[];
 }
 
+// COTTAGE — uses v2 interior props:
+//   t=table  c=chair  b=bed  f=lit-fireplace  r=rug
+//   n=barrel h=chest  k=bookshelf  P=painting  l=lantern
+//   D=exit door
 const COTTAGE: InteriorTemplate = {
   width: 12,
   height: 8,
   tiles: [
     "############",
-    "#..........#",
-    "#..t.......#",
-    "#..c....b..#",
-    "#..........#",
-    "#..........#",
+    "#l........l#",
+    "#.f...h..k.#",
+    "#..t..b....#",
+    "#..c..r....#",
+    "#......P...#",
     "#####DD#####",
     "############",
   ],
@@ -46,15 +50,49 @@ const TAVERN: InteriorTemplate = {
   height: 10,
   tiles: [
     "##############",
+    "#l..........l#",
+    "#.t.t.t..p..s#",
+    "#.c.c.c..f...#",
     "#............#",
-    "#.t.t.t.....s#",
-    "#.c.c.c......#",
-    "#............#",
-    "#.t.t.t......#",
-    "#.c.c.c......#",
+    "#.t.t.t..n.h.#",
+    "#.c.c.c..k...#",
     "#............#",
     "######DD######",
     "##############",
+  ],
+};
+
+// BLACKSMITH interior — anvil + forge fire + storage + bed for the smith
+const BLACKSMITH: InteriorTemplate = {
+  width: 12,
+  height: 8,
+  tiles: [
+    "############",
+    "#f....h..k.#",
+    "#......n...#",
+    "#..p.......#",
+    "#......b...#",
+    "#l........l#",
+    "#####DD#####",
+    "############",
+  ],
+};
+
+// TOWN HALL interior — large central room with desk, painting, fancy furniture
+const TOWN_HALL: InteriorTemplate = {
+  width: 16,
+  height: 10,
+  tiles: [
+    "################",
+    "#l............l#",
+    "#.P..........P.#",
+    "#.f....r....k..#",
+    "#......r...T...#",
+    "#..t.h.r..h....#",
+    "#..c....v......#",
+    "#..............#",
+    "#######DD#######",
+    "################",
   ],
 };
 
@@ -63,6 +101,11 @@ const TEMPLATES: Record<string, InteriorTemplate> = {
   "bld:001": COTTAGE,
   "bld:004": TAVERN,
   "bld:005": COTTAGE,
+  // v2 buildings
+  "bld:blacksmith": BLACKSMITH,
+  "bld:town_hall": TOWN_HALL,
+  "bld:granary": COTTAGE,        // simple storage interior for now
+  "bld:watchtower": COTTAGE,     // reuse interior — gameplay later
 };
 
 export class InteriorLayer {
@@ -192,32 +235,62 @@ export class InteriorLayer {
       }
     }
 
-    // Props — simple Graphics rectangles for table/chair/bed v1.
+    // Props — v2: real pixel-art sprites from the interior_props_master
+    // sheet. Each ASCII char maps to one sliced sprite, scaled to fit
+    // within the tile bounds with the natural aspect of the source.
+    // The processed sprites live at /art/processed/v2_interior_props_master/<name>.png.
+    const propMap: Record<string, string> = {
+      "t": "small_table",          // small wooden table
+      "c": "chair_backrest",       // chair with backrest
+      "b": "bed_red",              // red-blanket single bed
+      "B": "bed_blue",             // blue-blanket variant
+      "r": "rug_wool",             // wool rug
+      "f": "fireplace_lit",        // lit fireplace
+      "F": "fireplace_unlit",      // unlit fireplace
+      "n": "barrel",               // wooden barrel
+      "h": "chest_closed",         // treasure chest
+      "k": "bookshelf",            // bookshelf
+      "p": "cooking_pot_fire",     // cooking pot
+      "v": "vase_flowers",         // vase with flowers
+      "l": "lantern_hanging_lit",  // lit hanging lantern
+      "L": "lantern_hanging_unlit",
+      "S": "padded_stool",         // round padded stool
+      "m": "mirror_oval",          // mirror
+      "P": "painting",             // wall painting
+      "T": "tapestry",             // tapestry
+    };
+    const propPromises: Promise<void>[] = [];
     for (let y = 0; y < tpl.height; y++) {
       const row = tpl.tiles[y];
       for (let x = 0; x < row.length; x++) {
         const ch = row[x];
-        if (ch === "t") {
-          const g = new Graphics();
-          g.rect(x*16+2, y*16+4, 12, 10).fill(0x8b5a2b).stroke({color:0x4d2e10, width:1});
-          tileBox.addChild(g);
-        } else if (ch === "c") {
-          const g = new Graphics();
-          g.rect(x*16+5, y*16+5, 6, 8).fill(0x654321);
-          tileBox.addChild(g);
-        } else if (ch === "b") {
-          // Bed: red blanket with a darker headboard band so it reads as
-          // furniture, not just a slab. Previously fill(0xc44) — but
-          // PixiJS reads that as 0x000c44 (dark navy), which is why
-          // beds rendered black. Use 0xcc4444 for proper Endesga red.
-          const bed = new Graphics();
-          bed.rect(x*16+1, y*16+2, 14, 12).fill(0xcc4444).stroke({color:0x661010, width:1});
-          // Pillow stripe at the head.
-          bed.rect(x*16+2, y*16+3, 12, 3).fill(0xfff2a8);
-          tileBox.addChild(bed);
-        }
+        const propName = propMap[ch];
+        if (!propName) continue;
+        const propUrl =
+          `${ENGINE_URL}/art/processed/v2_interior_props_master/${propName}.png`;
+        const px = x * TILE_SIZE_PX;
+        const py = y * TILE_SIZE_PX;
+        propPromises.push(
+          Assets.load<Texture>(propUrl).then((tex) => {
+            tex.source.scaleMode = "nearest";
+            const sp = new Sprite(tex);
+            // Fit each prop within the tile; preserve aspect ratio.
+            // Furniture tends to be taller than wide; let height fill
+            // the tile and width auto-scale. The prop's natural
+            // anchor is bottom-center on the tile floor.
+            const aspect = tex.width / tex.height;
+            sp.height = TILE_SIZE_PX;
+            sp.width = TILE_SIZE_PX * aspect;
+            sp.x = px + (TILE_SIZE_PX - sp.width) / 2;
+            sp.y = py;
+            tileBox.addChild(sp);
+          }).catch((e) => {
+            console.warn(`interior prop ${propName} failed:`, e);
+          })
+        );
       }
     }
+    await Promise.all(propPromises);
 
     // Exit door — clickable interactive tile at the bottom of the
     // interior. Visually a dark wooden door with a gold highlight.
@@ -294,6 +367,10 @@ function prettyName(sprite: string): string {
     case "bld:001": return "Cottage";
     case "bld:004": return "The Hollow Tankard";
     case "bld:005": return "Market Stall";
+    case "bld:blacksmith": return "The Forge";
+    case "bld:town_hall": return "Town Hall";
+    case "bld:granary": return "Granary";
+    case "bld:watchtower": return "Watchtower";
     default: return "Interior";
   }
 }

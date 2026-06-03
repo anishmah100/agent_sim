@@ -175,12 +175,12 @@ def build_oak_hollow() -> Map:
     PLAZA_X1, PLAZA_Y1 = 38, 15
     m.fill_rect(PLAZA_X0, PLAZA_Y0, PLAZA_X1, PLAZA_Y1, STONE)
 
+    # v2: replaced the old wood-floored hall with the painted v2 town_hall
+    # building decoration. The whole plaza is solid stone underneath.
+    # (Kept the constants for reference in case place_decorations' near_plaza
+    #  check still uses them.)
     HALL_X0, HALL_Y0 = 25, 8
     HALL_X1, HALL_Y1 = 35, 12
-    m.fill_rect(HALL_X0, HALL_Y0, HALL_X1, HALL_Y1, WALL)
-    m.fill_rect(HALL_X0 + 1, HALL_Y0 + 1, HALL_X1 - 1, HALL_Y1 - 1, FLOOR)
-    # South-facing doorway (1-tile)
-    m.set(30, HALL_Y1, FLOOR)
 
     # Path ring around plaza
     for x in range(PLAZA_X0 - 1, PLAZA_X1 + 2):
@@ -264,9 +264,29 @@ def place_buildings(m: Map, decs: list[dict], placed: set[tuple[int, int]]) -> N
     # proportions where a house dominates ~4-5 tile rows. Footprint
     # is 5×2 (the bottom-most 2 rows are blocking ground).
     BUILDINGS = [
-        ("bld:000", 12, 18, 5, 2, 4.0),   # red cottage west of plaza
-        ("bld:001", 44, 18, 5, 2, 4.0),   # dark cottage east of plaza
-        ("bld:008", 39, 21, 1, 1, 1.0),   # well south-east
+        # v1 cottages flanking the plaza
+        ("bld:000", 12, 18, 5, 2, 4.0),    # red cottage west of plaza
+        ("bld:001", 44, 18, 5, 2, 4.0),    # dark cottage east of plaza
+        # v2 named buildings — village centerpieces
+        ("bld:town_hall",  26, 12, 6, 2, 4.0),   # north center civic anchor
+        ("bld:blacksmith", 19, 8,  3, 2, 3.5),   # NW forge
+        ("bld:granary",    36, 8,  2, 2, 4.0),   # NE silo
+        ("bld:watchtower", 4,  13, 2, 2, 5.0),   # FAR west tower
+        ("bld:watchtower", 54, 13, 2, 2, 5.0),   # FAR east tower
+        ("bld:well",       30, 21, 1, 1, 1.5),   # center plaza well
+        # market stalls — a row north of the river, south of the plaza
+        # (y=20 is grass; y=22-26 is the river — stalls would drown).
+        ("bld:stall_red_bread_open",    23, 20, 1, 1, 1.5),
+        ("bld:stall_blue_fish_open",    25, 20, 1, 1, 1.5),
+        ("bld:stall_green_veg_open",    27, 20, 1, 1, 1.5),
+        ("bld:stall_gold_cheese_open",  33, 20, 1, 1, 1.5),
+        ("bld:stall_purple_cloth_open", 35, 20, 1, 1, 1.5),
+        ("bld:stall_brown_smith_open",  37, 20, 1, 1, 1.5),
+        # extra cottages — village density
+        ("bld:000", 7,  30, 5, 2, 4.0),   # SW cottage
+        ("bld:001", 22, 32, 5, 2, 4.0),   # mid-south cottage
+        ("bld:000", 38, 32, 5, 2, 4.0),   # SE cottage
+        ("bld:001", 50, 30, 5, 2, 4.0),   # far-SE cottage
     ]
     # Reserve a buffer of tiles around each building so trees don't
     # spawn close enough for their canopies to spill over the roof or
@@ -284,7 +304,10 @@ def place_buildings(m: Map, decs: list[dict], placed: set[tuple[int, int]]) -> N
                 ny = y - dy
                 if not (0 <= nx < m.w and 0 <= ny < m.h):
                     ok = False; break
-                if m.grid[ny][nx] not in (GRASS, DIRT):
+                # v2 buildings may sit on stone plaza tiles, path tiles
+                # (market stalls + well sit on the path), and wood floor
+                # for the v1 hall replacement. Water + walls are out.
+                if m.grid[ny][nx] not in (GRASS, DIRT, "s", "f", "p"):
                     ok = False; break
                 if (nx, ny) in placed:
                     ok = False; break
@@ -514,7 +537,7 @@ def place_decorations(m: Map, seeded_placed: set[tuple[int, int]] | None = None)
 
 
 ENTITIES = [
-    # Village clearing — NPCs scattered on the plaza, not in a row.
+    # === v1 NPCs — village clearing ===
     {"entity_id": "npc_trainer_red",        "archetype": "trainer_red",        "pos": [21, 16], "facing": "S", "display_name": "Red the trainer"},
     {"entity_id": "npc_trainer_lyra_blue",  "archetype": "trainer_lyra_blue",  "pos": [25, 14], "facing": "E", "display_name": "Lyra"},
     {"entity_id": "npc_wizard",             "archetype": "wizard",             "pos": [37, 14], "facing": "W", "display_name": "Old Sage"},
@@ -522,6 +545,31 @@ ENTITIES = [
     {"entity_id": "npc_iron_guard",         "archetype": "iron_guard",         "pos": [33, 16], "facing": "S", "display_name": "Iron Guard"},
     {"entity_id": "npc_child",              "archetype": "child",              "pos": [29, 20], "facing": "S", "display_name": "Village child"},
     {"entity_id": "npc_cloaked_wanderer",   "archetype": "cloaked_wanderer",   "pos": [46, 32], "facing": "N", "display_name": "Hooded wanderer"},
+
+    # === v2 NPCs — placed near their thematic buildings ===
+    {"entity_id": "npc_blacksmith",         "archetype": "blacksmith_npc", "pos": [21, 10], "facing": "S", "display_name": "Brog the Smith"},
+    {"entity_id": "npc_woodcutter",         "archetype": "woodcutter",     "pos": [9, 9],   "facing": "E", "display_name": "Tim the Woodcutter"},
+    {"entity_id": "npc_mason",              "archetype": "mason",          "pos": [30, 23], "facing": "N", "display_name": "Rina the Mason"},
+    {"entity_id": "npc_mayor",              "archetype": "mayor",          "pos": [29, 15], "facing": "S", "display_name": "Mayor Halbrook"},
+    {"entity_id": "npc_drifter",            "archetype": "drifter",        "pos": [51, 33], "facing": "W", "display_name": "Mira the Drifter"},
+    {"entity_id": "npc_goblin_1",           "archetype": "goblin",         "pos": [54, 35], "facing": "N", "display_name": "Goblin scout"},
+    {"entity_id": "npc_goblin_2",           "archetype": "goblin",         "pos": [4, 35],  "facing": "E", "display_name": "Goblin lurker"},
+
+    # === Chopable tree entities — placed near the woodcutter ===
+    # Each is a first-class entity the Resources system recognizes; the
+    # Decoration layer renders the matching v2 tree sprite at the same tile.
+    {"entity_id": "tree_oak_1",   "archetype": "tree", "pos": [6, 8],   "facing": "S", "display_name": "Oak"},
+    {"entity_id": "tree_oak_2",   "archetype": "tree", "pos": [8, 7],   "facing": "S", "display_name": "Oak"},
+    {"entity_id": "tree_pine_1", "archetype": "tree", "pos": [12, 6],   "facing": "S", "display_name": "Pine"},
+    {"entity_id": "tree_pine_2", "archetype": "tree", "pos": [3, 6],    "facing": "S", "display_name": "Pine"},
+    {"entity_id": "tree_oak_3",   "archetype": "tree", "pos": [10, 4],   "facing": "S", "display_name": "Oak"},
+    {"entity_id": "tree_apple_1", "archetype": "tree", "pos": [16, 5],   "facing": "S", "display_name": "Apple tree"},
+
+    # === Mineable rock entities — placed near the mason / quarry area ===
+    {"entity_id": "rock_1", "archetype": "rock", "pos": [40, 36], "facing": "S", "display_name": "Boulder"},
+    {"entity_id": "rock_2", "archetype": "rock", "pos": [42, 37], "facing": "S", "display_name": "Boulder"},
+    {"entity_id": "rock_3", "archetype": "rock", "pos": [44, 35], "facing": "S", "display_name": "Boulder"},
+    {"entity_id": "rock_iron_1", "archetype": "rock", "pos": [46, 37], "facing": "S", "display_name": "Iron ore boulder"},
 ]
 
 

@@ -172,9 +172,35 @@ export class DecorationLayer {
   }
 }
 
+// Sprite IDs come in two flavors:
+//   - v1 numeric: "bld:000", "veg:003", etc. — point at art/processed/objects/<cat>/obj_NNN.png
+//   - v2 named:   "bld:blacksmith", "veg:tree_oak", "fx:window_glow", "props:bed_red" etc.
+//     — point at the processed v2 sliced sheets.
+const V2_BUILDING_NAMES = new Set([
+  "blacksmith", "town_hall", "granary", "watchtower", "well",
+]);
 function spriteUrl(id: string): string | null {
   const [cat, num] = id.split(":");
   if (!cat || !num) return null;
+
+  // v2 named buildings — standalone PNGs at processed/v2_<name>.png
+  if (cat === "bld" && V2_BUILDING_NAMES.has(num)) {
+    return `${ENGINE_URL}/art/processed/v2_${num}.png`;
+  }
+  // v2 vegetation/resources entities — sliced master sheet
+  if (cat === "veg" && /^[a-z]/.test(num)) {
+    return `${ENGINE_URL}/art/processed/v2_resources_world_master/${num}.png`;
+  }
+  // v2 market stalls — sliced sheet
+  if (cat === "bld" && num.startsWith("stall_")) {
+    return `${ENGINE_URL}/art/processed/v2_market_stall/${num}.png`;
+  }
+  // v2 construction stages — sliced sheet
+  if (cat === "bld" && (num.startsWith("cottage_stage_") || num.startsWith("wreckage_") || num.startsWith("scaffolding_"))) {
+    return `${ENGINE_URL}/art/processed/v2_construction_stages/${num}.png`;
+  }
+
+  // Legacy v1: numeric IDs → obj_NNN.png under category folder.
   const dir =
     cat === "veg" ? "vegetation" :
     cat === "bld" ? "buildings" :

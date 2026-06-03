@@ -25,11 +25,11 @@
     "gggggggggggggggggggggpppppppppppppppppppgggggggggggggggggggg",
     "gggggdgggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
     "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
-    "gggggggggggggggggggggpsssWWWWWWWWWWWssspgggggggggggggggggggg",
-    "gggggggggggggggggggggpsssWfffffffffWssspgggggggggggggggggggg",
-    "gggggggggggggggggggggpsssWfffffffffWssspgggggggggggggggggggg",
-    "gggggggggggggggggggggpsssWfffffffffWssspgggggggggggggggggggg",
-    "gggggggggggggggggggggpsssWWWWWfWWWWWssspgggggggggggggggggggg",
+    "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
+    "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
+    "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
+    "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
+    "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
     "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
     "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
     "gggggggggggggggggggggpssssssssssssssssspgggggggggggggggggggg",
@@ -128,6 +128,176 @@
       ],
       "facing": "N",
       "display_name": "Hooded wanderer"
+    },
+    {
+      "entity_id": "npc_blacksmith",
+      "archetype": "blacksmith_npc",
+      "pos": [
+        21,
+        10
+      ],
+      "facing": "S",
+      "display_name": "Brog the Smith"
+    },
+    {
+      "entity_id": "npc_woodcutter",
+      "archetype": "woodcutter",
+      "pos": [
+        9,
+        9
+      ],
+      "facing": "E",
+      "display_name": "Tim the Woodcutter"
+    },
+    {
+      "entity_id": "npc_mason",
+      "archetype": "mason",
+      "pos": [
+        30,
+        23
+      ],
+      "facing": "N",
+      "display_name": "Rina the Mason"
+    },
+    {
+      "entity_id": "npc_mayor",
+      "archetype": "mayor",
+      "pos": [
+        29,
+        15
+      ],
+      "facing": "S",
+      "display_name": "Mayor Halbrook"
+    },
+    {
+      "entity_id": "npc_drifter",
+      "archetype": "drifter",
+      "pos": [
+        51,
+        33
+      ],
+      "facing": "W",
+      "display_name": "Mira the Drifter"
+    },
+    {
+      "entity_id": "npc_goblin_1",
+      "archetype": "goblin",
+      "pos": [
+        54,
+        35
+      ],
+      "facing": "N",
+      "display_name": "Goblin scout"
+    },
+    {
+      "entity_id": "npc_goblin_2",
+      "archetype": "goblin",
+      "pos": [
+        4,
+        35
+      ],
+      "facing": "E",
+      "display_name": "Goblin lurker"
+    },
+    {
+      "entity_id": "tree_oak_1",
+      "archetype": "tree",
+      "pos": [
+        6,
+        8
+      ],
+      "facing": "S",
+      "display_name": "Oak"
+    },
+    {
+      "entity_id": "tree_oak_2",
+      "archetype": "tree",
+      "pos": [
+        8,
+        7
+      ],
+      "facing": "S",
+      "display_name": "Oak"
+    },
+    {
+      "entity_id": "tree_pine_1",
+      "archetype": "tree",
+      "pos": [
+        12,
+        6
+      ],
+      "facing": "S",
+      "display_name": "Pine"
+    },
+    {
+      "entity_id": "tree_pine_2",
+      "archetype": "tree",
+      "pos": [
+        3,
+        6
+      ],
+      "facing": "S",
+      "display_name": "Pine"
+    },
+    {
+      "entity_id": "tree_oak_3",
+      "archetype": "tree",
+      "pos": [
+        10,
+        4
+      ],
+      "facing": "S",
+      "display_name": "Oak"
+    },
+    {
+      "entity_id": "tree_apple_1",
+      "archetype": "tree",
+      "pos": [
+        16,
+        5
+      ],
+      "facing": "S",
+      "display_name": "Apple tree"
+    },
+    {
+      "entity_id": "rock_1",
+      "archetype": "rock",
+      "pos": [
+        40,
+        36
+      ],
+      "facing": "S",
+      "display_name": "Boulder"
+    },
+    {
+      "entity_id": "rock_2",
+      "archetype": "rock",
+      "pos": [
+        42,
+        37
+      ],
+      "facing": "S",
+      "display_name": "Boulder"
+    },
+    {
+      "entity_id": "rock_3",
+      "archetype": "rock",
+      "pos": [
+        44,
+        35
+      ],
+      "facing": "S",
+      "display_name": "Boulder"
+    },
+    {
+      "entity_id": "rock_iron_1",
+      "archetype": "rock",
+      "pos": [
+        46,
+        37
+      ],
+      "facing": "S",
+      "display_name": "Iron ore boulder"
     }
   ],
   "decorations": [
@@ -150,12 +320,147 @@
       "walkable": false
     },
     {
-      "x": 39,
+      "x": 26,
+      "y": 12,
+      "sprite": "bld:town_hall",
+      "height_tiles": 4.0,
+      "footprint_w": 6,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 19,
+      "y": 8,
+      "sprite": "bld:blacksmith",
+      "height_tiles": 3.5,
+      "footprint_w": 3,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 36,
+      "y": 8,
+      "sprite": "bld:granary",
+      "height_tiles": 4.0,
+      "footprint_w": 2,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 4,
+      "y": 13,
+      "sprite": "bld:watchtower",
+      "height_tiles": 5.0,
+      "footprint_w": 2,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 54,
+      "y": 13,
+      "sprite": "bld:watchtower",
+      "height_tiles": 5.0,
+      "footprint_w": 2,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 30,
       "y": 21,
-      "sprite": "bld:008",
-      "height_tiles": 1.0,
+      "sprite": "bld:well",
+      "height_tiles": 1.5,
       "footprint_w": 1,
       "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 23,
+      "y": 20,
+      "sprite": "bld:stall_red_bread_open",
+      "height_tiles": 1.5,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 25,
+      "y": 20,
+      "sprite": "bld:stall_blue_fish_open",
+      "height_tiles": 1.5,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 27,
+      "y": 20,
+      "sprite": "bld:stall_green_veg_open",
+      "height_tiles": 1.5,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 33,
+      "y": 20,
+      "sprite": "bld:stall_gold_cheese_open",
+      "height_tiles": 1.5,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 35,
+      "y": 20,
+      "sprite": "bld:stall_purple_cloth_open",
+      "height_tiles": 1.5,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 37,
+      "y": 20,
+      "sprite": "bld:stall_brown_smith_open",
+      "height_tiles": 1.5,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 7,
+      "y": 30,
+      "sprite": "bld:000",
+      "height_tiles": 4.0,
+      "footprint_w": 5,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 22,
+      "y": 32,
+      "sprite": "bld:001",
+      "height_tiles": 4.0,
+      "footprint_w": 5,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 38,
+      "y": 32,
+      "sprite": "bld:000",
+      "height_tiles": 4.0,
+      "footprint_w": 5,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 50,
+      "y": 30,
+      "sprite": "bld:001",
+      "height_tiles": 4.0,
+      "footprint_w": 5,
+      "footprint_h": 2,
       "walkable": false
     },
     {
@@ -1377,13 +1682,6 @@
       "walkable": false
     },
     {
-      "x": 3,
-      "y": 11,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
       "x": 57,
       "y": 11,
       "sprite": "veg:037",
@@ -1412,13 +1710,6 @@
       "walkable": false
     },
     {
-      "x": 56,
-      "y": 12,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
       "x": 57,
       "y": 12,
       "sprite": "veg:037",
@@ -1433,16 +1724,9 @@
       "walkable": false
     },
     {
-      "x": 3,
+      "x": 57,
       "y": 13,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 56,
-      "y": 13,
-      "sprite": "veg:004",
+      "sprite": "veg:000",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -1454,30 +1738,9 @@
       "walkable": false
     },
     {
-      "x": 59,
-      "y": 13,
-      "sprite": "veg:000",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
       "x": 1,
       "y": 14,
       "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 3,
-      "y": 14,
-      "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 56,
-      "y": 14,
-      "sprite": "veg:036",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -1492,20 +1755,6 @@
       "x": 2,
       "y": 15,
       "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 3,
-      "y": 15,
-      "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 56,
-      "y": 15,
-      "sprite": "veg:037",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -3204,23 +3453,9 @@
       "walkable": false
     },
     {
-      "x": 55,
-      "y": 13,
-      "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
       "x": 53,
       "y": 10,
       "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 53,
-      "y": 14,
-      "sprite": "veg:000",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -3241,27 +3476,6 @@
     {
       "x": 7,
       "y": 12,
-      "sprite": "veg:000",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 6,
-      "y": 12,
-      "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 6,
-      "y": 15,
-      "sprite": "veg:000",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 10,
-      "y": 32,
       "sprite": "veg:000",
       "height_tiles": 2.0,
       "walkable": false
@@ -3291,27 +3505,6 @@
       "x": 18,
       "y": 35,
       "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 53,
-      "y": 29,
-      "sprite": "veg:004",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 54,
-      "y": 32,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 50,
-      "y": 31,
-      "sprite": "veg:000",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -3519,13 +3712,6 @@
       "walkable": true
     },
     {
-      "x": 55,
-      "y": 11,
-      "sprite": "veg:010",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
       "x": 17,
       "y": 12,
       "sprite": "veg:011",
@@ -3571,13 +3757,6 @@
       "x": 41,
       "y": 13,
       "sprite": "veg:025",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 4,
-      "y": 14,
-      "sprite": "veg:010",
       "height_tiles": 0.7,
       "walkable": true
     },
@@ -3680,31 +3859,10 @@
       "walkable": true
     },
     {
-      "x": 33,
-      "y": 19,
-      "sprite": "veg:009",
-      "height_tiles": 1.1,
-      "walkable": true
-    },
-    {
-      "x": 36,
-      "y": 19,
-      "sprite": "veg:042",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
       "x": 6,
       "y": 21,
       "sprite": "veg:011",
       "height_tiles": 0.8,
-      "walkable": true
-    },
-    {
-      "x": 22,
-      "y": 21,
-      "sprite": "veg:002",
-      "height_tiles": 1.0,
       "walkable": true
     },
     {
@@ -3736,31 +3894,10 @@
       "walkable": true
     },
     {
-      "x": 7,
-      "y": 28,
-      "sprite": "veg:008",
-      "height_tiles": 1.1,
-      "walkable": true
-    },
-    {
-      "x": 12,
-      "y": 28,
-      "sprite": "veg:042",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
       "x": 29,
       "y": 28,
       "sprite": "veg:041",
       "height_tiles": 0.8,
-      "walkable": true
-    },
-    {
-      "x": 51,
-      "y": 28,
-      "sprite": "veg:003",
-      "height_tiles": 1.0,
       "walkable": true
     },
     {
@@ -3785,20 +3922,6 @@
       "walkable": true
     },
     {
-      "x": 54,
-      "y": 29,
-      "sprite": "veg:008",
-      "height_tiles": 1.1,
-      "walkable": true
-    },
-    {
-      "x": 9,
-      "y": 30,
-      "sprite": "veg:003",
-      "height_tiles": 1.0,
-      "walkable": true
-    },
-    {
       "x": 31,
       "y": 30,
       "sprite": "veg:003",
@@ -3810,13 +3933,6 @@
       "y": 30,
       "sprite": "veg:009",
       "height_tiles": 1.1,
-      "walkable": true
-    },
-    {
-      "x": 50,
-      "y": 30,
-      "sprite": "veg:011",
-      "height_tiles": 0.8,
       "walkable": true
     },
     {
@@ -3834,20 +3950,6 @@
       "walkable": true
     },
     {
-      "x": 23,
-      "y": 31,
-      "sprite": "veg:010",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 26,
-      "y": 31,
-      "sprite": "veg:010",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
       "x": 15,
       "y": 33,
       "sprite": "veg:025",
@@ -3856,13 +3958,6 @@
     },
     {
       "x": 18,
-      "y": 33,
-      "sprite": "veg:042",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 23,
       "y": 33,
       "sprite": "veg:042",
       "height_tiles": 0.7,
@@ -3880,20 +3975,6 @@
       "y": 33,
       "sprite": "veg:011",
       "height_tiles": 0.8,
-      "walkable": true
-    },
-    {
-      "x": 21,
-      "y": 34,
-      "sprite": "veg:010",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 24,
-      "y": 34,
-      "sprite": "veg:025",
-      "height_tiles": 0.7,
       "walkable": true
     },
     {
