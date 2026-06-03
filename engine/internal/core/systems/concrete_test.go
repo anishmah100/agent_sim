@@ -36,6 +36,9 @@ func (s *stubWorld) GetService(string) any             { return nil }
 func (s *stubWorld) RegisterService(string, any)       {}
 func (s *stubWorld) EntitiesInRadius([2]int, int) []string { return nil }
 func (s *stubWorld) IsWalkable([2]int) bool            { return true }
+func (s *stubWorld) EnterBuilding(string, string, int) bool { return false }
+func (s *stubWorld) ExitBuilding(string) bool          { return false }
+func (s *stubWorld) InsideBuilding(string) string      { return "" }
 func (s *stubWorld) Chebyshev(a, b [2]int) int         {
 	dx, dy := a[0]-b[0], a[1]-b[1]
 	if dx < 0 {

@@ -93,6 +93,41 @@ func (a *WorldAdapter) Chebyshev(a1, b [2]int) int {
 	return chebyshev(Tile(a1), Tile(b))
 }
 
+// Building-interior membership. These manipulate the engine-private
+// InsideBuilding + insideTicks fields directly so composable systems
+// don't have to know about the existing tick-decay semantics.
+func (a *WorldAdapter) EnterBuilding(entityID, buildingID string, maxTicks int) bool {
+	e := a.W.EntityByIDUnlocked(entityID)
+	if e == nil {
+		return false
+	}
+	a.W.MutateEntity(entityID, func(real *Entity) {
+		real.InsideBuilding = buildingID
+		real.insideTicks = maxTicks
+	})
+	return true
+}
+
+func (a *WorldAdapter) ExitBuilding(entityID string) bool {
+	e := a.W.EntityByIDUnlocked(entityID)
+	if e == nil || e.InsideBuilding == "" {
+		return false
+	}
+	a.W.MutateEntity(entityID, func(real *Entity) {
+		real.InsideBuilding = ""
+		real.insideTicks = 0
+	})
+	return true
+}
+
+func (a *WorldAdapter) InsideBuilding(entityID string) string {
+	e := a.W.EntityByIDUnlocked(entityID)
+	if e == nil {
+		return ""
+	}
+	return e.InsideBuilding
+}
+
 // LockWrite / UnlockWrite / LockRead / UnlockRead expose locking for
 // the pipeline. World uses sync.RWMutex internally.
 func (a *WorldAdapter) LockWrite()   { a.W.mu.Lock() }

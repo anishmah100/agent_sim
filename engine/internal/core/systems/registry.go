@@ -36,6 +36,16 @@ type World interface {
 	// Tile + walkability for verb validation.
 	IsWalkable(t [2]int) bool
 	Chebyshev(a, b [2]int) int
+
+	// Building interior membership. EnterBuilding marks the entity as
+	// being inside the named building for up to `maxTicks` (the engine
+	// auto-exits after the countdown so an offline agent doesn't get
+	// stuck inside forever). ExitBuilding clears membership early.
+	// Building systems orchestrate the verb-level rules (ownership,
+	// locks, observers); the world owns the field.
+	EnterBuilding(entityID, buildingID string, maxTicks int) bool
+	ExitBuilding(entityID string) bool
+	InsideBuilding(entityID string) string
 }
 
 // Entity is the opaque handle systems mutate. The concrete world

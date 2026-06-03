@@ -15,6 +15,7 @@ import (
 	"github.com/anishmah100/agent_sim/engine/internal/systems/inventory"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/loot"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/money"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/property"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/quests"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/trade"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
@@ -36,6 +37,7 @@ func Install(w *world.World) *world.SystemHost {
 	host.Install(combat.New())
 	host.Install(money.New())
 	host.Install(inventory.New())
+	host.Install(property.New())
 	host.Install(trade.New())
 	host.Install(loot.New())
 	host.Install(quests.New())
