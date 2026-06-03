@@ -7,8 +7,8 @@
 // we'll swap to @pixi/tilemap or our own batched draw — the interface
 // of TilemapLayer stays the same.
 
-import { Application, Container, Sprite } from "pixi.js";
-import { TILE_SIZE_PX, getTileTexture, type TileKind } from "./tiles";
+import { Application, Container, Sprite, Texture } from "pixi.js";
+import { TILE_SIZE_PX, getTileTextureAt, pickEdgeTexture, type TileKind } from "./tiles";
 
 export interface TileMapData {
   map_id: string;
@@ -19,6 +19,15 @@ export interface TileMapData {
   tiles_legend: Record<string, TileKind>;
   tiles: string[];
   entities: TileMapEntity[];
+  decorations?: TileMapDecoration[];
+}
+
+export interface TileMapDecoration {
+  x: number;
+  y: number;
+  sprite: string;
+  height_tiles?: number;
+  walkable?: boolean;
 }
 
 export interface TileMapEntity {
@@ -56,6 +65,8 @@ export class TilemapLayer {
       child.destroy();
     }
 
+    // Build a TileKind grid so the autotiler can read neighbors.
+    const grid: TileKind[][] = [];
     for (let y = 0; y < data.height_tiles; y++) {
       const row = data.tiles[y];
       if (row.length !== data.width_tiles) {
@@ -63,22 +74,32 @@ export class TilemapLayer {
           `row ${y} length ${row.length} != declared width ${data.width_tiles}`,
         );
       }
+      const rowKinds: TileKind[] = [];
       for (let x = 0; x < data.width_tiles; x++) {
         const ch = row[x];
         const kind = data.tiles_legend[ch];
         if (kind === undefined) {
           throw new Error(`unknown tile char ${JSON.stringify(ch)} at (${x},${y})`);
         }
-        const tex = getTileTexture(this.app, kind);
+        rowKinds.push(kind);
+      }
+      grid.push(rowKinds);
+    }
+
+    const kindAt = (x: number, y: number): TileKind | null => {
+      if (x < 0 || y < 0 || x >= data.width_tiles || y >= data.height_tiles) return null;
+      return grid[y][x];
+    };
+
+    for (let y = 0; y < data.height_tiles; y++) {
+      for (let x = 0; x < data.width_tiles; x++) {
+        const kind = grid[y][x];
+        let tex: Texture | null = pickEdgeTexture(kind, x, y, kindAt);
+        if (!tex) tex = getTileTextureAt(this.app, kind, x, y);
         const sp = new Sprite(tex);
         sp.x = x * TILE_SIZE_PX;
         sp.y = y * TILE_SIZE_PX;
-        // Source tiles are ~117×111 px (full DALL-E detail preserved).
-        // Scale so each tile fills its 16×16 footprint. We render each
-        // tile 1 world-pixel WIDER and TALLER than its grid slot to
-        // overlap the next tile — this hides any subpixel seam that
-        // would otherwise show as a thin dark line at non-integer
-        // viewport zoom levels (the standard tilemap extrusion trick).
+        // 1px overlap hides subpixel seams at non-integer zoom.
         sp.width = TILE_SIZE_PX + 1;
         sp.height = TILE_SIZE_PX + 1;
         this.container.addChild(sp);

@@ -21,6 +21,7 @@ import { Application, Container } from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
+import { DecorationLayer } from "./Decoration";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
@@ -72,10 +73,12 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
   // Layers under the viewport. Order = render order.
   const tilemap = new TilemapLayer(app);
+  const decorations = new DecorationLayer();
   const entities = new EntityLayer();
   const fxAbove = new Container();          // particles, selection rings, day/night tint top
   fxAbove.label = "fx_above";
   viewport.addChild(tilemap.container);
+  viewport.addChild(decorations.container);
   viewport.addChild(entities.container);
   viewport.addChild(fxAbove);
 
@@ -130,10 +133,10 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
   const doFitToWorld = (): void => {
     if (!currentWorld) return;
-    viewport.fit(true, viewport.worldWidth, viewport.worldHeight);
     viewport.moveCenter(viewport.worldWidth / 2, viewport.worldHeight / 2);
-    // Comfortable default zoom — tiles render at ~32 device-px each.
-    viewport.setZoom(2.0, true);
+    // HG-style close camera — tiles render at ~64 device-px each so
+    // detail (tree texture, character pixel art) reads at a glance.
+    viewport.setZoom(4.0, true);
   };
 
   return {
@@ -154,6 +157,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
           display_name: e.display_name,
         })),
       );
+      void decorations.load(data.decorations ?? []);
       doFitToWorld();
     },
 
