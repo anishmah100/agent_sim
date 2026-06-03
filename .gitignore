@@ -38,3 +38,6 @@ worlds/snapshots/*.bin
 
 # Claude Code session metadata
 .claude/
+
+# Local run artifacts from ./start.sh
+.runlog/
