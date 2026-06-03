@@ -229,6 +229,14 @@ func (s *service) DealDamage(w syscore.World, targetID string, amount int, cause
 	})
 	w.QueueEvent(DamageDealt{Target: targetID, Killer: killer, Amount: amount, NewHP: newHP, Cause: cause})
 	if died {
+		// Credit the killer with a kill so leaderboards / inspector
+		// have something to show. Non-combat causes (trap, fire) have
+		// killer == "" and don't credit anyone.
+		if killer != "" {
+			w.MutateEntity(killer, func(real syscore.Entity) {
+				real.SetExtra("kills", extrasInt(real, "kills")+1)
+			})
+		}
 		w.QueueEvent(EntityDied{EntityID: targetID, Killer: killer, Cause: cause})
 		w.EmitSound(target.Pos(), "death_scream")
 	}

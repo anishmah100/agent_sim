@@ -30,6 +30,7 @@ export function App() {
   const [worldLoadError, setWorldLoadError] = createSignal<string | null>(null);
   const [wsState, setWsState] = createSignal<"connecting" | "open" | "closed">("connecting");
   const [liveTick, setLiveTick] = createSignal<number | null>(null);
+  const [entityCount, setEntityCount] = createSignal(0);
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<EntityState | null>(null);
   const [rulebookOpen, setRulebookOpen] = createSignal(false);
@@ -89,6 +90,7 @@ export function App() {
       onConnState: setWsState,
       onSnapshot: (snap) => {
         setLiveTick(snap.tick);
+        setEntityCount(snap.entities.length);
         pixiHandle?.setEntities(snap.entities);
         // Keep the inspector's data live for the selected entity.
         const sid = selectedId();
@@ -233,10 +235,10 @@ export function App() {
 
       {hudOpen() && (
         <HUD
-          tick={liveTick() ?? 0}
           dayPhase="day"
           weather="clear"
           worldDims={worldInfo()?.world_dims ?? [0, 0]}
+          entityCount={entityCount()}
           selected={selectedSnapshot()}
         />
       )}

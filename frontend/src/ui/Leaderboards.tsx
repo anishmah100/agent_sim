@@ -5,7 +5,7 @@ import { For, Show, createResource } from "solid-js";
 
 const ENGINE_URL = import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
 
-type Board = "richest" | "kills" | "relationships";
+type Board = "richest" | "kills" | "buildings" | "contracts";
 
 interface Row {
   entity_id: string;
@@ -22,12 +22,14 @@ async function fetchBoard(b: Board): Promise<Row[]> {
 export function Leaderboards() {
   const [richest] = createResource(() => "richest" as Board, fetchBoard);
   const [kills] = createResource(() => "kills" as Board, fetchBoard);
-  const [rel] = createResource(() => "relationships" as Board, fetchBoard);
+  const [buildings] = createResource(() => "buildings" as Board, fetchBoard);
+  const [contracts] = createResource(() => "contracts" as Board, fetchBoard);
   return (
     <div class="leaderboards">
       <Section title="Richest" rows={richest()} unit="g" />
       <Section title="Most kills" rows={kills()} unit="" />
-      <Section title="Most relationships" rows={rel()} unit="" />
+      <Section title="Most buildings owned" rows={buildings()} unit="" />
+      <Section title="Most contracts completed" rows={contracts()} unit="" />
     </div>
   );
 }

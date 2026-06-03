@@ -6,8 +6,20 @@
 // AnimatedSprite from a real atlas is a single-method change later.
 
 import { AnimatedSprite, Container, Graphics, Sprite, Text } from "pixi.js";
+import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import type { CharacterAtlas, CharacterAnim } from "./CharacterAtlas";
+
+// Shared hover outline filter for entities — same look as decorations'
+// building hover (Decoration.ts). One instance is fine because Pixi
+// re-evaluates the filter each frame against whichever container's
+// .filters array currently points to it.
+const HOVER_OUTLINE = new OutlineFilter({
+  thickness: 1.5,
+  color: 0xfff2a8,
+  alpha: 0.85,
+  knockout: false,
+});
 
 export interface EntityState {
   entity_id: string;
@@ -242,6 +254,21 @@ export class EntityLayer {
 
     this.applyPos(wrap, e.pos);
     this.container.addChild(wrap);
+
+    // Hover affordance — match the building hover in Decoration.ts so
+    // users learn one interaction model: pointer-over outlines the
+    // clickable thing, click selects/enters. Items + decorations stay
+    // un-hoverable to keep the visual signal meaningful.
+    if (e.archetype !== "item" && e.archetype !== "decoration") {
+      wrap.eventMode = "static";
+      wrap.cursor = "pointer";
+      wrap.on("pointerover", () => {
+        wrap.filters = [HOVER_OUTLINE];
+      });
+      wrap.on("pointerout", () => {
+        wrap.filters = [];
+      });
+    }
 
     return {
       state: { ...e },

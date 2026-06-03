@@ -206,9 +206,15 @@ export class InteriorLayer {
           g.rect(x*16+5, y*16+5, 6, 8).fill(0x654321);
           tileBox.addChild(g);
         } else if (ch === "b") {
-          const g = new Graphics();
-          g.rect(x*16+1, y*16+2, 14, 12).fill(0xc44).stroke({color:0x600, width:1});
-          tileBox.addChild(g);
+          // Bed: red blanket with a darker headboard band so it reads as
+          // furniture, not just a slab. Previously fill(0xc44) — but
+          // PixiJS reads that as 0x000c44 (dark navy), which is why
+          // beds rendered black. Use 0xcc4444 for proper Endesga red.
+          const bed = new Graphics();
+          bed.rect(x*16+1, y*16+2, 14, 12).fill(0xcc4444).stroke({color:0x661010, width:1});
+          // Pillow stripe at the head.
+          bed.rect(x*16+2, y*16+3, 12, 3).fill(0xfff2a8);
+          tileBox.addChild(bed);
         }
       }
     }

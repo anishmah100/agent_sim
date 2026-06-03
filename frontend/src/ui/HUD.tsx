@@ -1,19 +1,24 @@
-// HUD overlay — top-right clock, top-left mini-stats, bottom-left
-// minimap stub. Lives outside the PixiJS viewport (Solid DOM).
+// HUD overlay — top-left selected-entity panel + a small world-stats
+// strip top-right. Lives outside the PixiJS viewport (Solid DOM).
+//
+// Top-bar already shows the live tick + WS state, so the HUD does NOT
+// duplicate them. Top-right carries info that's NOT in the top-bar:
+// day phase, weather (when not clear), entity count.
 //
 // Inputs:
-//   - tick + day_phase + weather from the world clock
+//   - dayPhase + weather from the world clock (engine populates these
+//     on the snapshot envelope eventually; defaults until then)
+//   - entityCount for "X entities" world summary
 //   - selected entity HP/gold/inventory from the inspector signal
-//   - world dims for the minimap
 
 import { Show } from "solid-js";
 import type { EntityState } from "../render/Entity";
 
 export interface HUDProps {
-  tick: number;
   dayPhase: string;
   weather: string;
   worldDims: [number, number];
+  entityCount: number;
   selected: EntityState | null;
 }
 
@@ -21,11 +26,11 @@ export function HUD(props: HUDProps) {
   return (
     <>
       <div class="hud-topright">
-        <div class="clock">tick {props.tick}</div>
         <div class="phase">{props.dayPhase}</div>
         <Show when={props.weather !== "clear"}>
           <div class="weather">{props.weather}</div>
         </Show>
+        <div class="entity-count">{props.entityCount} entities</div>
       </div>
       <Show when={props.selected}>
         <div class="hud-topleft">

@@ -8,8 +8,8 @@
 // fields (public vs private), its emitted sounds, and its archetypes.
 // A search box filters verbs and state-field keys across all systems.
 
-import { createResource, createSignal, For, Show } from "solid-js";
-import { fetchAffordances, type SystemDeclaration, type VerbDeclaration, type StateFieldDecl, type SoundDecl, type ArchetypeDecl } from "../net/api";
+import { createSignal, onMount, For, Show } from "solid-js";
+import { fetchAffordances, type AffordanceManifest, type SystemDeclaration, type VerbDeclaration, type StateFieldDecl, type SoundDecl, type ArchetypeDecl } from "../net/api";
 
 const PALETTE = {
   bg: "rgba(24, 20, 37, 0.96)",
@@ -23,9 +23,18 @@ const PALETTE = {
 };
 
 export function WorldRulebook(props: { onClose: () => void }) {
-  const [manifest] = createResource(fetchAffordances);
+  // Explicit fetch state so a hung or failed request shows the user
+  // an actionable error instead of a forever "loading" spinner.
+  const [manifest, setManifest] = createSignal<AffordanceManifest | null>(null);
+  const [error, setError] = createSignal<string | null>(null);
   const [query, setQuery] = createSignal("");
   const [activeSystem, setActiveSystem] = createSignal<string | null>(null);
+
+  onMount(() => {
+    fetchAffordances()
+      .then((m) => setManifest(m))
+      .catch((e) => setError((e as Error).message ?? String(e)));
+  });
 
   const matches = (s: string) => {
     const q = query().trim().toLowerCase();
@@ -160,8 +169,16 @@ export function WorldRulebook(props: { onClose: () => void }) {
           </nav>
 
           <main style={{ padding: "16px 22px", overflow: "auto" }}>
+            <Show when={error()}>
+              <div style={{ color: PALETTE.bad, padding: "20px 0" }}>
+                failed to load manifest: {error()}
+                <div style={{ color: PALETTE.ink2, "font-size": "11px", "margin-top": "6px" }}>
+                  is the engine running on {(import.meta as any).env?.VITE_ENGINE_URL ?? "http://127.0.0.1:8080"}?
+                </div>
+              </div>
+            </Show>
             <Show
-              when={manifest()}
+              when={manifest() || error()}
               fallback={
                 <div style={{ color: PALETTE.ink2, padding: "40px 0", "text-align": "center" }}>
                   loading manifest…

@@ -11,7 +11,7 @@
 
 import { Container, ColorMatrixFilter } from "pixi.js";
 
-const DAY_LENGTH_MS = 240_000;   // 4 real minutes per in-game day
+const DAY_LENGTH_MS = 900_000;   // 15 real minutes per in-game day (was 4 min — too fast)
 
 interface Tint {
   r: number;     // multiplier
@@ -29,15 +29,18 @@ interface Tint {
 //   0.80 dusk         orange
 //   0.90 twilight     blue-purple
 //   1.00 night        deep blue dim
+// Night kept moonlit-blue but NEVER pitch-black; the goal is "atmospheric
+// shift", not "lights off". Deep night was -0.30 brightness before, which
+// crushed visibility. Cap at -0.14.
 const KEYFRAMES: Array<{ t: number; tint: Tint }> = [
-  { t: 0.00, tint: { r: 0.55, g: 0.45, b: 0.65, bright: -0.15 } },  // pre-dawn
-  { t: 0.08, tint: { r: 0.95, g: 0.78, b: 0.62, bright: -0.05 } },  // dawn
+  { t: 0.00, tint: { r: 0.78, g: 0.78, b: 0.95, bright: -0.10 } },  // pre-dawn
+  { t: 0.08, tint: { r: 0.95, g: 0.82, b: 0.70, bright: -0.02 } },  // dawn
   { t: 0.20, tint: { r: 1.05, g: 1.02, b: 0.95, bright:  0.02 } },  // morning
   { t: 0.50, tint: { r: 1.00, g: 1.00, b: 1.00, bright:  0.00 } },  // noon
-  { t: 0.70, tint: { r: 1.05, g: 0.95, b: 0.80, bright:  0.00 } },  // afternoon
-  { t: 0.82, tint: { r: 1.10, g: 0.72, b: 0.55, bright: -0.05 } },  // sunset
-  { t: 0.90, tint: { r: 0.65, g: 0.55, b: 0.85, bright: -0.18 } },  // twilight
-  { t: 1.00, tint: { r: 0.45, g: 0.50, b: 0.85, bright: -0.30 } },  // deep night
+  { t: 0.70, tint: { r: 1.05, g: 0.95, b: 0.82, bright:  0.00 } },  // afternoon
+  { t: 0.82, tint: { r: 1.08, g: 0.78, b: 0.62, bright: -0.03 } },  // sunset
+  { t: 0.90, tint: { r: 0.82, g: 0.75, b: 0.95, bright: -0.10 } },  // twilight
+  { t: 1.00, tint: { r: 0.78, g: 0.80, b: 1.00, bright: -0.14 } },  // moonlit night
 ];
 
 function lerp(a: number, b: number, t: number): number {
