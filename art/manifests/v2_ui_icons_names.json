@@ -1,0 +1,19 @@
+{
+  "$comment": "Row,col → semantic name for v2_ui_icons (8 cols × 8 rows = 64 UI icons).",
+  "0,0": "book", "0,1": "trophy", "0,2": "eye_open", "0,3": "eye_closed",
+  "0,4": "magnifier", "0,5": "compass", "0,6": "speech_bubble", "0,7": "gear",
+  "1,0": "arrow_up", "1,1": "arrow_down", "1,2": "arrow_right", "1,3": "arrow_left",
+  "1,4": "crosshair", "1,5": "map_pin", "1,6": "plus", "1,7": "minus",
+  "2,0": "heart_full", "2,1": "heart_half", "2,2": "heart_empty", "2,3": "coin",
+  "2,4": "coins_stack", "2,5": "swords_crossed", "2,6": "shield", "2,7": "hammer_anvil",
+  "3,0": "sleep_z", "3,1": "skull", "3,2": "question_circle", "3,3": "exclaim_triangle",
+  "3,4": "bandage_cross", "3,5": "flame", "3,6": "snowflake", "3,7": "poison",
+  "4,0": "walking", "4,1": "running", "4,2": "pickaxe", "4,3": "axe",
+  "4,4": "hand_grab", "4,5": "hand_give", "4,6": "mouth_speak", "4,7": "ear_listen",
+  "5,0": "scroll_quest", "5,1": "letter", "5,2": "handshake", "5,3": "heart_broken",
+  "5,4": "face_love", "5,5": "face_anger", "5,6": "face_smile", "5,7": "face_sad",
+  "6,0": "house", "6,1": "lock_closed", "6,2": "lock_open", "6,3": "key",
+  "6,4": "crown", "6,5": "door", "6,6": "hammer", "6,7": "x_red",
+  "7,0": "clock", "7,1": "sun", "7,2": "moon", "7,3": "cloud",
+  "7,4": "tree", "7,5": "info_i", "7,6": "question", "7,7": "checkmark"
+}

@@ -1,0 +1,15 @@
+{
+  "$comment": "Row,col → semantic name for v2_interior_props_master (8 cols × 6 rows = 48 cells).",
+  "0,0": "small_table", "0,1": "round_table_cloth", "0,2": "long_bench", "0,3": "chair_backrest",
+  "0,4": "padded_stool", "0,5": "bar_counter_mug", "0,6": "writing_desk_quill", "0,7": "side_table_candlestick",
+  "1,0": "bed_red", "1,1": "bed_blue", "1,2": "bed_double_red", "1,3": "cot_straw",
+  "1,4": "rug_wool", "1,5": "rug_bearskin", "1,6": "curtains_red", "1,7": "cushion_gold",
+  "2,0": "barrel", "2,1": "cabinet_closed", "2,2": "cabinet_open_bottles", "2,3": "chest_closed",
+  "2,4": "chest_open_gold", "2,5": "basket_wicker", "2,6": "crate_rope", "2,7": "bookshelf",
+  "3,0": "cooking_pot_fire", "3,1": "plates_stack", "3,2": "mug_ale", "3,3": "wine_bottle_goblet",
+  "3,4": "candles_wall", "3,5": "flour_sack", "3,6": "cheese_board", "3,7": "bread_board",
+  "4,0": "fireplace_lit", "4,1": "fireplace_unlit", "4,2": "sconce_lit", "4,3": "sconce_unlit",
+  "4,4": "candelabra", "4,5": "lantern_hanging_lit", "4,6": "lantern_hanging_unlit", "4,7": "firepit",
+  "5,0": "painting", "5,1": "tapestry", "5,2": "coat_rack", "5,3": "washbasin",
+  "5,4": "mirror_oval", "5,5": "sewing_kit_stool", "5,6": "vase_flowers", "5,7": "scroll_stand"
+}

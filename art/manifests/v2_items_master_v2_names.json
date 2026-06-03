@@ -1,0 +1,19 @@
+{
+  "$comment": "Row,col → semantic name for v2_items_master_v2 (8 cols × 8 rows = 64 inventory items).",
+  "0,0": "wood_log", "0,1": "wood_plank", "0,2": "stone_block", "0,3": "stone_refined",
+  "0,4": "iron_ore", "0,5": "iron_ingot", "0,6": "coal", "0,7": "wheat_sheaf",
+  "1,0": "axe", "1,1": "pickaxe", "1,2": "hammer", "1,3": "saw",
+  "1,4": "shovel", "1,5": "sickle", "1,6": "fishing_rod", "1,7": "bucket_empty",
+  "2,0": "sword_short", "2,1": "sword_long", "2,2": "dagger", "2,3": "club_wood",
+  "2,4": "spear", "2,5": "bow", "2,6": "quiver_arrows", "2,7": "crossbow",
+  "3,0": "helmet_leather", "3,1": "helmet_iron", "3,2": "chestplate_leather", "3,3": "chestplate_iron",
+  "3,4": "shield_wood", "3,5": "shield_iron", "3,6": "boots_leather", "3,7": "cloak_folded",
+  "4,0": "bread_loaf", "4,1": "apple", "4,2": "cheese_wheel", "4,3": "fish_raw",
+  "4,4": "fish_cooked", "4,5": "mug_ale", "4,6": "wine_bottle", "4,7": "potion_healing",
+  "5,0": "key_gold", "5,1": "key_iron", "5,2": "scroll_sealed", "5,3": "letter_open",
+  "5,4": "map_rolled", "5,5": "magnifying_glass", "5,6": "lockpick_set", "5,7": "compass",
+  "6,0": "coin_single", "6,1": "coins_small_pile", "6,2": "coins_large_pile", "6,3": "gem_ruby",
+  "6,4": "gem_sapphire", "6,5": "gem_emerald", "6,6": "ring_gold", "6,7": "chalice_gold",
+  "7,0": "torch_unlit", "7,1": "torch_lit", "7,2": "bucket_water", "7,3": "bottle_empty",
+  "7,4": "sack", "7,5": "lantern_lit", "7,6": "lantern_unlit", "7,7": "slot_empty"
+}

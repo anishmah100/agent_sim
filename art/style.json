@@ -69,6 +69,17 @@
       "grid_rows": 8,
       "snap_palette_ref": "tile_palette"
     },
+    "v2_building_freeform": {
+      "$use_for": "v2 single-asset buildings (blacksmith, town_hall, granary, watchtower, well, market_stall)",
+      "$comment": "Preserve source resolution. Palette-snap to the full tile palette. Magenta key. No grid — each sheet is a single building or one row of variants. Per-asset tight-crop happens AFTER intake via art/crop_building.py if needed.",
+      "preserve_source_resolution": true,
+      "snap_palette_ref": "tile_palette"
+    },
+    "v2_master_sheet_freeform": {
+      "$use_for": "v2 master sheets where sprites land in a grid but the grid is laid out by DALL-E (not the prompt). Preserve source resolution so the per-cell content-bbox slicer can find them. Slicing happens in art/slice_master_sheet.py after intake.",
+      "preserve_source_resolution": true,
+      "snap_palette_ref": "tile_palette"
+    },
     "tileset_freeform_256": {
       "$use_for": "tileset_vegetation, tileset_building, interior_tileset",
       "$comment": "Mixed-size sprites in one sheet. Down-samples to 256x256 native (enough to hold a 16x16-tile footprint with detail). Per-sprite rectangles are catalogued in art/manifests/<name>.json AFTER intake.",

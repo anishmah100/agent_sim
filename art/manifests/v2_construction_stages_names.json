@@ -1,0 +1,9 @@
+{
+  "$comment": "Row,col → semantic name for v2_construction_stages (4 cols × 3 rows = 12 cells). Stages 0-5 are cottage progression; row 3 cells 0-3 are demolition/wreckage + overlays.",
+  "0,0": "cottage_stage_0_blueprint", "0,1": "cottage_stage_1_foundation",
+  "0,2": "cottage_stage_2_walls_partial", "0,3": "cottage_stage_3_walls_full",
+  "1,0": "cottage_stage_4_roof_partial", "1,1": "cottage_stage_5_finished",
+  "1,2": "wreckage_demolished_cottage", "1,3": "wreckage_demolished_blueprint",
+  "2,0": "scaffolding_small", "2,1": "scaffolding_large",
+  "2,2": "progress_bar_frame", "2,3": "worker_tools_pile"
+}
