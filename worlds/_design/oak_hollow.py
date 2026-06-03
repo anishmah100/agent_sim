@@ -77,29 +77,64 @@ class Map:
 
 
 def river_predicate(cx: float, amplitude: float, half_width: float) -> Callable[[int, int], bool]:
-    """A sinuous river — a sinusoid in y around centerline cx. Returns
-    a predicate (x, y) -> bool: True where the tile should be water."""
+    """A river that's mostly STRAIGHT (amplitude 0 → no stair-step
+    boundary). The center y is at cx; the half_width plus a wide
+    central belly defines the river's vertical extent."""
 
     def p(x: int, y: int) -> bool:
-        # river runs west → east at y ≈ cx, undulating
         wave = cx + amplitude * math.sin((x / W) * math.pi * 1.7)
         dist = abs(y - wave)
-        # widen halfway across
-        belly = 1.0 + 0.7 * math.sin((x / W) * math.pi)
+        belly = 1.0 + 0.5 * math.sin((x / W) * math.pi)
         return dist <= half_width * belly
 
     return p
+
+
+def smooth_boundaries(m: Map, target: str, against: set[str], iterations: int = 2) -> None:
+    """Remove 1-tile spikes from a region. After stamping water (or
+    dirt, etc.), interior bumps where 3+ of the 4 neighbors are a
+    DIFFERENT kind get flipped to that other kind. Smooths stair-step
+    edges that result from sampling an analytic curve at integer
+    tile coordinates."""
+
+    for _ in range(iterations):
+        flips: list[tuple[int, int, str]] = []
+        for y in range(m.h):
+            for x in range(m.w):
+                t = m.grid[y][x]
+                if t != target:
+                    continue
+                neigh_count = 0
+                neigh_kind = ""
+                for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < m.w and 0 <= ny < m.h:
+                        nk = m.grid[ny][nx]
+                        if nk in against:
+                            neigh_count += 1
+                            neigh_kind = nk
+                if neigh_count >= 3:
+                    flips.append((x, y, neigh_kind))
+        if not flips:
+            break
+        for (x, y, k) in flips:
+            m.set(x, y, k)
 
 
 def build_oak_hollow() -> Map:
     m = Map(W, H)
 
     # ----- River + pond (lower-middle band) -----
-    river = river_predicate(cx=24.0, amplitude=2.5, half_width=2.0)
+    # Straight river — clean shoreline, no sinusoidal stair-step.
+    river = river_predicate(cx=24.0, amplitude=0.0, half_width=2.0)
     m.stamp_when(river, WATER)
     # Pond on west side — circular bulge anchored on the river bend.
     m.fill_circle(cx=10, cy=24, r=4.0, t=WATER)
     m.fill_circle(cx=13, cy=23, r=3.0, t=WATER)
+    # Smooth the rasterized boundaries: any water tile surrounded by
+    # 3+ grass neighbors flips to grass, eliminating single-tile spikes
+    # along the shore. Two passes round most edges.
+    smooth_boundaries(m, target=WATER, against={GRASS}, iterations=2)
 
     # ----- Village clearing (north center) -----
     PLAZA_X0, PLAZA_Y0 = 22, 6

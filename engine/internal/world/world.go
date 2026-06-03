@@ -117,10 +117,11 @@ type fileWorld struct {
 }
 
 type fileDecoration struct {
-	X        int    `json:"x"`
-	Y        int    `json:"y"`
-	Sprite   string `json:"sprite"`
-	Walkable *bool  `json:"walkable,omitempty"` // pointer so we can distinguish absent from false
+	X           int     `json:"x"`
+	Y           int     `json:"y"`
+	Sprite      string  `json:"sprite"`
+	HeightTiles float64 `json:"height_tiles,omitempty"`
+	Walkable    *bool   `json:"walkable,omitempty"` // pointer so we can distinguish absent from false
 }
 
 type fileEntity struct {
@@ -182,6 +183,11 @@ func Load(path string) (*World, error) {
 	// Walkable defaults to FALSE if the field is missing — most veg in
 	// our sheet is solid scenery. Bushes/flowers/groundcover get
 	// walkable=true at placement time in the world generator.
+	//
+	// For decorations TALLER than 1.5 tiles (mostly trees), we also
+	// block the tile north of the footprint — the canopy renders into
+	// that tile and a character walking through it would visually be
+	// inside the tree's leaves. Block forces the path to go around.
 	for _, d := range fw.Decorations {
 		if d.X < 0 || d.X >= w.WidthTiles || d.Y < 0 || d.Y >= w.HeightTiles {
 			continue
@@ -192,6 +198,9 @@ func Load(path string) (*World, error) {
 		}
 		if !walkable {
 			w.walkable[d.Y][d.X] = false
+			if d.HeightTiles >= 1.5 && d.Y-1 >= 0 {
+				w.walkable[d.Y-1][d.X] = false
+			}
 		}
 	}
 
