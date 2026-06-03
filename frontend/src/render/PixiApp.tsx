@@ -25,6 +25,7 @@ import { DecorationLayer } from "./Decoration";
 import { InteriorLayer } from "./Interior";
 import { SpeechBubbleLayer } from "./SpeechBubble";
 import { DayNight } from "./DayNight";
+import { HD2DStack } from "./HD2D";
 import type { AudibleEvent } from "../net/ws";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
@@ -113,6 +114,11 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   // only — the interior overlay sits outside the viewport so its
   // visuals stay neutral).
   const dayNight = new DayNight(viewport);
+
+  // HD-2D filter stack — bloom + tilt-shift + saturation boost + slight
+  // chromatic aberration. Composed on top of the day/night ColorMatrix.
+  const hd2d = new HD2DStack(viewport);
+  void hd2d;  // referenced for type-keep
 
   // Per-frame tick for entity layer effects (selection ring pulse).
   app.ticker.add((delta) => {
