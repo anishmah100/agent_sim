@@ -132,20 +132,20 @@
   ],
   "decorations": [
     {
-      "x": 13,
+      "x": 12,
       "y": 18,
       "sprite": "bld:000",
-      "height_tiles": 3.0,
-      "footprint_w": 4,
+      "height_tiles": 4.0,
+      "footprint_w": 5,
       "footprint_h": 2,
       "walkable": false
     },
     {
-      "x": 45,
+      "x": 44,
       "y": 18,
       "sprite": "bld:001",
-      "height_tiles": 3.0,
-      "footprint_w": 4,
+      "height_tiles": 4.0,
+      "footprint_w": 5,
       "footprint_h": 2,
       "walkable": false
     },
@@ -3142,34 +3142,6 @@
     },
     {
       "x": 14,
-      "y": 19,
-      "sprite": "veg:037",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 15,
-      "y": 19,
-      "sprite": "veg:000",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 46,
-      "y": 19,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 49,
-      "y": 18,
-      "sprite": "veg:004",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 14,
       "y": 27,
       "sprite": "veg:037",
       "height_tiles": 2.0,
@@ -3652,13 +3624,6 @@
       "walkable": true
     },
     {
-      "x": 48,
-      "y": 16,
-      "sprite": "veg:009",
-      "height_tiles": 1.1,
-      "walkable": true
-    },
-    {
       "x": 53,
       "y": 16,
       "sprite": "veg:011",
@@ -3677,13 +3642,6 @@
       "y": 18,
       "sprite": "veg:010",
       "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 12,
-      "y": 18,
-      "sprite": "veg:011",
-      "height_tiles": 0.8,
       "walkable": true
     },
     {
@@ -3715,13 +3673,6 @@
       "walkable": true
     },
     {
-      "x": 11,
-      "y": 19,
-      "sprite": "veg:042",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
       "x": 20,
       "y": 19,
       "sprite": "veg:010",
@@ -3740,13 +3691,6 @@
       "y": 19,
       "sprite": "veg:042",
       "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 38,
-      "y": 20,
-      "sprite": "veg:002",
-      "height_tiles": 1.0,
       "walkable": true
     },
     {

@@ -259,13 +259,21 @@ def place_buildings(m: Map, decs: list[dict], placed: set[tuple[int, int]]) -> N
     # Layout — drop buildings on grass north of the plaza, framing it.
     # All cottages 3-wide × 2-tall footprint, render 3 tiles tall so
     # the roof rises above the footprint (HG-style).
+    # Each tuple: sprite, x, y (SW corner), fp_w, fp_h, h_tiles.
+    # Cottages render 5 tiles wide × 4 tiles tall — closer to HG/SS
+    # proportions where a house dominates ~4-5 tile rows. Footprint
+    # is 5×2 (the bottom-most 2 rows are blocking ground).
     BUILDINGS = [
-        # sprite, x, y (SW corner), fp_w, fp_h, h_tiles
-        ("bld:000", 13, 18, 4, 2, 3.0),   # red cottage west of plaza
-        ("bld:001", 45, 18, 4, 2, 3.0),   # dark cottage east of plaza
-        ("bld:005", 23, 22, 6, 2, 2.5),   # red-awning market south of plaza
-        ("bld:008", 39, 21, 1, 1, 1.0),   # well east of market
+        ("bld:000", 12, 18, 5, 2, 4.0),   # red cottage west of plaza
+        ("bld:001", 44, 18, 5, 2, 4.0),   # dark cottage east of plaza
+        ("bld:008", 39, 21, 1, 1, 1.0),   # well south-east
     ]
+    # Reserve a buffer of tiles around each building so trees don't
+    # spawn close enough for their canopies to spill over the roof or
+    # the entrance. The buffer marks tiles in `placed` BUT not blocking
+    # — trees skip them, ground decorations still allowed.
+    BUFFER_S = 2   # 2 tiles south of footprint (cover entrance)
+    BUFFER_NS = 1  # 1 tile east/west/north
     for (sprite, x, y, fpw, fph, h) in BUILDINGS:
         # Refuse to place if any cell is already occupied (or off-map,
         # or non-grass).
@@ -284,9 +292,16 @@ def place_buildings(m: Map, decs: list[dict], placed: set[tuple[int, int]]) -> N
                 break
         if not ok:
             continue
+        # Footprint cells go into placed (blocking).
         for dx in range(fpw):
             for dy in range(fph):
                 placed.add((x + dx, y - dy))
+        # Buffer cells around footprint also marked so trees skip them.
+        # We don't enforce blocking on the buffer — it's only there to
+        # keep tree canopies from overlapping the building.
+        for bx in range(x - BUFFER_NS, x + fpw + BUFFER_NS):
+            for by in range(y - fph + 1 - BUFFER_NS, y + 1 + BUFFER_S):
+                placed.add((bx, by))
         decs.append({
             "x": x, "y": y, "sprite": sprite,
             "height_tiles": h, "footprint_w": fpw, "footprint_h": fph,
