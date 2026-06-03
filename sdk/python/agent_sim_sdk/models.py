@@ -186,10 +186,143 @@ class Wait(_Action):
     ticks: int = 60
 
 
+# === Session-2 composable-system verbs ===
+
+class Pay(_Action):
+    """Transfer gold to an adjacent target (Money system)."""
+    verb: Literal["pay"] = "pay"
+    target: str
+    amount: int
+
+
+class WorkForPay(_Action):
+    """Earn a small wage (Money system stub)."""
+    verb: Literal["work_for_pay"] = "work_for_pay"
+
+
+class Trade(_Action):
+    """Atomic item-for-gold swap with an adjacent target (Trade system)."""
+    verb: Literal["trade"] = "trade"
+    target: str
+    item: str
+    price: int
+
+
+class Loot(_Action):
+    """Take gold + clear inventory from an adjacent corpse (Loot system)."""
+    verb: Literal["loot"] = "loot"
+    target: str
+
+
+class Chop(_Action):
+    """Chop an adjacent tree entity for wood (Resources system)."""
+    verb: Literal["chop"] = "chop"
+    target: str
+
+
+class Mine(_Action):
+    """Mine an adjacent rock entity for stone (Resources system)."""
+    verb: Literal["mine"] = "mine"
+    target: str
+
+
+class Enter(_Action):
+    """Step inside an adjacent building (Property system)."""
+    verb: Literal["enter"] = "enter"
+    target: str
+
+
+class Exit(_Action):
+    """Leave the building you're currently in (Property system)."""
+    verb: Literal["exit"] = "exit"
+
+
+class Lock(_Action):
+    """Lock an owned building (Property system; owner only)."""
+    verb: Literal["lock"] = "lock"
+    target: str
+
+
+class Unlock(_Action):
+    """Unlock an owned building (Property system; owner only)."""
+    verb: Literal["unlock"] = "unlock"
+    target: str
+
+
+class ClaimOwnership(_Action):
+    """Claim an unowned adjacent building (Property system)."""
+    verb: Literal["claim_ownership"] = "claim_ownership"
+    target: str
+
+
+class TransferOwnership(_Action):
+    """Hand an owned building to another entity (Property system)."""
+    verb: Literal["transfer_ownership"] = "transfer_ownership"
+    target: str
+    new_owner: str
+
+
+class PlaceBlueprint(_Action):
+    """Place a building blueprint at an adjacent walkable tile.
+    Pays the initial materials up front (Construction system)."""
+    verb: Literal["place_blueprint"] = "place_blueprint"
+    kind: str       # "cottage" | "shed" | ...
+    at: Pos
+
+
+class AdvanceConstruction(_Action):
+    """Spend the next batch of materials on an owned blueprint.
+    Completes the build when progress hits 100 (Construction system)."""
+    verb: Literal["advance_construction"] = "advance_construction"
+    target: str
+
+
+class Demolish(_Action):
+    """Remove an owned blueprint or building (Construction system)."""
+    verb: Literal["demolish"] = "demolish"
+    target: str
+
+
+class ProposeTask(_Action):
+    """Propose a verbal contract to a known entity (VerbalQuests system).
+    The engine records the contract but does NOT enforce completion —
+    that's emergent from the agents' behavior."""
+    verb: Literal["propose_task"] = "propose_task"
+    target: str
+    terms: str
+    reward: Optional[str] = None
+
+
+class AcceptTask(_Action):
+    """Accept a contract proposed to you (VerbalQuests system)."""
+    verb: Literal["accept_task"] = "accept_task"
+    id: str
+
+
+class RejectTask(_Action):
+    """Reject a contract proposed to you (VerbalQuests system)."""
+    verb: Literal["reject_task"] = "reject_task"
+    id: str
+
+
+class CompleteTask(_Action):
+    """Mark a contract complete (from the proposer's PoV — no
+    engine verification; VerbalQuests system)."""
+    verb: Literal["complete_task"] = "complete_task"
+    id: str
+
+
 Action = Annotated[
     Union[
+        # Base verbs.
         Move, Speak, Whisper, Shout, LookAt, Interact,
         Pickup, Drop, Equip, Give, Attack, Defend, Heal, Wait,
+        # Composable-system verbs (session 2).
+        Pay, WorkForPay, Trade, Loot,
+        Chop, Mine,
+        Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
+        PlaceBlueprint, AdvanceConstruction, Demolish,
+        ProposeTask, AcceptTask, RejectTask, CompleteTask,
     ],
     Field(discriminator="verb"),
 ]
