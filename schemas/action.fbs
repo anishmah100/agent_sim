@@ -1,0 +1,53 @@
+// FlatBuffers schema for agent→engine actions.
+
+namespace AgentSim;
+
+include "observation.fbs";
+
+enum Verb : byte {
+  Move = 0,
+  Speak = 1,
+  Whisper = 2,
+  Shout = 3,
+  LookAt = 4,
+  Interact = 5,
+  Pickup = 6,
+  Drop = 7,
+  Equip = 8,
+  Give = 9,
+  Attack = 10,
+  Defend = 11,
+  Heal = 12,
+  Wait = 13,
+  // Scenario verbs declared via params_json:
+  Trade = 50,
+  Pay = 51,
+  Loot = 52,
+  WorkForPay = 53,
+}
+
+table Action {
+  action_id: string;
+  in_response_to_obs: ulong = 0;
+  priority: byte = 0;
+  verb: Verb;
+  // Scenario-specific params go here. v1 is a JSON string so we don't
+  // have to rev the schema for every new verb. Hot loop verbs (move,
+  // attack) get strongly-typed fields below.
+  params_json: string;
+  move_target: Pos;
+  speak_text: string;
+  target_id: string;
+  affordance: string;
+  amount: int = 0;
+  wait_ticks: int = 0;
+}
+
+table ActionAck {
+  action_id: string;
+  verb: Verb;
+  accepted: bool = false;
+  reason: string;
+}
+
+root_type Action;

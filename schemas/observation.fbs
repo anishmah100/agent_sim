@@ -1,0 +1,85 @@
+// FlatBuffers schema for the hot-path observation message.
+//
+// Mirrors docs/OBSERVATION_MODEL.md. JSON stays the cold-path
+// debug-friendly encoding; this is what we ship over WS once we
+// flip the protocol switch.
+
+namespace AgentSim;
+
+enum Facing : byte { N = 0, S = 1, E = 2, W = 3 }
+enum AudibleKind : byte { Speech = 0, Shout = 1, Whisper = 2, Sound = 3 }
+enum DayPhase : byte { Dawn=0, Morning=1, Midday=2, Afternoon=3, Dusk=4, Night=5 }
+enum ImageFormat : byte { Png = 0, Webp = 1 }
+
+struct Pos { x: short; y: short; }
+
+table SelfState {
+  entity_id: string;
+  pos: Pos;
+  facing: Facing;
+  extras_json: string; // opaque scenario blob
+  current_action_verb: string;
+  current_action_eta_tick: ulong = 0;
+}
+
+table VisibleEntity {
+  entity_id: string;
+  apparent_label: string;
+  pos: Pos;
+  facing: Facing;
+  archetype: string;
+  doing: string;
+}
+
+table VisibleObject {
+  object_id: string;
+  kind: string;
+  pos: Pos;
+  affordances: [string];
+  state_summary_json: string;
+}
+
+table AudibleEvent {
+  event_id: string;
+  kind: AudibleKind;
+  from_entity: string;
+  from_pos: Pos;
+  text: string;
+  sound_kind: string;
+  tick: ulong;
+}
+
+table WorldClock {
+  tick: ulong;
+  day_phase: DayPhase;
+  weather: string;
+}
+
+table KnownMapSummary {
+  map_id: string;
+  width: short;
+  height: short;
+}
+
+table ViewImage {
+  format: ImageFormat;
+  width: ushort;
+  height: ushort;
+  data: [ubyte];
+  centered_on_pos: Pos;
+  facing: Facing;
+}
+
+table Observation {
+  obs_id: ulong;
+  world_tick: ulong;
+  self: SelfState;
+  visible_entities: [VisibleEntity];
+  visible_objects: [VisibleObject];
+  audible: [AudibleEvent];
+  known_map: KnownMapSummary;
+  clock: WorldClock;
+  view_image: ViewImage;
+}
+
+root_type Observation;

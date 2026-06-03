@@ -93,6 +93,7 @@ func main() {
 	mux.HandleFunc("/ws/viewer", hub.Handle)
 	mux.HandleFunc("/ws/agent", agents.HandleWS)
 	mux.HandleFunc("/api/v1/agent/register", agents.HandleRegister)
+	mux.HandleFunc("/api/v1/leaderboards", wire.LeaderboardsHandler(w))
 
 	// Static world JSON + art atlases. The engine serves these because:
 	// 1. Same-origin = no CORS pain.

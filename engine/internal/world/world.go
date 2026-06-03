@@ -611,21 +611,26 @@ func (w *World) Tick() {
 func (w *World) Snapshot() WorldSnapshot {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	ents := make([]Entity, 0, len(w.entities))
+	ents := make([]*Entity, 0, len(w.entities))
 	for _, e := range w.entities {
-		ents = append(ents, *e)
+		cp := *e
+		ents = append(ents, &cp)
 	}
 	return WorldSnapshot{
-		Tick:     w.tick,
-		MapID:    w.MapID,
-		Entities: ents,
+		Tick:        w.tick,
+		MapID:       w.MapID,
+		WidthTiles:  w.WidthTiles,
+		HeightTiles: w.HeightTiles,
+		Entities:    ents,
 	}
 }
 
 type WorldSnapshot struct {
-	Tick     uint64   `json:"tick"`
-	MapID    string   `json:"map_id"`
-	Entities []Entity `json:"entities"`
+	Tick        uint64    `json:"tick"`
+	MapID       string    `json:"map_id"`
+	WidthTiles  int       `json:"width_tiles,omitempty"`
+	HeightTiles int       `json:"height_tiles,omitempty"`
+	Entities    []*Entity `json:"entities"`
 }
 
 // ViewImage — per-agent rasterized crop. Filled in by the Go-side

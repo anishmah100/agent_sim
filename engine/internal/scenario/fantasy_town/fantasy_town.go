@@ -62,6 +62,7 @@ func (s *FantasyTown) OnEntitySpawn(e *world.Entity) {
 }
 
 func (s *FantasyTown) OnTick(w *world.World, tick uint64) {
+	s.tickQuests(w, tick)
 	// Slow HP regen: +1 every 5 sec when not in combat.
 	if tick%300 != 0 {
 		return
