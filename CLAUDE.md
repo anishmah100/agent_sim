@@ -16,18 +16,29 @@ This is **round 2** of a project. Round 1 (`~/projects/province_sim/`) shipped a
 
 ## Read these before you do anything
 
+The most authoritative docs (Session 2 Q&A; supersedes earlier ones where they conflict):
+
+| File | What it tells you |
+|---|---|
+| `docs/DECISIONS.md` | The Q&A sessions that produced the plan. **Session 2 (Q32-Q61) is the current source of truth** for architecture. Read this first. |
+| `docs/SYSTEM_ARCHITECTURE_V2.md` | The phased-pipeline + event-bus + composable-systems + spatial-index engine architecture. |
+| `docs/AGENT_API.md` | The bot ↔ engine contract: HTTP register, WS observation/action, rejection vocabulary. |
+| `docs/AFFORDANCE_MANIFEST.md` | The single source of truth for what a world lets you do. Drives SDK validation + UI World Rulebook. |
+| `docs/CONSTRUCTION_PROCEDURAL.md` | The Townscaper-style procedural building system + fallback plan. |
+
+Original Session 1 docs (still valid where Session 2 doesn't supersede):
+
 | File | What it tells you |
 |---|---|
 | `docs/VISION.md` | The product: who logs in, what they see, what they do, why it goes viral |
-| `docs/ARCHITECTURE.md` | The 4 layers (engine / map / UI / agent) and the contracts between them |
 | `docs/STACK.md` | Every tech pick with rationale + license + alternative considered |
 | `docs/ANTI_MESS_PLAN.md` | How we avoid the polish debt that killed round 1 |
-| `docs/ART_STYLE_GUIDE.md` | Palette, tile dims, sprite specs, AI gen prompt patterns |
-| `docs/OBSERVATION_MODEL.md` | What an agent sees each tick + how vision/hearing/memory work |
-| `docs/VERB_REFERENCE.md` | Base verb set + how scenarios extend it |
-| `docs/WIRE_PROTOCOL.md` | WebSocket + FlatBuffers schemas, message lifecycle |
-| `docs/ROADMAP.md` | Milestones with screenshot/validation gates |
-| `docs/DECISIONS.md` | The Q&A session that produced this plan — read for context on any pick |
+| `docs/ART_STYLE_GUIDE.md` | World art: palette, tile dims, sprite specs, AI gen prompt patterns |
+| `docs/OBSERVATION_MODEL.md` | What an agent sees each tick (mostly superseded by AGENT_API.md) |
+| `docs/VERB_REFERENCE.md` | Base verb vocabulary (mostly superseded by AFFORDANCE_MANIFEST.md) |
+| `docs/WIRE_PROTOCOL.md` | WebSocket lifecycle (mostly superseded by AGENT_API.md) |
+| `docs/ROADMAP.md` | Sequence of milestones with screenshot/validation gates |
+| `docs/ARCHITECTURE.md` | Original 4-layer model (Session 2's SYSTEM_ARCHITECTURE_V2.md is the active one) |
 
 ## Core principles (durable, do not violate)
 

@@ -413,7 +413,7 @@ an alternative or supplement to the JSON observation. Crop size TBD.
   a format both Go and the frontend can consume).
 - A multimodal example agent ships with the v1 SDK.
 
-## What's NOT decided / open
+## What's NOT decided / open (after Session 1)
 
 These came up but were deferred:
 
@@ -425,3 +425,387 @@ These came up but were deferred:
 - **Hosted persona tier** — explicitly v2.
 
 These are all in `docs/ROADMAP.md` "After-launch backlog."
+
+---
+
+# SESSION 2 — Feature-complete launch refactor
+
+A second Q&A session after we'd built a working-but-half-wired prototype. the maintainer reframed the goal: "no v1/v2 staging — feature-complete launch." This session locked the architectural decisions that the rest of the build follows. Replaces / amends earlier docs where they conflict.
+
+## Q32: Unit of composition for rulesets
+
+**Question:** How granular is the unit of composition for higher-order rulesets (combat, money, voting, lineage, finance, kingdoms)?
+
+**Answer:** **Composable systems.** Each ruleset is a standalone module. Worlds declare which modules to load via config. fantasy_town becomes a config file listing [Combat-v1, Money-v1, Inventory-v1, Construction-v1, ...]. Every world is a composition.
+
+**Implications:**
+- Hard separation between engine + base verbs + composable systems.
+- Combat is NOT in the engine. Money is NOT in the engine. Engine knows only: entity / position / facing / movement / vision / hearing / base verbs (move, speak, whisper, shout, look_at, wait, interact).
+- Each system is its own Go package under `engine/internal/systems/<name>/`.
+- New systems plug in by registering verb handlers + event subscribers — never by touching engine core.
+
+## Q33: Leaderboard purpose
+
+**Question:** Is the leaderboard a public scorecard, an internal eval suite, or a competition platform?
+
+**Answer:** **Internal-style, multi-dimensional, per-user.** Not a public scorecard ranking models. We track per-user metrics across many dimensions (wealth, kills, friends, governance, longevity, ...). Vision: researchers from labs drop bots into the world to see what their model is good at; the leaderboard surfaces capability profiles emergently.
+
+**Implications:**
+- No backend tagging. No "model A vs model B" infrastructure. Users describe their architecture in their bio if they want.
+- Leaderboard aggregates per-user/per-agent (one user = one agent per world).
+- Many parallel dimensions; each is a radar-chart axis.
+- Aggregation per backend emerges naturally if (say) all top wealth agents have "Claude" in their bio.
+
+## Q34: Quest abstraction
+
+**Question:** Are quests engine primitives, a Tasks system, pure speech, or hybrid?
+
+**Answer:** **Verbal contracts, no engine primitive.** Agent A speaks an offer. Agent B speaks acceptance. They go do the work. Either side can defect; emergent consequences. The ONLY engine support is a pair of LIGHTWEIGHT UI annotation verbs:
+- `propose_task(recipient, title, description)` — creates a public marker
+- `accept_task(task_id)` — links acceptance
+
+The engine doesn't track completion, doesn't escrow rewards, doesn't enforce anything. The verbs exist solely so spectators can SEE "X is currently doing a task for Y" in the UI.
+
+**Implications:**
+- Agents that get exploited (do work, don't get paid) develop reputations. Reputation is the consequence layer.
+- The UI renders the propose/accept pair as a connector between the two agents.
+- No "quest log" engine state. Bot tracks its own commitments in its own memory.
+
+## Q35: What "persona" means
+
+**Question:** "Persona" was doing four jobs at once. Decompose: (1) display name + archetype, (2) public bio, (3) private system prompt, (4) self-declared relationships.
+
+**Answer:** **Engine tracks only (1) name + archetype + (2) public bio.** Voice / system prompt + private opinions of others stay in the bot's own backend.
+
+**Implications:**
+- The docs' `apparent_label` derivation (from observer's relationship table) is **dead**. Engine just shows the entity's display_name to every observer.
+- If an agent wants to call Bob "my wife" internally, that's the agent's brain's job, not engine state.
+- Public bio is readable by other agents when within 5 tiles (see Q43).
+- Persona registration: 3 fields, not 7.
+
+## Q36: Persona authoring location
+
+**Question:** Where is name + bio + archetype set — web form or bot code?
+
+**Answer:** **Bot code is canonical.** Web is just login + API key issuance. Persona sits in the bot's source. SDK sends it on every register call. Researcher-friendly; Git-versioned; no "character creator" web flow.
+
+**Implications:**
+- Delete `frontend/src/auth/PersonaForm.tsx`. It's dead code.
+- `/api/v1/agent/register` accepts persona inline.
+- Editing your bio = edit source + reconnect; in-world bio updates.
+
+## Q37: User → agent cardinality
+
+**Question:** One user = many agents, or one user = one persistent agent?
+
+**Answer:** **One user = one persistent agent per world.** Like a Pokemon save file. Reconnect picks up where you left off. Researchers wanting populations would need many user accounts (or future "researcher mode").
+
+**Implications:**
+- `/api/v1/agent/register` is idempotent: same user_token = same agent_id.
+- Multi-world: same user can have separate characters in Fantasy Town vs Manhattan (each engine process = its own DB).
+- Leaderboard slot per user.
+
+## Q38: Execution model
+
+**Question:** Real-time, turn-based, or hybrid?
+
+**Answer:** **Pure real-time.** World ticks at 60Hz regardless. Agent observes at their own cadence. Slow agents miss things. "Snooze you lose" is realistic; speed-vs-quality is part of agent architecture.
+
+**Implications:**
+- Best agents will use hierarchical architectures: a fast low-level locomotion controller + a slow high-level strategist that share state. Ship a reference implementation: `examples/hello_hierarchical.py`.
+- No benchmark "fair-comparison mode." Faster networks / smaller prompts are part of the bot's competitive surface.
+
+## Q39: Affordance manifest
+
+**Question:** How rich is the world's rules manifest, and how does a bot get it?
+
+**Answer:** **Rich.** Per-system declarations of: verbs (with JSON Schema params + preconditions + worked examples), state fields owned (with shape + meaning), sounds emitted, archetypes added. Exposed at `/api/v1/world/affordances`. Bot fetches at register; UI renders the same data as the "World Rulebook" page. Single source of truth.
+
+**Implications:**
+- Each `engine/internal/systems/<name>/` package declares its manifest contribution.
+- Engine aggregates all loaded systems' manifests at boot.
+- UI consumes the same endpoint to render a beautiful World Rulebook page.
+- Agents can validate actions client-side using the schemas.
+- Codegen: SDK builds typed wrappers from the manifest at SDK release time.
+
+## Q40: Action submission shape
+
+**Question:** Typed dataclasses, generic act(), codegen, or method-style?
+
+**Answer:** **Typed dataclasses per verb (current SDK style).** Core SDK ships Move/Speak/Wait/Interact/etc. Each composable system ships its own module: `agent_sim_sdk.combat`, `agent_sim_sdk.voting`, etc. Bot does `from agent_sim_sdk.combat import Attack`.
+
+**Implications:**
+- SDK versioning becomes important — adding a system = a release.
+- Researchers get IDE auto-complete on every verb.
+- Escape hatch: `agent.act_raw(verb_name, **params)` for advanced flexibility.
+
+## Q41: Disconnect behavior
+
+**Question:** Soft idle, grace + despawn, vulnerable body, or hybrid?
+
+**Answer:** **Vulnerable body.** No invulnerability grace. Disconnected character is a stationary body that NPCs / other agents can attack, loot, or interact with. Reconnect any time; if you died, scenario respawn rules apply.
+
+**Implications:**
+- Disincentivizes parking bots.
+- Reconnect within the body's lifetime = pick up where you left off.
+- Need a clean visual indicator that an entity is currently disconnected (a small "Z" or grayed sprite).
+
+## Q42: Concurrent connections for same user
+
+**Question:** Last wins, first wins, explicit takeover, or shared body?
+
+**Answer:** **Explicit takeover.** Second connection from the same user must send `takeover: true` in the auth frame. Without it, rejected with `already_connected`.
+
+**Implications:**
+- A buggy bot reconnecting in a loop doesn't thrash.
+- Intentional restarts work: bot supplies `takeover: true` on startup.
+
+## Q43: Vision shape + visible-entity fields
+
+**Question:** Omnidirectional disk vs forward cone? What's in visible_entities?
+
+**Answer:** **Omnidirectional 12-tile disk + bresenham LOS (walls + tall objects block).** Same in every direction (Pokemon-style). Each `visible_entities[i]` contains: entity_id + display_name + archetype + pos + facing + doing + HP / max_HP. **Bio is conditionally included** if observer is within 5 tiles. Gold + inventory stay private.
+
+**Implications:**
+- Observation builder checks distance per neighbor; includes bio if ≤5 tiles, omits otherwise.
+- `apparent_label` field collapses to just `display_name`.
+- HP visible to everyone in vision — Octopath-style health bars over heads in the UI.
+
+## Q44: Day/night and vision
+
+**Question:** Does day/night affect vision mechanically?
+
+**Answer:** **Cosmetic only.** Day/night ColorMatrixFilter is the entire feature. Vision radius is a constant 12 tiles regardless of time-of-day. No light sources, no Lighting system, no night-vision reduction.
+
+**Implications:**
+- Lantern entities are decorative only.
+- Simpler engine. Removes one composable system from the launch list.
+
+## Q45: Sound blocking
+
+**Question:** Do walls block sound?
+
+**Answer:** **Walls fully block sound** via bresenham LOS (vision check is more permissive: it includes tall trees; hearing check only blocks for walls). Entering a building = real privacy. Whispered conversations actually matter.
+
+**Implications:**
+- The perception module gets two LOS variants: `seesEntity` (blocks on visionBlocks) and `hearsEntity` (blocks on walls only).
+- Building interiors are an audio bubble — outside can't hear inside.
+
+## Q46: Sound event emission
+
+**Question:** Engine only emits speech, or any system can emit sounds?
+
+**Answer:** **Any system can emit sounds.** Each composable system declares its sounds in the affordance manifest alongside its verbs + state. Combat declares `sword_clang` + `death_scream`. Door system declares `creak`. Wolf NPCs declare `howl`.
+
+**Implications:**
+- Engine API: `world.EmitSound(at, kind, options)` — propagates via the same audible event ring.
+- Manifest schema now has four sections per system: verbs, state fields, sounds_emitted, archetypes.
+
+## Q47: Buildings as entities
+
+**Question:** Buildings as decorations, world objects, or first-class entities?
+
+**Answer:** **First-class entities.** archetype="building". Full lifecycle: create (Construction system) / destroy (Combat / fire / siege) / inherit (Lineage system). Extras blob holds footprint, sprite, interior_map_id, owner, lock_state, etc. All systems touch buildings through normal entity channels.
+
+**Implications:**
+- Decorations stay for visual-only items (mushrooms, flowers, pebbles).
+- Trees can stay decorations for now; promote to entities later if Forestry needs them.
+- Building / Property system owns verbs: `enter`, `lock`, `unlock`, `place_sign`, `claim_ownership`, `transfer_ownership`.
+- Building / Property system emits sounds: `door_open`, `door_close`, `lock_click`.
+
+## Q48: Interior authoring + ticking
+
+**Question:** Per-type templates, per-instance custom, or procedural? When are interiors loaded?
+
+**Answer:** **Per-instance custom interiors. Eager-loaded at world boot. All interiors tick continuously.** Each building has its own hand-authored interior. World runs everywhere, always — NPCs inside the tavern keep gossiping whether anyone's watching or not.
+
+**Implications:**
+- Engine memory = sum of all loaded maps, all the time.
+- Scales fine for a launch world (~10-30 named buildings).
+- MultiMapHub.TickAll() handles per-tick across all maps.
+- Hand-authored interiors are a content-cost line item.
+
+## Q49: Base map content
+
+**Question:** What does `GET /api/v1/world/map` return?
+
+**Answer:** **Overworld only.** Terrain + named regions + building EXTERIORS (positions + display names like "tavern", "town hall"). NOT interior layouts. NOT current entity positions. NOT dynamic events. Agents must walk into interiors and remember what they saw.
+
+**Implications:**
+- Realism + benchmark fidelity.
+- Static — same data for everyone.
+- The docs' `known_map_summary.named_regions` populated from this; the interior portion in OBSERVATION_MODEL §5 is dead.
+
+## Q50: Launch system scope
+
+**Question:** Which systems are launch-required vs post-launch (but architecture-ready)?
+
+**Answer:**
+- **Launch-required**: Combat + Money + Inventory + Verbal-Quest UI + **Construction** (because building creation has engine implications that must be designed up front).
+- **Post-launch, architecture-ready (no refactor needed)**: Relationships/Social, Voting/Governance, Lineage/Children, Financial markets, Kingdoms/regions.
+
+**Implications:**
+- Construction is a launch system, not post-launch.
+- The composable-systems architecture must support all the post-launch systems plugging in without engine refactor — the central forcing function.
+
+## Q51: Cross-system architecture
+
+**Question:** Shared state, event bus, service interfaces, or hybrid?
+
+**Answer:** **Hybrid: phased pipeline + typed event bus + service interfaces + grid spatial index.** Tick = 5 phases:
+
+1. Drain action queue. Verb handlers run; may CALL other systems' services; may EMIT events.
+2. System OnTick callbacks (deterministic order).
+3. Drain event bus. Subscribers receive batched events from this tick.
+4. Per-agent observation build (parallel goroutines).
+5. Per-viewer broadcast (parallel, AOI-filtered).
+
+Grid spatial index: O(1) "what's in radius R of (x,y)" via tile→entities map. All vision / hearing / AOI queries use it.
+
+**Implications:**
+- Significant refactor of `engine/internal/world/`: split into core (entities, tiles, movement, perception, spatial index) + base verbs + a System registry + an EventBus.
+- Each system: registers verb handlers; declares emitted events + subscribed events; declares manifest contributions.
+- Deterministic phase ordering enables replays + future benchmark replay.
+- Naturally parallelizable per-entity within a phase.
+
+## Q52: Visual feature tier
+
+**Question:** Polished baseline, cinematic, Octopath HD-2D, or beyond?
+
+**Answer:** **Octopath HD-2D tier.** Cinematic baseline + tilt-shift depth-of-field + dynamic point lights (lanterns cast soft circles at night) + water reflections of nearby sprites + wind-swayed grass/foliage shader + directional sun shadows + atmospheric perspective + bloom + vignette + LUT color grading + screen wipes + camera shake + weather particles.
+
+**Implications:**
+- PixiJS v8 with custom filter classes + shader passes. Possibly WebGPU compute.
+- Multi-week shader/filter work. Real rendering pipeline upgrade, not just stacking filters.
+- Per-feature flag — can ship base + bloom + vignette first, layer in shaders progressively.
+
+## Q53: Delta encoding scope
+
+**Question:** Where do we apply delta encoding?
+
+**Answer:** **Delta for viewer broadcasts; full state for agent observations.** Bots get the complete snapshot every observation — no delta complexity in the SDK, no drift, easy benchmarking. Browser viewers use delta where bandwidth at 30Hz actually hurts.
+
+**Implications:**
+- Agent WS path: each obs is a full payload.
+- Viewer WS path: first message full, then diffs against last sent.
+- History persists indefinitely in an append-only event log; replay-independence frees us from delta-replay constraints.
+
+## Q54: Historian
+
+**Question:** How is the world's history exposed for summaries?
+
+**Answer:** **Engine-side service. Free to anyone.** `/api/v1/history?since=T&until=T&about=entity_id&focus=...` returns an LLM-generated written narrative summary. Aggressive caching. Per-world LLM backend configurable. Powers story feed, spectator "what did I miss," world recap.
+
+**Implications:**
+- Append-only event log (Postgres) records every event the engine emits.
+- Historian indexer caches summaries by query.
+- Cost: we pay for LLM calls. Caching is essential for cost control.
+
+## Q55: Agentic UI iteration loop
+
+**Question:** How do I iterate on UI when the maintainer isn't watching?
+
+**Answer:** **Wireframe-free, video-driven, design-critic loop.**
+
+1. Implement the panel.
+2. Playwright script records VIDEO of full interaction: clicks every button, hovers every element, triggers every state (loading / error / empty / full). Outputs video.mp4 + per-frame screenshots.
+3. Spawn a "design critic" sub-agent with: the video, an Octopath/HG reference panel, the style guide. Critic returns gap analysis covering typography, color, alignment, density, polish, animation pacing, interaction feel.
+4. Apply fixes; re-run.
+5. Loop until critic clears.
+6. Commit; send to the maintainer for human sign-off.
+
+**Critical**: VIDEO not static frames. Static frames miss broken animations.
+
+## Q56: Production quality scope
+
+**Question:** What does "production quality" cover?
+
+**Answer:** **All eight dimensions.** Reliability + Performance + Security + Observability + Code Quality + CI/CD + Data Integrity + Documentation. No compromises.
+
+**Implications:**
+- 99.9% uptime SLA target.
+- Soak tests + crash recovery + snapshot validation.
+- 60Hz at 1000 entities + 500 viewers benchmarked.
+- Rate limits + auth + sanitization at every input.
+- Prometheus + Grafana + alerting.
+- 80% engine line coverage / 90% SDK.
+- Zero-downtime deploys + rollback.
+- Postgres backups + recovery drills.
+- Public SDK docs site + runbooks.
+
+## Q57: UI visual language
+
+**Question:** Pokemon-style chunky bubbles or Octopath-style translucent dark + golden accents?
+
+**Answer:** **Octopath / Square Enix HD-2D style.** Translucent dark panels, thin golden borders, serif accent font (EB Garamond) for headers, clean sans-serif (Inter) for body, subtle particle accents inside panels.
+
+**Implications:**
+- Lock the style guide. Color tokens, font tokens, panel-chrome tokens go into `art/ui_style.json`.
+- Kobalte components themed with this palette + chrome.
+- One style for everything. No splits between in-world and chrome.
+
+## Q58: UI authoring approach
+
+**Question:** Sketch / Figma / reference-screenshot / code-first?
+
+**Answer:** **Code-first + design-critic loop.** No upfront wireframes. Iterate via Q55 loop until critic clears. Critic uses Octopath / Triangle Strategy reference panels as the comparison anchor.
+
+**Implications:**
+- We skip the wireframe step from ANTI_MESS_PLAN §4 for UI panels (it's substituted by the critic loop).
+- The critic IS the discipline.
+
+## Q59: Visible-entity field set
+
+**Question:** What does an agent see about a visible neighbor at distance?
+
+**Answer:** **entity_id + display_name + archetype + pos + facing + doing + HP/max_HP** always. **Bio included only when observer is within 5 tiles**. Gold + inventory always private.
+
+**Implications:**
+- Observation builder includes / omits bio per neighbor based on chebyshev distance ≤ 5.
+- Default extras_summary visibility: scenario-defined. Combat exposes HP. Money does NOT expose gold publicly.
+
+## Q60: Construction approach
+
+**Question:** Blueprint / free-form / hybrid / collaborative?
+
+**Answer:** **Townscaper / Manor Lords composable approach, time-boxed prototype.** 2-week sprint on one style (Cottage):
+
+1. Hand-author the per-style component library: walls, windows, doors, roof tiles, chimney.
+2. Procedural floor-plan generator: BSP partition of footprint into rooms; door placement; walls.
+3. Auto-tile assembly: similar to terrain autotile, applied to building walls.
+4. Build verb: `Build(style, footprint, room_count, target_pos)`. Validates materials + space + ownership. Spawns building entity + sub-map after N ticks.
+5. Free-form furniture placement inside the empty interior: `Place_furniture(item, pos, rotation)`.
+
+Design-critic loop. If critic clears: lock + add Manor + Watchtower + Tavern + Castle. If 2 weeks elapse without clearance: fall back to fixed blueprints + free-form interior.
+
+**Implications:**
+- Material sources: BOTH gather (Forestry chops trees → wood; Mining → stone) AND buy (markets). Two extra systems: Forestry + Mining (or one unified Resources system).
+- Buildings spawn as entities with `extras.interior_map_id` pointing at a newly-generated sub-map.
+- Multi-floor buildings = sub-map with a stair-tile portal to a floor-2 sub-map. Same Warp mechanism as exterior↔interior.
+
+## Q61: NPC implementation
+
+**Question:** Engine-internal Go, external SDK subprocesses, hybrid, or open-source reference?
+
+**Answer:** **External Python subprocesses via the SDK.** Each NPC = a SDK process the engine spawns + supervises. Same code path as user bots. NPC code lives in `scenarios/fantasy_town/npcs/` — open + inspectable. Researchers can study NPC implementations as canonical examples.
+
+**Implications:**
+- Engine has an NPC supervisor: spawns N NPCs at boot, restarts on crash.
+- We pay LLM cost for sophisticated NPCs (mayor, judge).
+- The agent API is dogfooded by being our own consumer — its quality is a forcing function.
+- Per-scenario NPC roster declared in scenario config.
+
+---
+
+# What's still open after Session 2
+
+Detail-level questions deferred to implementation time:
+
+- Race conditions for simultaneous tile claims
+- Heartbeat / ping intervals (default: 30s ping, 60s timeout)
+- SDK + manifest versioning policy
+- Sound localization precision (precise from_pos vs direction-only)
+- Multi-floor building portal mechanics
+- Resource gathering specifics (per-tree wood yield, etc.)
+- Furniture placement constraints
+- Voting / Lineage / Finance / Kingdoms architecture stubs (don't paint into a corner)
