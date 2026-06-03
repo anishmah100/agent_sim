@@ -316,12 +316,24 @@ func Load(path string) (*World, error) {
 				}
 			}
 		}
-		// Tall objects (trees, buildings ≥ 1.5 tiles) also block ONE row
-		// above their footprint — the canopy/roof reaches into that
-		// tile so a character walking there would visually disappear.
+		// Tall objects (trees, buildings ≥ 1.5 tiles) also block the
+		// rows ABOVE their footprint that the visual sprite covers —
+		// otherwise a character can walk to a tile that's drawn-over by
+		// the roof and end up apparently standing on top of the
+		// building. We block ceil(height_tiles - fpH) additional rows.
 		if d.HeightTiles >= 1.5 {
-			ny := d.Y - fpH
-			if ny >= 0 {
+			extraRows := int(d.HeightTiles) - fpH
+			if d.HeightTiles-float64(int(d.HeightTiles)) > 1e-9 {
+				extraRows++   // ceil — covers fractional roof
+			}
+			if extraRows < 1 {
+				extraRows = 1
+			}
+			for k := 1; k <= extraRows; k++ {
+				ny := d.Y - fpH - (k - 1)
+				if ny < 0 {
+					continue
+				}
 				for dx := 0; dx < fpW; dx++ {
 					nx := d.X + dx
 					if nx >= 0 && nx < w.WidthTiles {
