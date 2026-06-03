@@ -75,12 +75,21 @@ func main() {
 	})
 	mux.HandleFunc("/ws/viewer", hub.Handle)
 
-	// Static world JSON: serves worlds/*.json so the frontend can load
-	// the tile data alongside connecting WS. Same origin, simpler than
-	// dual-hosting. CORS open in v0.
+	// Static world JSON + art atlases. The engine serves these because:
+	// 1. Same-origin = no CORS pain.
+	// 2. The agent rasterizer (Milestone 4) needs to read the same
+	//    files as the frontend so server-rendered crops match.
+	// CORS open in v0.
 	worldsDir, _ := filepath.Abs(filepath.Dir(*flagWorld))
 	mux.Handle("/worlds/", http.StripPrefix("/worlds/",
 		corsHandler(http.FileServer(http.Dir(worldsDir)))))
+
+	// art/ is sibling-of-worlds in the repo. Convention: repo_root/art
+	// and repo_root/worlds. Compute repo root from world flag.
+	repoRoot := filepath.Dir(worldsDir)
+	artDir := filepath.Join(repoRoot, "art")
+	mux.Handle("/art/", http.StripPrefix("/art/",
+		corsHandler(http.FileServer(http.Dir(artDir)))))
 
 	srv := &http.Server{
 		Addr:              *flagAddr,

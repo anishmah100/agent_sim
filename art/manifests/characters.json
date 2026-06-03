@@ -1,0 +1,42 @@
+{
+  "$schema": "Per-character animation manifest. Each entry consumes the processed 128x60 character sheet at native resolution (5 rows × 4 cols, each cell 32x12 native — character footprint 16x24 within an oversized cell with 8 px of padding either side and the action row at the bottom 12 px). All characters use the same sheet shape (see art/style.json -> character_full_v3_upscaled).",
+
+  "sheet_shape": {
+    "native_dims_px": [128, 60],
+    "frame_box_px": [16, 12],
+    "frame_anchor_px": [8, 11],
+    "$cell_layout_comment": "5 rows × 4 cols. Each row is 12 px tall; each cell is 32 px wide. The character occupies the central 16 px of width and the full 12 px of height (anchored bottom-center, feet at y=11 within the frame). In sheet coords: cell.x = col * 32, frame.x = cell.x + 8, cell.y = frame.y = row * 12.",
+    "rows": [
+      {"name": "walk_down",  "row_index": 0, "frames": 4},
+      {"name": "walk_up",    "row_index": 1, "frames": 4},
+      {"name": "walk_left",  "row_index": 2, "frames": 4},
+      {"name": "walk_right", "row_index": 3, "frames": 4},
+      {"name": "action",     "row_index": 4, "frames": 4,
+       "$sub": "frame 0=attack_windup, 1=attack_release, 2=hit, 3=interact"}
+    ]
+  },
+
+  "characters": [
+    {"id": "trainer_red",        "sheet": "trainer_red.png",
+     "display_name": "Trainer Red",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "trainer_lyra_blue",  "sheet": "trainer_lyra_blue.png",
+     "display_name": "Lyra",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "wizard",             "sheet": "wizard.png",
+     "display_name": "Old Sage",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "baker",              "sheet": "baker.png",
+     "display_name": "Merchant Baker",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "iron_guard",         "sheet": "iron_guard.png",
+     "display_name": "Iron Guard",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "child",              "sheet": "child.png",
+     "display_name": "Village Child",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]},
+    {"id": "cloaked_wanderer",   "sheet": "cloaked_wanderer.png",
+     "display_name": "Cloaked Wanderer",
+     "footprint_tiles": [1, 1], "sprite_size_tiles": [1, 2]}
+  ]
+}

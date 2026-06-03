@@ -5,8 +5,9 @@
 // (16×24, bottom-center anchored, facing-aware) so swapping in
 // AnimatedSprite from a real atlas is a single-method change later.
 
-import { Container, Graphics, Text } from "pixi.js";
+import { AnimatedSprite, Container, Graphics, Sprite, Text } from "pixi.js";
 import { TILE_SIZE_PX } from "./tiles";
+import type { CharacterAtlas, CharacterAnim } from "./CharacterAtlas";
 
 export interface EntityState {
   entity_id: string;
@@ -16,15 +17,48 @@ export interface EntityState {
   display_name?: string;
 }
 
-const ENTITY_W = 16;
-const ENTITY_H = 24;
+// Footprint = 16x16 (one tile). Sprite container is anchored at top-left
+// of the footprint; the sprite child is centered horizontally and
+// bottom-aligned to the footprint bottom row (which corresponds to the
+// feet pixel). This lets characters of any sprite height (12 or 24 px)
+// render correctly without per-character math.
+const FOOTPRINT_W = TILE_SIZE_PX;
+const FOOTPRINT_H = TILE_SIZE_PX;
+
+// Map engine archetype string → character_id used by the atlas. As we
+// add more characters this grows. v0 starting set rotates the cast so
+// the placeholder NPCs become visibly different sprites.
+const ARCHETYPE_TO_CHARACTER: Record<string, string> = {
+  // dev_test world uses "human" + display_name to differentiate. Until
+  // engine sends a real character_id field, we hash on entity_id to
+  // pick from the rotation.
+  human: "trainer_red",
+};
+const CHARACTER_ROTATION = [
+  "trainer_red", "trainer_lyra_blue", "wizard", "baker",
+  "iron_guard", "child", "cloaked_wanderer",
+];
+
+function pickCharacterId(state: EntityState): string {
+  const mapped = ARCHETYPE_TO_CHARACTER[state.archetype];
+  if (mapped !== undefined && state.archetype !== "human") return mapped;
+  // Deterministic hash on entity_id so the same NPC always gets the
+  // same sprite across reloads.
+  let h = 0;
+  for (const c of state.entity_id) h = (h * 31 + c.charCodeAt(0)) | 0;
+  const idx = Math.abs(h) % CHARACTER_ROTATION.length;
+  return CHARACTER_ROTATION[idx];
+}
 
 interface RenderedEntity {
   state: EntityState;
+  characterId: string;
   container: Container;
-  body: Graphics;
-  facingMark: Graphics;
+  body: Sprite | AnimatedSprite | Graphics;
+  facingMark: Graphics | null;
   label: Text;
+  prevPos: [number, number];
+  movingSince: number;             // ms — for idle detection
 }
 
 export class EntityLayer {
@@ -33,13 +67,11 @@ export class EntityLayer {
   private selectionRing: Graphics;
   private selectedId: string | null = null;
   private pulsePhase = 0;
+  private atlas: CharacterAtlas | null = null;
 
   constructor() {
     this.container = new Container();
     this.container.label = "entities";
-    // Keep children sorted by Y so entities further south draw on top
-    // (proper "depth" for top-down 3/4 view). Built into Pixi when
-    // sortableChildren = true + each child's zIndex is set.
     this.container.sortableChildren = true;
 
     // Selection ring lives on its own. We re-position + redraw each
@@ -48,6 +80,23 @@ export class EntityLayer {
     this.selectionRing.visible = false;
     this.selectionRing.zIndex = -1;            // under all entity sprites
     this.container.addChild(this.selectionRing);
+  }
+
+  /** Inject the character atlas once it's loaded. Existing rendered
+   *  entities are torn down and rebuilt — necessary because the old
+   *  placeholder body is a Graphics, but the new body is an
+   *  AnimatedSprite. update() can't swap between these shapes. */
+  setAtlas(atlas: CharacterAtlas | null): void {
+    this.atlas = atlas;
+    if (this.items.size === 0) return;
+    const states = this.getAll();
+    for (const re of this.items.values()) {
+      re.container.destroy({ children: true });
+    }
+    this.items.clear();
+    for (const s of states) {
+      this.items.set(s.entity_id, this.create(s));
+    }
   }
 
   getAll(): EntityState[] {
@@ -71,12 +120,12 @@ export class EntityLayer {
       this.selectionRing.visible = false;
       return;
     }
-    // Foot position = center of the 16x16 tile footprint.
-    const cx = re.container.x + ENTITY_W / 2;
-    const cy = re.container.y + ENTITY_H - 1;
+    // Foot position = center-bottom of the 16x16 tile footprint.
+    const cx = re.container.x + FOOTPRINT_W / 2;
+    const cy = re.container.y + FOOTPRINT_H - 1;
     const pulse = 0.7 + 0.3 * Math.sin(this.pulsePhase);
-    const rx = ENTITY_W * 0.42;
-    const ry = ENTITY_H * 0.11;
+    const rx = FOOTPRINT_W * 0.42;
+    const ry = FOOTPRINT_H * 0.18;
     this.selectionRing.clear();
     // Dark frame.
     this.selectionRing.ellipse(cx, cy, rx + 1.2, ry + 1.2)
@@ -114,61 +163,122 @@ export class EntityLayer {
   private create(e: EntityState): RenderedEntity {
     const wrap = new Container();
     wrap.label = `entity:${e.entity_id}`;
+    const characterId = pickCharacterId(e);
 
-    // Body: simple human silhouette using palette colors. Drawn at
-    // sprite-native size; the viewport scale handles display size.
-    const body = new Graphics();
-    drawPlaceholderBody(body);
+    let body: Sprite | AnimatedSprite | Graphics;
+    let facingMark: Graphics | null = null;
 
-    // Facing mark: tiny triangle on the side the character is facing.
-    // Helps validate facing wiring before real sprite directions land.
-    const facingMark = new Graphics();
-    drawFacingMark(facingMark, e.facing);
+    const spec = this.atlas?.get(characterId);
+    if (spec) {
+      // Real sprite. AnimatedSprite handles per-anim frame cycling; we
+      // swap the textures field when facing changes. Default to idle
+      // (frame 0 of the appropriate walk direction).
+      const sprite = new AnimatedSprite(spec.anims.walk_down);
+      sprite.animationSpeed = 0.13;        // ~8 fps walk
+      sprite.loop = true;
+      sprite.anchor.set(spec.anchor_px[0] / spec.frame_w,
+                        spec.anchor_px[1] / spec.frame_h);
+      // 12-tall native sprite scaled 2x = 24-tall display, ~1.5 tiles
+      // tall, matching HeartGold's character-to-tile ratio.
+      sprite.scale.set(2);
+      // Sit on the bottom-center of the 16x16 footprint.
+      sprite.x = FOOTPRINT_W / 2;
+      sprite.y = FOOTPRINT_H;
+      sprite.texture.source.scaleMode = "nearest";
+      sprite.stop();                       // start in idle
+      body = sprite;
+    } else {
+      const g = new Graphics();
+      drawPlaceholderBody(g);
+      facingMark = new Graphics();
+      drawFacingMark(facingMark, e.facing);
+      body = g;
+    }
 
-    // Floating name label above the head. Drama bubbles will share
-    // this anchor pattern later.
     const label = new Text({
       text: e.display_name ?? e.entity_id,
       style: {
         fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        fontSize: 7,
+        fontSize: 6,
         fill: 0xead4aa,
         stroke: { color: 0x181425, width: 2 },
         align: "center",
       },
     });
     label.anchor.set(0.5, 1);
-    label.x = ENTITY_W / 2;
-    label.y = -2;
+    label.x = FOOTPRINT_W / 2;
+    // Label sits 2 px above the sprite's head. Sprite head pixel is
+    // computed from spec.anchor_px (foot pixel in native) and scale.
+    // For a 12-tall sprite anchored at y=11 with 2× scale, head is at
+    // worldY = FOOTPRINT_H - frame_h*scale*(anchor_y/frame_h) = 16 - 22 = -6.
+    label.y = spec
+      ? FOOTPRINT_H - spec.anchor_px[1] * 2 - 2
+      : -10;
 
     wrap.addChild(body);
-    wrap.addChild(facingMark);
+    if (facingMark) wrap.addChild(facingMark);
     wrap.addChild(label);
 
     this.applyPos(wrap, e.pos);
     this.container.addChild(wrap);
 
-    return { state: { ...e }, container: wrap, body, facingMark, label };
+    return {
+      state: { ...e },
+      characterId,
+      container: wrap,
+      body,
+      facingMark,
+      label,
+      prevPos: [e.pos[0], e.pos[1]],
+      movingSince: performance.now(),
+    };
   }
 
   private update(re: RenderedEntity, next: EntityState): void {
     const moved = re.state.pos[0] !== next.pos[0] || re.state.pos[1] !== next.pos[1];
     const turned = re.state.facing !== next.facing;
     const renamed = re.state.display_name !== next.display_name;
-    if (moved) this.applyPos(re.container, next.pos);
-    if (turned) drawFacingMark(re.facingMark, next.facing);
+    if (moved) {
+      this.applyPos(re.container, next.pos);
+      re.movingSince = performance.now();
+    }
     if (renamed) re.label.text = next.display_name ?? next.entity_id;
+
+    if (re.body instanceof AnimatedSprite) {
+      const spec = this.atlas?.get(re.characterId);
+      if (spec) {
+        const animKey = facingToAnim(next.facing);
+        const desired = spec.anims[animKey];
+        // Swap the textures sequence only when facing actually changed
+        // — re-assigning textures resets the playhead which would
+        // otherwise jitter every tick.
+        if (turned || re.body.textures !== desired) {
+          re.body.textures = desired;
+          re.body.play();
+        }
+        // Idle: if we haven't moved in ~250ms, freeze on frame 0 of the
+        // current direction. Looks like a HeartGold idle.
+        const idleNow = performance.now() - re.movingSince > 250;
+        if (idleNow && re.body.playing) {
+          re.body.gotoAndStop(0);
+        } else if (!idleNow && !re.body.playing) {
+          re.body.play();
+        }
+      }
+    } else if (re.facingMark && turned) {
+      drawFacingMark(re.facingMark, next.facing);
+    }
     re.state = { ...next };
   }
 
   private applyPos(c: Container, tile: [number, number]): void {
-    // Tile (x,y) → world px coords (top-left of the sprite footprint).
-    // Footprint is 16×16; sprite is 16×24 with the extra 8px reaching
-    // up above. So sprite top = tile_top - 8.
+    // Container origin sits at the top-left of the 16x16 footprint.
+    // The body sprite was positioned with its anchor at footprint
+    // bottom-center, so head/cap extends up automatically.
     c.x = Math.round(tile[0] * TILE_SIZE_PX);
-    c.y = Math.round(tile[1] * TILE_SIZE_PX - (ENTITY_H - TILE_SIZE_PX));
-    // Sort by bottom-of-sprite Y so entities further south draw on top.
-    c.zIndex = c.y + ENTITY_H;
+    c.y = Math.round(tile[1] * TILE_SIZE_PX);
+    // Sort by foot pixel Y so entities further south draw on top.
+    c.zIndex = c.y + FOOTPRINT_H;
   }
 
   destroy(): void {
@@ -180,8 +290,18 @@ export class EntityLayer {
   }
 }
 
-/** Placeholder human silhouette in palette colors. Replaced by an
- *  AnimatedSprite from the character atlas in Milestone 2. */
+function facingToAnim(f: "N"|"S"|"E"|"W"): CharacterAnim {
+  switch (f) {
+    case "N": return "walk_up";
+    case "S": return "walk_down";
+    case "E": return "walk_right";
+    case "W": return "walk_left";
+  }
+}
+
+/** Placeholder human silhouette in palette colors. Used only when the
+ *  character atlas hasn't loaded yet (or for archetypes with no real
+ *  sprite assigned). */
 function drawPlaceholderBody(g: Graphics): void {
   g.clear();
   // Boots

@@ -23,6 +23,7 @@ import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
+import { CharacterAtlas } from "./CharacterAtlas";
 
 export interface PixiHandle {
   app: Application;
@@ -91,6 +92,20 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   app.ticker.add((delta) => {
     entities.tick(delta.deltaMS);
   });
+
+  // Kick off the character atlas load in the background. When it
+  // resolves, the entity layer upgrades existing placeholders to real
+  // AnimatedSprites on the next setAll() call. Failure is non-fatal —
+  // entities just keep their placeholder bodies.
+  void CharacterAtlas.load().then(
+    (atlas) => {
+      entities.setAtlas(atlas);
+      console.log(`character atlas loaded: ${atlas.list().length} characters`);
+    },
+    (err) => {
+      console.warn("character atlas load failed; using placeholders:", err);
+    },
+  );
 
   // Resize the viewport's "screen size" when the host element resizes
   // — pixi-viewport needs explicit notification.
