@@ -16,19 +16,20 @@
 import { onMount, onCleanup, createSignal } from "solid-js";
 import { mountPixiApp, type PixiHandle } from "../render/PixiApp";
 import { fetchWorldInfo, fetchWorldMap, type WorldInfo } from "../net/api";
+import { connectViewer, type ViewerClient } from "../net/ws";
 import type { TileMapData } from "../render/Tilemap";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
   const [connError, setConnError] = createSignal<string | null>(null);
   const [worldLoadError, setWorldLoadError] = createSignal<string | null>(null);
+  const [wsState, setWsState] = createSignal<"connecting" | "open" | "closed">("connecting");
+  const [liveTick, setLiveTick] = createSignal<number | null>(null);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
+  let viewer: ViewerClient | null = null;
 
   onMount(async () => {
-    // Engine info is best-effort — frontend is useful for solo dev
-    // even if the engine isn't running yet (we just render the world
-    // file directly).
     fetchWorldInfo()
       .then(setWorldInfo)
       .catch((e) => setConnError((e as Error).message));
@@ -41,9 +42,21 @@ export function App() {
     } catch (e) {
       setWorldLoadError((e as Error).message);
     }
+
+    // Live viewer stream. Snapshots overwrite the entity layer; tile
+    // layer is static and was already loaded from the JSON above.
+    viewer = connectViewer({
+      onConnState: setWsState,
+      onSnapshot: (snap) => {
+        setLiveTick(snap.tick);
+        pixiHandle?.setEntities(snap.entities);
+      },
+    });
   });
 
   onCleanup(() => {
+    viewer?.close();
+    viewer = null;
     pixiHandle?.destroy();
     pixiHandle = null;
   });
@@ -87,10 +100,21 @@ export function App() {
         <strong style={{ color: "#feae34" }}>agent_sim</strong>
         <span style={{ opacity: "0.65" }}>
           {worldInfo()
-            ? `engine=${worldInfo()!.scenario} · tick=${worldInfo()!.tick}`
+            ? `engine=${worldInfo()!.scenario}`
             : connError()
               ? <span style={{ color: "#e43b44" }}>engine offline (ok for solo render)</span>
               : "connecting to engine…"}
+        </span>
+        <span
+          style={{
+            "font-size": "11px",
+            padding: "2px 8px",
+            "border-radius": "3px",
+            background: wsState() === "open" ? "#265c42" : wsState() === "connecting" ? "#733e39" : "#3a4466",
+            color: "#ead4aa",
+          }}
+        >
+          ws: {wsState()} {liveTick() !== null ? ` · live tick ${liveTick()}` : ""}
         </span>
         {worldLoadError() && (
           <span style={{ color: "#e43b44" }}>world load failed: {worldLoadError()}</span>

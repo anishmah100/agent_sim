@@ -4,9 +4,7 @@
 // 60Hz, serves WebSocket endpoints for viewers and agents, and exposes a
 // minimal HTTP surface for registration + static info.
 //
-// This is the skeleton. Real subsystems land in internal/world (state +
-// tick), internal/wire (FlatBuffers + WS message types), internal/scenario
-// (verb registration, scenario loading). See docs/ARCHITECTURE.md.
+// See docs/ARCHITECTURE.md for the layer contracts.
 package main
 
 import (
@@ -17,62 +15,72 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/anishmah100/agent_sim/engine/internal/wire"
+	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
 
-// Wall-clock tick rate. The engine simulates the world in fixed-rate
-// steps; rendering interpolation lives on the client.
 const tickRate = 60
 const tickDuration = time.Second / tickRate
 
 var (
 	flagAddr     = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
-	flagWorld    = flag.String("world", "worlds/test.ldtk", "LDtk world file")
+	flagWorld    = flag.String("world", "worlds/dev_test.json", "world JSON file")
 	flagScenario = flag.String("scenario", "fantasy_town", "scenario pack id")
 )
-
-// engineState holds the minimal handshake state for the skeleton. The
-// real world state will live in internal/world.World once that exists.
-type engineState struct {
-	startedAt time.Time
-	tick      atomic.Uint64
-	world     string
-	scenario  string
-}
-
-func (e *engineState) info() map[string]any {
-	return map[string]any{
-		"name":      "agent_sim engine",
-		"version":   "0.0.1",
-		"scenario":  e.scenario,
-		"world":     e.world,
-		"tick_rate": tickRate,
-		"tick":      e.tick.Load(),
-		"uptime_s":  time.Since(e.startedAt).Seconds(),
-	}
-}
 
 func main() {
 	flag.Parse()
 
-	st := &engineState{
-		startedAt: time.Now(),
-		world:     *flagWorld,
-		scenario:  *flagScenario,
+	w, err := world.Load(*flagWorld)
+	if err != nil {
+		log.Fatalf("load world: %v", err)
 	}
+	log.Printf("loaded world %s (%dx%d, %d entities) from %s",
+		w.MapID, w.WidthTiles, w.HeightTiles,
+		len(w.Snapshot().Entities), *flagWorld)
+
+	startedAt := time.Now()
+	var tick atomic.Uint64
+
+	ctx, cancel := signal.NotifyContext(
+		context.Background(), os.Interrupt, syscall.SIGTERM,
+	)
+	defer cancel()
+
+	hub := wire.NewViewerHub(ctx, w)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/world/info", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		_ = json.NewEncoder(w).Encode(st.info())
+	mux.HandleFunc("/api/v1/world/info", func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Content-Type", "application/json")
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
+		_ = json.NewEncoder(rw).Encode(map[string]any{
+			"name":      "agent_sim engine",
+			"version":   "0.0.2",
+			"scenario":  *flagScenario,
+			"world":     w.MapID,
+			"world_dims": []int{w.WidthTiles, w.HeightTiles},
+			"tick_rate": tickRate,
+			"tick":      tick.Load(),
+			"uptime_s":  time.Since(startedAt).Seconds(),
+		})
 	})
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+	mux.HandleFunc("/healthz", func(rw http.ResponseWriter, r *http.Request) {
+		rw.WriteHeader(http.StatusOK)
+		_, _ = rw.Write([]byte("ok"))
 	})
+	mux.HandleFunc("/ws/viewer", hub.Handle)
+
+	// Static world JSON: serves worlds/*.json so the frontend can load
+	// the tile data alongside connecting WS. Same origin, simpler than
+	// dual-hosting. CORS open in v0.
+	worldsDir, _ := filepath.Abs(filepath.Dir(*flagWorld))
+	mux.Handle("/worlds/", http.StripPrefix("/worlds/",
+		corsHandler(http.FileServer(http.Dir(worldsDir)))))
 
 	srv := &http.Server{
 		Addr:              *flagAddr,
@@ -80,21 +88,14 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	ctx, cancel := signal.NotifyContext(
-		context.Background(), os.Interrupt, syscall.SIGTERM,
-	)
-	defer cancel()
-
 	go func() {
-		log.Printf("engine listening on %s (scenario=%s world=%s)",
-			*flagAddr, *flagScenario, *flagWorld)
+		log.Printf("engine listening on %s (scenario=%s)",
+			*flagAddr, *flagScenario)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}
 	}()
 
-	// World tick loop. Skeleton: just increments a counter. Real
-	// simulation work lands in world.Tick() once internal/world exists.
 	tickTimer := time.NewTicker(tickDuration)
 	defer tickTimer.Stop()
 
@@ -109,7 +110,17 @@ func main() {
 			return
 
 		case <-tickTimer.C:
-			st.tick.Add(1)
+			w.Tick()
+			tick.Add(1)
 		}
 	}
+}
+
+// corsHandler adds Access-Control-Allow-Origin: * to the response.
+// v0-only convenience; real CORS lockdown lands with the deploy story.
+func corsHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		rw.Header().Set("Access-Control-Allow-Origin", "*")
+		h.ServeHTTP(rw, r)
+	})
 }

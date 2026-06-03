@@ -22,12 +22,19 @@ export async function fetchWorldInfo(): Promise<WorldInfo> {
   return (await r.json()) as WorldInfo;
 }
 
-/** Fetch the world tilemap JSON. In v0 the file is served by Vite as
- *  a static asset; once the engine owns world ingestion (Milestone 3
- *  onward) this moves to /api/v1/world/render or comes through the
- *  viewer WS as a chunked stream. */
+/** Fetch the world tilemap JSON. The engine serves it from /worlds/<name>.json
+ *  alongside the WS endpoint, so we get correct CORS + the same origin
+ *  for both. Falls back to a same-origin path if VITE_ENGINE_URL is empty
+ *  (useful for static-only dev with no engine running). */
 export async function fetchWorldMap(name = "dev_test"): Promise<unknown> {
-  const r = await fetch(`/worlds/${name}.json`);
-  if (!r.ok) throw new Error(`world map ${r.status}`);
-  return r.json();
+  // Try engine first; fall back to Vite static.
+  for (const base of [ENGINE_URL, ""]) {
+    try {
+      const r = await fetch(`${base}/worlds/${name}.json`);
+      if (r.ok) return r.json();
+    } catch {
+      // try next base
+    }
+  }
+  throw new Error(`world map not found at ${ENGINE_URL}/worlds/${name}.json or static`);
 }
