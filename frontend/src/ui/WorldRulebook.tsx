@@ -208,24 +208,24 @@ function SystemSection(props: { system: SystemDeclaration; matches: (s: string) 
       </h3>
       <p style={{ margin: "0 0 14px 0", color: PALETTE.ink2 }}>{props.system.description}</p>
 
-      <Show when={props.system.verbs.length > 0}>
+      <Show when={(props.system.verbs?.length ?? 0) > 0}>
         <h4 style={{ margin: "12px 0 6px 0", color: PALETTE.ink }}>verbs</h4>
-        <For each={props.system.verbs}>{(v) => <VerbCard verb={v} />}</For>
+        <For each={props.system.verbs ?? []}>{(v) => <VerbCard verb={v} />}</For>
       </Show>
 
-      <Show when={props.system.state_fields.length > 0}>
+      <Show when={(props.system.state_fields?.length ?? 0) > 0}>
         <h4 style={{ margin: "16px 0 6px 0", color: PALETTE.ink }}>state</h4>
-        <For each={props.system.state_fields}>{(f) => <StateRow field={f} />}</For>
+        <For each={props.system.state_fields ?? []}>{(f) => <StateRow field={f} />}</For>
       </Show>
 
-      <Show when={props.system.sounds_emitted?.length > 0}>
+      <Show when={(props.system.sounds_emitted?.length ?? 0) > 0}>
         <h4 style={{ margin: "16px 0 6px 0", color: PALETTE.ink }}>sounds</h4>
-        <For each={props.system.sounds_emitted}>{(s) => <SoundRow sound={s} />}</For>
+        <For each={props.system.sounds_emitted ?? []}>{(s) => <SoundRow sound={s} />}</For>
       </Show>
 
-      <Show when={props.system.archetypes?.length > 0}>
+      <Show when={(props.system.archetypes?.length ?? 0) > 0}>
         <h4 style={{ margin: "16px 0 6px 0", color: PALETTE.ink }}>archetypes</h4>
-        <For each={props.system.archetypes}>{(a) => <ArchetypeRow arch={a} />}</For>
+        <For each={props.system.archetypes ?? []}>{(a) => <ArchetypeRow arch={a} />}</For>
       </Show>
     </section>
   );
@@ -246,37 +246,37 @@ function VerbCard(props: { verb: VerbDeclaration }) {
         <code style={{ color: PALETTE.accent, "font-weight": "600", "font-size": "14px" }}>{props.verb.verb}</code>
         <span style={{ color: PALETTE.ink2, "font-size": "12px" }}>{props.verb.description}</span>
       </div>
-      <Show when={props.verb.preconditions?.length > 0}>
+      <Show when={(props.verb.preconditions?.length ?? 0) > 0}>
         <div style={{ "margin-top": "6px", "font-size": "11px" }}>
           <span style={{ color: PALETTE.ink2 }}>requires: </span>
-          <For each={props.verb.preconditions}>
+          <For each={props.verb.preconditions ?? []}>
             {(p, i) => (
               <span style={{ color: PALETTE.good }}>
-                {p}{i() < props.verb.preconditions.length - 1 ? ", " : ""}
+                {p}{i() < (props.verb.preconditions?.length ?? 0) - 1 ? ", " : ""}
               </span>
             )}
           </For>
         </div>
       </Show>
-      <Show when={props.verb.rejection_reasons?.length > 0}>
+      <Show when={(props.verb.rejection_reasons?.length ?? 0) > 0}>
         <div style={{ "margin-top": "3px", "font-size": "11px" }}>
           <span style={{ color: PALETTE.ink2 }}>rejects: </span>
-          <For each={props.verb.rejection_reasons}>
+          <For each={props.verb.rejection_reasons ?? []}>
             {(r, i) => (
               <span style={{ color: PALETTE.bad }}>
-                {r}{i() < props.verb.rejection_reasons.length - 1 ? ", " : ""}
+                {r}{i() < (props.verb.rejection_reasons?.length ?? 0) - 1 ? ", " : ""}
               </span>
             )}
           </For>
         </div>
       </Show>
-      <Show when={props.verb.emits_events && props.verb.emits_events.length > 0}>
+      <Show when={(props.verb.emits_events?.length ?? 0) > 0}>
         <div style={{ "margin-top": "3px", "font-size": "11px" }}>
           <span style={{ color: PALETTE.ink2 }}>emits: </span>
-          <For each={props.verb.emits_events!}>
+          <For each={props.verb.emits_events ?? []}>
             {(e, i) => (
               <span style={{ color: PALETTE.ink }}>
-                {e}{i() < props.verb.emits_events!.length - 1 ? ", " : ""}
+                {e}{i() < (props.verb.emits_events?.length ?? 0) - 1 ? ", " : ""}
               </span>
             )}
           </For>

@@ -79,10 +79,45 @@ func (a *Aggregator) Add(decl SystemDeclaration) {
 }
 
 func (a *Aggregator) Build() Manifest {
+	// Normalize nil slices to empty slices so the JSON manifest never
+	// has `"verbs": null` / `"state_fields": null` etc. Consumers
+	// (frontend Rulebook, bot SDK, tests) can then assume arrays exist
+	// and call .length / iterate without null guards.
+	systems := make([]SystemDeclaration, len(a.systems))
+	copy(systems, a.systems)
+	for i := range systems {
+		if systems[i].Verbs == nil {
+			systems[i].Verbs = []VerbDeclaration{}
+		}
+		if systems[i].StateFields == nil {
+			systems[i].StateFields = []StateFieldDecl{}
+		}
+		if systems[i].SoundsEmitted == nil {
+			systems[i].SoundsEmitted = []SoundDecl{}
+		}
+		if systems[i].Archetypes == nil {
+			systems[i].Archetypes = []ArchetypeDecl{}
+		}
+		for j := range systems[i].Verbs {
+			v := &systems[i].Verbs[j]
+			if v.Preconditions == nil {
+				v.Preconditions = []string{}
+			}
+			if v.RejectionReasons == nil {
+				v.RejectionReasons = []string{}
+			}
+			if v.EmitsEvents == nil {
+				v.EmitsEvents = []string{}
+			}
+			if v.Examples == nil {
+				v.Examples = []VerbExample{}
+			}
+		}
+	}
 	return Manifest{
 		World:         a.world,
 		Scenario:      a.scenario,
 		SchemaVersion: 1,
-		Systems:       a.systems,
+		Systems:       systems,
 	}
 }
