@@ -128,12 +128,20 @@ def build_oak_hollow() -> Map:
     # Straight river — clean shoreline, no sinusoidal stair-step.
     river = river_predicate(cx=24.0, amplitude=0.0, half_width=2.0)
     m.stamp_when(river, WATER)
-    # Pond on west side — circular bulge anchored on the river bend.
-    m.fill_circle(cx=10, cy=24, r=4.0, t=WATER)
-    m.fill_circle(cx=13, cy=23, r=3.0, t=WATER)
-    # Smooth the rasterized boundaries: any water tile surrounded by
-    # 3+ grass neighbors flips to grass, eliminating single-tile spikes
-    # along the shore. Two passes round most edges.
+    # Pond on west side — octagonal bulge anchored on the river bend.
+    # An octagon has exactly 8 unique transition slots (one per edge +
+    # corner) so the autotile picks a clean cycle around it.
+    PD_X0, PD_Y0, PD_X1, PD_Y1 = 7, 21, 14, 27
+    for y in range(PD_Y0, PD_Y1 + 1):
+        for x in range(PD_X0, PD_X1 + 1):
+            in_nw = x == PD_X0 and y == PD_Y0
+            in_ne = x == PD_X1 and y == PD_Y0
+            in_sw = x == PD_X0 and y == PD_Y1
+            in_se = x == PD_X1 and y == PD_Y1
+            if in_nw or in_ne or in_sw or in_se:
+                continue
+            m.set(x, y, WATER)
+    # Smooth single-tile spikes from rasterized boundaries.
     smooth_boundaries(m, target=WATER, against={GRASS}, iterations=2)
 
     # ----- Village clearing (north center) -----
@@ -177,12 +185,24 @@ def build_oak_hollow() -> Map:
         m.set(BRIDGE_RIGHT + offset, y, PATH)
 
     # ----- Dirt clearing (south-east) — quarry / dig site -----
-    for (cx, cy, r) in [(44, 33, 3.2), (47, 34, 2.5), (41, 35, 2.0)]:
-        for y in range(H):
-            for x in range(W):
-                if (x - cx) ** 2 + (y - cy) ** 2 <= r * r:
-                    if m.grid[y][x] == GRASS:
-                        m.set(x, y, DIRT)
+    # An OCTAGON (rectangle with the 4 corners notched off by 1 tile).
+    # This shape has exactly 8 edge transitions + 4 corner transitions,
+    # one of each type, so the autotile renders a clean uniform border
+    # instead of stair-stepped zigzag.
+    DC_X0, DC_Y0 = 41, 31
+    DC_X1, DC_Y1 = 50, 38
+    for y in range(DC_Y0, DC_Y1 + 1):
+        for x in range(DC_X0, DC_X1 + 1):
+            if m.grid[y][x] != GRASS:
+                continue
+            # Notch off the 4 corners.
+            in_nw = x == DC_X0 and y == DC_Y0
+            in_ne = x == DC_X1 and y == DC_Y0
+            in_sw = x == DC_X0 and y == DC_Y1
+            in_se = x == DC_X1 and y == DC_Y1
+            if in_nw or in_ne or in_sw or in_se:
+                continue
+            m.set(x, y, DIRT)
 
     # ----- Forest border hint — small dirt patches near map edges
     # suggest worn paths where players' eyes wander, but kept sparse.
@@ -192,6 +212,10 @@ def build_oak_hollow() -> Map:
                 if (x - cx) ** 2 + (y - cy) ** 2 <= r * r:
                     if m.grid[y][x] == GRASS:
                         m.set(x, y, DIRT)
+
+    # Smooth dirt boundaries the same way we smooth water — kill single-
+    # tile spikes left over from the corner-notched + small-patch fills.
+    smooth_boundaries(m, target=DIRT, against={GRASS}, iterations=2)
 
     return m
 
