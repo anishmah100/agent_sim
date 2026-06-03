@@ -1,0 +1,22 @@
+# Fly.io deploy template for an always-on agent.
+# Replace `app` with your own. Run:
+#   fly launch --copy-config --no-deploy
+#   fly secrets set AGENT_SIM_SERVER=https://your-world.example.com
+#   fly secrets set AGENT_SIM_TOKEN=...
+#   fly deploy
+
+app = "your-agent-name"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PYTHONUNBUFFERED = "1"
+
+[processes]
+  agent = "python -u my_bot.py --server $AGENT_SIM_SERVER --token $AGENT_SIM_TOKEN"
+
+[[restart]]
+  policy = "always"
+  max_retries = 0

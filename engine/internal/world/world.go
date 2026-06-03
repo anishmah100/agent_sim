@@ -121,7 +121,52 @@ type World struct {
 	// — the same fields the frontend uses to pick which interior to
 	// render. Entities at a door tile may switch to InsideBuilding.
 	buildingDoors map[Tile]buildingRef
+
+	// Tile-level vision blockers. true = tile blocks vision (walls,
+	// tall blocking decorations). false = clear.
+	visionBlocks [][]bool
+
+	// Per-tile kind name (grass, dirt, water, ...). Used by the
+	// rasterizer to pick the right tile texture. Same shape as walkable.
+	tileKindGrid [][]string
+
+	// Decoration list as loaded (read-only after init).
+	decorations []DecorationRef
+
+	// Audible event ring buffer + monotonic event ID counter.
+	audible  []AudibleEvent
+	eventSeq uint64
+
+	// Scenario hooks — installed via InstallScenario. Both are nil for
+	// a bare engine; when a scenario is installed, the dispatcher
+	// consults verbHandlers and Tick() calls onTick.
+	verbHandlers map[string]func(*World, *Entity, *ActionEnvelope) ActionResult
+	onTick       func(*World, uint64)
 }
+
+// InstallScenario wires verb handlers and per-tick callback into the
+// world. Call once at startup, before Tick() begins.
+func (w *World) InstallScenario(verbs map[string]func(*World, *Entity, *ActionEnvelope) ActionResult, onTick func(*World, uint64), onSpawn func(*Entity)) {
+	w.mu.Lock()
+	w.verbHandlers = verbs
+	w.onTick = onTick
+	if onSpawn != nil {
+		for _, e := range w.entities {
+			onSpawn(e)
+		}
+	}
+	w.mu.Unlock()
+}
+
+func (w *World) scenarioHandler(verb string) func(*World, *Entity, *ActionEnvelope) ActionResult {
+	return w.verbHandlers[verb]
+}
+
+// VisionRadius / NightRadius — engine defaults; scenarios can override.
+const (
+	VisionRadius = 12
+	NightRadius  = 6
+)
 
 type buildingRef struct {
 	Sprite string
@@ -185,6 +230,12 @@ func Load(path string) (*World, error) {
 		occupants:     make(map[Tile]string),
 		buildingDoors: make(map[Tile]buildingRef),
 	}
+	w.visionBlocks = make([][]bool, fw.HeightTiles)
+	w.tileKindGrid = make([][]string, fw.HeightTiles)
+	for y := 0; y < fw.HeightTiles; y++ {
+		w.visionBlocks[y] = make([]bool, fw.WidthTiles)
+		w.tileKindGrid[y] = make([]string, fw.WidthTiles)
+	}
 
 	// Build walkability map from the tile legend.
 	w.walkable = make([][]bool, w.HeightTiles)
@@ -201,6 +252,11 @@ func Load(path string) (*World, error) {
 				kind = fw.TilesLegend[ch]
 			}
 			w.walkable[y][x] = walkableKinds[kind]
+			w.tileKindGrid[y][x] = kind
+			// Walls block vision. Water/void don't (you can see across).
+			if kind == "wall" {
+				w.visionBlocks[y][x] = true
+			}
 		}
 	}
 
@@ -214,6 +270,18 @@ func Load(path string) (*World, error) {
 	// that tile and a character walking through it would visually be
 	// inside the tree's leaves. Block forces the path to go around.
 	for _, d := range fw.Decorations {
+		// Record into the public read-only list.
+		ref := DecorationRef{
+			X: d.X, Y: d.Y, Sprite: d.Sprite,
+			HeightTiles: d.HeightTiles,
+			FootprintW:  d.FootprintW,
+			FootprintH:  d.FootprintH,
+		}
+		if d.Walkable != nil {
+			ref.Walkable = *d.Walkable
+		}
+		w.decorations = append(w.decorations, ref)
+
 		if d.X < 0 || d.X >= w.WidthTiles || d.Y < 0 || d.Y >= w.HeightTiles {
 			continue
 		}
@@ -242,6 +310,10 @@ func Load(path string) (*World, error) {
 					continue
 				}
 				w.walkable[ny][nx] = false
+				// Tall blocking decorations also block vision through them.
+				if d.HeightTiles >= 1.5 {
+					w.visionBlocks[ny][nx] = true
+				}
 			}
 		}
 		// Tall objects (trees, buildings ≥ 1.5 tiles) also block ONE row
@@ -431,6 +503,9 @@ func (w *World) Tick() {
 	defer w.mu.Unlock()
 
 	w.tick++
+	if w.onTick != nil {
+		w.onTick(w, w.tick)
+	}
 
 	for _, e := range w.entities {
 		// --- Inside a building: tick down, then exit. ---
@@ -553,22 +628,13 @@ type WorldSnapshot struct {
 	Entities []Entity `json:"entities"`
 }
 
-// AgentObservation + ViewImage stubs reserved for the agent-WS path.
-// See docs/OBSERVATION_MODEL.md §10b. Implementation lands in the
-// agent SDK milestone.
-
-type AgentObservation struct {
-	ObsID     uint64     `json:"obs_id"`
-	WorldTick uint64     `json:"world_tick"`
-	Self      *Entity    `json:"self"`
-	ViewImage *ViewImage `json:"view_image,omitempty"`
-}
-
+// ViewImage — per-agent rasterized crop. Filled in by the Go-side
+// rasterizer when the agent's vision_mode includes images.
 type ViewImage struct {
-	Format        string     `json:"format"`
-	Width         uint16     `json:"width"`
-	Height        uint16     `json:"height"`
-	Data          []byte     `json:"data"`
-	CenteredOnPos [2]float64 `json:"centered_on_pos"`
-	Facing        Facing     `json:"facing"`
+	Format        string `json:"format"`
+	Width         uint16 `json:"width"`
+	Height        uint16 `json:"height"`
+	Data          []byte `json:"data"`
+	CenteredOnPos Tile   `json:"centered_on_pos"`
+	Facing        Facing `json:"facing"`
 }

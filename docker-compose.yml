@@ -1,0 +1,23 @@
+services:
+  fantasy_town:
+    build: ./engine
+    container_name: agent_sim_fantasy_town
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ADDR: ":8080"
+      WORLD: "/worlds/dev_test.json"
+      SCENARIO: "fantasy_town"
+    volumes:
+      - ./worlds:/worlds:ro
+      - ./art:/art:ro
+      - ./snapshots:/snapshots
+  # Add more services to host additional worlds — each becomes its own
+  # process per the "one server per world" rule in docs/VISION.md.
+  # Example (commented):
+  # rome:
+  #   build: ./engine
+  #   ports: ["8081:8080"]
+  #   environment:
+  #     WORLD: "/worlds/rome.json"

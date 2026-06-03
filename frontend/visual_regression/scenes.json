@@ -1,0 +1,6 @@
+[
+  { "name": "world_overview", "zoom_out": 14, "tolerance": 0.01 },
+  { "name": "plaza_close",    "zoom_out": 0,  "tolerance": 0.01 },
+  { "name": "bridge",         "zoom_out": 4,  "pan": [-50, -100], "tolerance": 0.01 },
+  { "name": "dirt_clearing",  "zoom_out": 4,  "pan": [-200, -200], "tolerance": 0.01 }
+]

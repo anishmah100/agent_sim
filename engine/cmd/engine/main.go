@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/anishmah100/agent_sim/engine/internal/scenario/fantasy_town"
 	"github.com/anishmah100/agent_sim/engine/internal/wire"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
@@ -44,6 +45,21 @@ func main() {
 		w.MapID, w.WidthTiles, w.HeightTiles,
 		len(w.Snapshot().Entities), *flagWorld)
 
+	// Install the chosen scenario. Currently only fantasy_town exists;
+	// future scenarios register here too.
+	if *flagScenario == "fantasy_town" {
+		s := fantasy_town.New()
+		verbs := make(map[string]func(*world.World, *world.Entity, *world.ActionEnvelope) world.ActionResult)
+		for _, v := range s.Verbs() {
+			h := s.Handler(v)
+			if h != nil {
+				verbs[v] = h
+			}
+		}
+		w.InstallScenario(verbs, func(w *world.World, t uint64) { s.OnTick(w, t) }, s.OnEntitySpawn)
+		log.Printf("installed scenario: %s (%d verbs)", s.Name(), len(verbs))
+	}
+
 	startedAt := time.Now()
 	var tick atomic.Uint64
 
@@ -53,6 +69,7 @@ func main() {
 	defer cancel()
 
 	hub := wire.NewViewerHub(ctx, w)
+	agents := wire.NewAgentHub(ctx, w)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/world/info", func(rw http.ResponseWriter, r *http.Request) {
@@ -74,6 +91,8 @@ func main() {
 		_, _ = rw.Write([]byte("ok"))
 	})
 	mux.HandleFunc("/ws/viewer", hub.Handle)
+	mux.HandleFunc("/ws/agent", agents.HandleWS)
+	mux.HandleFunc("/api/v1/agent/register", agents.HandleRegister)
 
 	// Static world JSON + art atlases. The engine serves these because:
 	// 1. Same-origin = no CORS pain.
