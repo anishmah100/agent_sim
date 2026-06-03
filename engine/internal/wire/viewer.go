@@ -113,6 +113,9 @@ func (h *ViewerHub) count() int {
 	return len(h.clients)
 }
 
+// Count is the public version for the metrics exporter.
+func (h *ViewerHub) Count() int { return h.count() }
+
 // broadcastLoop pushes a JSON-encoded WorldSnapshot to every connected
 // viewer at PushHz. Fast-paths when nobody is listening so we don't
 // pay the JSON encode cost during quiet periods.

@@ -41,6 +41,14 @@ type AgentHub struct {
 	live map[string]*agentConn
 }
 
+// Count returns the number of currently-connected agents (used by
+// the /metrics endpoint).
+func (h *AgentHub) Count() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.live)
+}
+
 type agentRecord struct {
 	AgentID   string
 	EntityID  string

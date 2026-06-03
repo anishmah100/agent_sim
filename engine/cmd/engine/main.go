@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/anishmah100/agent_sim/engine/internal/historian"
+	"github.com/anishmah100/agent_sim/engine/internal/metrics"
 	"github.com/anishmah100/agent_sim/engine/internal/npc"
 	"github.com/anishmah100/agent_sim/engine/internal/scenario/fantasy_town"
 	"github.com/anishmah100/agent_sim/engine/internal/wire"
@@ -123,6 +124,28 @@ func main() {
 	mux.HandleFunc("/api/v1/world/affordances", wire.AffordanceManifestHandler(host))
 	mux.HandleFunc("/api/v1/world/history", historian.Handler(hist))
 
+	// Prometheus-format /metrics. Stats sourced from the existing
+	// counters (no client_golang dep).
+	npcStats := func() int {
+		if npcSup == nil {
+			return 0
+		}
+		total := 0
+		for _, s := range npcSup.Stats() {
+			total += s.Restarts
+		}
+		return total
+	}
+	mux.HandleFunc("/metrics", metrics.Handler(metricsSource{
+		startedAt:   startedAt,
+		tickPtr:     &tick,
+		world:       w,
+		hub:         hub,
+		agentHub:    agents,
+		hist:        hist,
+		npcRestarts: npcStats,
+	}))
+
 	// Static world JSON + art atlases. The engine serves these because:
 	// 1. Same-origin = no CORS pain.
 	// 2. The agent rasterizer (Milestone 4) needs to read the same
@@ -184,3 +207,28 @@ func corsHandler(h http.Handler) http.Handler {
 		h.ServeHTTP(rw, r)
 	})
 }
+
+// metricsSource implements metrics.Source by reading from the live
+// world / hubs / historian / NPC supervisor.
+type metricsSource struct {
+	startedAt   time.Time
+	tickPtr     *atomic.Uint64
+	world       *world.World
+	hub         *wire.ViewerHub
+	agentHub    *wire.AgentHub
+	hist        *historian.Historian
+	npcRestarts func() int
+}
+
+func (s metricsSource) Tick() uint64           { return s.tickPtr.Load() }
+func (s metricsSource) UptimeSeconds() float64 { return time.Since(s.startedAt).Seconds() }
+func (s metricsSource) EntityCount() int       { return len(s.world.EntityIDs()) }
+func (s metricsSource) ViewerCount() int       { return s.hub.Count() }
+func (s metricsSource) AgentCount() int        { return s.agentHub.Count() }
+func (s metricsSource) EventsEmitted() uint64 {
+	if s.hist == nil {
+		return 0
+	}
+	return s.hist.Stats().TotalEmitted
+}
+func (s metricsSource) NPCRestarts() int { return s.npcRestarts() }
