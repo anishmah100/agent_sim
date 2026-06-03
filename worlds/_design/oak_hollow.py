@@ -201,16 +201,21 @@ def place_decorations(m: Map) -> list[dict]:
     #   veg:010 small bush
     #   veg:036 mushroom cluster (0.8-tile)
     # We mix these so a clump reads as a real forest.
-    # Painterly DALL-E trees. Kept smaller than HG canopies so they
-    # read as "in the world" instead of dominating it. 1.8 tile tall
-    # ≈ 28px at zoom 4 = visible silhouette without crowding tiles.
-    TREE_BIG = [("veg:000", 1.8), ("veg:004", 1.8)]
-    TREE_ACCENT = [("veg:001", 1.8)]  # autumn orange — used sparingly, not on plaza
-    BUSH = [("veg:008", 1.1), ("veg:009", 1.1), ("veg:010", 1.0)]
-    MUSH = [("veg:036", 0.8)]
+    # Painterly forest sprites — installed from the GPT-generated forest
+    # sheet (art/install_forest_sheet.py). Style fully matches our
+    # painterly character art. Trees ~2 tiles tall so silhouettes read
+    # at HG-like zoom without crowding.
+    TREE_BIG = [
+        ("veg:000", 2.0), ("veg:004", 2.0), ("veg:036", 2.0), ("veg:037", 2.0),
+    ]
+    TREE_ACCENT = [
+        ("veg:001", 2.0),   # autumn orange
+        ("veg:022", 2.0),   # apple/berry
+        ("veg:032", 2.0),   # snow pine
+    ]
+    BUSH = [("veg:008", 1.1), ("veg:009", 1.1), ("veg:025", 1.1)]
+    MUSH = [("veg:010", 0.8), ("veg:023", 0.8)]   # flowers + log accents
     TREE_SPACING = 2
-    # Don't put trees within this distance of the plaza/village stone
-    # so it doesn't look like trees are growing out of cobblestone.
     PLAZA_BUFFER = 1
 
     def is_tree(sprite: str) -> bool:
@@ -303,7 +308,15 @@ def place_decorations(m: Map) -> list[dict]:
             spr, h = pick(TREE_BIG, cx + dx, cy + dy)
             add(cx + dx, cy + dy, spr, h)
 
-    # --- Sparse bushes in the meadow + plaza grass strips ---
+    # --- Groundcover in the meadow — flowers, mushrooms, small plants.
+    # More variety pulls the eye away from large blank grass plains.
+    GROUNDCOVER = [
+        ("veg:022", 0.8),  # flower
+        ("veg:023", 0.6),  # small plant
+        ("veg:025", 1.0),  # bush variant
+        ("veg:032", 0.7),  # mushroom cluster
+        ("veg:037", 0.8),  # plant variant
+    ]
     for y in range(H):
         for x in range(W):
             if (x, y) in placed or is_blocking(m, x, y):
@@ -311,10 +324,13 @@ def place_decorations(m: Map) -> list[dict]:
             if m.grid[y][x] != GRASS:
                 continue
             roll = hash_at(x, y, 6) % 1000
-            if roll < 25:
+            if roll < 30:
                 spr, h = pick(BUSH, x, y)
                 add(x, y, spr, h, walkable=True)
-            elif roll < 32:
+            elif roll < 50:
+                spr, h = pick(GROUNDCOVER, x, y)
+                add(x, y, spr, h, walkable=True)
+            elif roll < 55:
                 spr, h = pick(MUSH, x, y)
                 add(x, y, spr, h, walkable=True)
 
