@@ -22,14 +22,18 @@ import { Viewport } from "pixi-viewport";
 import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
+import { installClickToInspect, type ClickEvent } from "./input";
 
 export interface PixiHandle {
   app: Application;
   viewport: Viewport;
   loadWorld(data: TileMapData): void;
   setEntities(entities: EntityState[]): void;
+  getEntities(): EntityState[];
   centerOn(tileX: number, tileY: number): void;
   fitToWorld(): void;
+  setSelectedEntity(id: string | null): void;
+  onClick(handler: (ev: ClickEvent) => void): () => void;
   destroy(): void;
 }
 
@@ -72,6 +76,22 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   viewport.addChild(entities.container);
   viewport.addChild(fxAbove);
 
+  // Click handler — installed once. App-level listeners register
+  // through the returned onClick().
+  const clickHandlers: Array<(ev: ClickEvent) => void> = [];
+  installClickToInspect({
+    viewport,
+    getEntities: () => entities.getAll(),
+    onClick: (ev) => {
+      for (const h of clickHandlers) h(ev);
+    },
+  });
+
+  // Per-frame tick for entity layer effects (selection ring pulse).
+  app.ticker.add((delta) => {
+    entities.tick(delta.deltaMS);
+  });
+
   // Resize the viewport's "screen size" when the host element resizes
   // — pixi-viewport needs explicit notification.
   app.renderer.on("resize", (w: number, h: number) => {
@@ -113,6 +133,10 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
       entities.setAll(list);
     },
 
+    getEntities(): EntityState[] {
+      return entities.getAll();
+    },
+
     centerOn(tileX: number, tileY: number) {
       viewport.moveCenter(
         tileX * TILE_SIZE_PX + TILE_SIZE_PX / 2,
@@ -121,6 +145,18 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
 
     fitToWorld: doFitToWorld,
+
+    setSelectedEntity(id: string | null) {
+      entities.setSelected(id);
+    },
+
+    onClick(handler) {
+      clickHandlers.push(handler);
+      return () => {
+        const i = clickHandlers.indexOf(handler);
+        if (i >= 0) clickHandlers.splice(i, 1);
+      };
+    },
 
     destroy() {
       tilemap.destroy();

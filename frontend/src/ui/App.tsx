@@ -18,6 +18,8 @@ import { mountPixiApp, type PixiHandle } from "../render/PixiApp";
 import { fetchWorldInfo, fetchWorldMap, type WorldInfo } from "../net/api";
 import { connectViewer, type ViewerClient } from "../net/ws";
 import type { TileMapData } from "../render/Tilemap";
+import type { EntityState } from "../render/Entity";
+import { Inspector } from "./Inspector";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
@@ -25,9 +27,17 @@ export function App() {
   const [worldLoadError, setWorldLoadError] = createSignal<string | null>(null);
   const [wsState, setWsState] = createSignal<"connecting" | "open" | "closed">("connecting");
   const [liveTick, setLiveTick] = createSignal<number | null>(null);
+  const [selectedId, setSelectedId] = createSignal<string | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] = createSignal<EntityState | null>(null);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
+
+  const closeInspector = () => {
+    setSelectedId(null);
+    setSelectedSnapshot(null);
+    pixiHandle?.setSelectedEntity(null);
+  };
 
   onMount(async () => {
     fetchWorldInfo()
@@ -36,12 +46,36 @@ export function App() {
 
     pixiHandle = await mountPixiApp(canvasContainer);
 
+    // Dev escape hatch: expose the pixi handle on globalThis so tests
+    // and browser devtools can read entity state, drive the viewport,
+    // and trigger selection without going through pointer events. The
+    // app NEVER reads from globalThis itself — this is one-way.
+    (globalThis as unknown as { __pixiHandle?: typeof pixiHandle }).__pixiHandle = pixiHandle;
+
     try {
       const mapData = (await fetchWorldMap("dev_test")) as TileMapData;
       pixiHandle.loadWorld(mapData);
     } catch (e) {
       setWorldLoadError((e as Error).message);
     }
+
+    // Click → inspect.
+    pixiHandle.onClick((ev) => {
+      if (ev.entity) {
+        setSelectedId(ev.entity.entity_id);
+        setSelectedSnapshot(ev.entity);
+        pixiHandle?.setSelectedEntity(ev.entity.entity_id);
+      } else {
+        closeInspector();
+      }
+    });
+
+    // ESC closes the inspector.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeInspector();
+    };
+    window.addEventListener("keydown", onKey);
+    onCleanup(() => window.removeEventListener("keydown", onKey));
 
     // Live viewer stream. Snapshots overwrite the entity layer; tile
     // layer is static and was already loaded from the JSON above.
@@ -50,6 +84,12 @@ export function App() {
       onSnapshot: (snap) => {
         setLiveTick(snap.tick);
         pixiHandle?.setEntities(snap.entities);
+        // Keep the inspector's data live for the selected entity.
+        const sid = selectedId();
+        if (sid !== null) {
+          const found = snap.entities.find((e) => e.entity_id === sid);
+          if (found) setSelectedSnapshot(found);
+        }
       },
     });
   });
@@ -137,6 +177,8 @@ export function App() {
           </button>
         </span>
       </div>
+
+      <Inspector entity={selectedSnapshot()} onClose={closeInspector} />
 
       <div
         style={{

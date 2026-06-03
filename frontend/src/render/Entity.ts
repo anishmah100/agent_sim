@@ -30,6 +30,9 @@ interface RenderedEntity {
 export class EntityLayer {
   readonly container: Container;
   private items = new Map<string, RenderedEntity>();
+  private selectionRing: Graphics;
+  private selectedId: string | null = null;
+  private pulsePhase = 0;
 
   constructor() {
     this.container = new Container();
@@ -38,6 +41,54 @@ export class EntityLayer {
     // (proper "depth" for top-down 3/4 view). Built into Pixi when
     // sortableChildren = true + each child's zIndex is set.
     this.container.sortableChildren = true;
+
+    // Selection ring lives on its own. We re-position + redraw each
+    // frame in tick(); created once to avoid Graphics churn.
+    this.selectionRing = new Graphics();
+    this.selectionRing.visible = false;
+    this.selectionRing.zIndex = -1;            // under all entity sprites
+    this.container.addChild(this.selectionRing);
+  }
+
+  getAll(): EntityState[] {
+    return Array.from(this.items.values()).map((re) => ({ ...re.state }));
+  }
+
+  setSelected(id: string | null): void {
+    this.selectedId = id;
+    if (id === null) {
+      this.selectionRing.visible = false;
+    }
+  }
+
+  /** Per-frame update — drives the selection ring's position + pulse.
+   *  Called from PixiApp's ticker. */
+  tick(deltaMs: number): void {
+    this.pulsePhase = (this.pulsePhase + deltaMs / 230) % (Math.PI * 2);
+    if (this.selectedId === null) return;
+    const re = this.items.get(this.selectedId);
+    if (!re) {
+      this.selectionRing.visible = false;
+      return;
+    }
+    // Foot position = center of the 16x16 tile footprint.
+    const cx = re.container.x + ENTITY_W / 2;
+    const cy = re.container.y + ENTITY_H - 1;
+    const pulse = 0.7 + 0.3 * Math.sin(this.pulsePhase);
+    const rx = ENTITY_W * 0.42;
+    const ry = ENTITY_H * 0.11;
+    this.selectionRing.clear();
+    // Dark frame.
+    this.selectionRing.ellipse(cx, cy, rx + 1.2, ry + 1.2)
+      .stroke({ color: 0x181425, width: 1.2, alpha: 0.7 });
+    // Bright gold ring.
+    this.selectionRing.ellipse(cx, cy, rx, ry)
+      .stroke({ color: 0xfee761, width: 0.8, alpha: 0.95 * pulse });
+    // Soft outer halo for visibility against any tile.
+    this.selectionRing.ellipse(cx, cy, rx + 0.8, ry + 0.8)
+      .stroke({ color: 0xffd24a, width: 1.5, alpha: 0.3 * pulse });
+    this.selectionRing.zIndex = re.container.zIndex - 0.5;
+    this.selectionRing.visible = true;
   }
 
   setAll(entities: EntityState[]): void {
