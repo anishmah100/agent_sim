@@ -67,16 +67,43 @@ def reject(name: str, reason: str) -> None:
     sys.exit(1)
 
 
-def get_layout(style: dict, asset_class: str) -> dict:
-    """Return the layout descriptor for an asset class."""
-    layouts = style.get("character_sheet_layouts", {})
-    if asset_class in layouts:
-        return layouts[asset_class]
-    if asset_class.startswith("character") or asset_class == "trainer_red":
-        return layouts["character_full_v3_upscaled"]
-    if asset_class.startswith("tile"):
-        raise ValueError("tile assets need explicit layout in style.json")
-    raise ValueError(f"unknown asset-class {asset_class!r}")
+CHARACTER_NAMES = {
+    "trainer_red", "trainer_lyra_blue", "wizard", "baker",
+    "iron_guard", "child", "cloaked_wanderer",
+    # also accept the prompt-style names if anyone uses those
+    "old_sage", "guard_iron", "child_kid", "merchant_baker", "lyra_blue",
+}
+TILESET_GRID_NAMES = {"overworld_tileset", "items_master"}
+TILESET_FREEFORM_NAMES = {
+    "tileset_vegetation", "tileset_building", "tileset_buildings",
+    "interior_tileset", "tileset_interior",
+}
+
+
+def get_layout(style: dict, asset_name: str, asset_class: str | None) -> dict:
+    """Return the layout descriptor for an asset, inferring from name
+    if asset_class isn't passed."""
+    char_layouts = style.get("character_sheet_layouts", {})
+    tile_layouts = style.get("tileset_layouts", {})
+
+    # Explicit asset_class wins.
+    if asset_class is not None:
+        if asset_class in char_layouts:
+            return char_layouts[asset_class]
+        if asset_class in tile_layouts:
+            return tile_layouts[asset_class]
+        raise ValueError(f"unknown asset-class {asset_class!r}")
+
+    # Name-based inference.
+    if asset_name in CHARACTER_NAMES or asset_name.startswith("character_"):
+        return char_layouts["character_full_v3_upscaled"]
+    if asset_name in TILESET_GRID_NAMES:
+        return tile_layouts["tileset_grid_8x8"]
+    if asset_name in TILESET_FREEFORM_NAMES:
+        return tile_layouts["tileset_freeform_256"]
+    raise ValueError(
+        f"cannot infer layout for {asset_name!r}; pass --asset-class"
+    )
 
 
 def nearest_color_idx(
@@ -100,19 +127,32 @@ def process(
     style = load_style()
 
     try:
-        layout = get_layout(style, asset_class)
+        layout = get_layout(style, asset_name, asset_class)
     except ValueError as e:
         reject(asset_name, str(e))
 
-    # Snap palette: full Endesga 32 by default, OR a layout-specific
-    # subset (e.g. character intake excludes pinks so AI-gen edge shadows
-    # don't halo into them).
-    snap_hex = layout.get("snap_palette_subset", style["palette"])
+    # Snap palette resolution order: explicit subset → ref into top-level
+    # named palette → full master palette.
+    if "snap_palette_subset" in layout:
+        snap_hex = layout["snap_palette_subset"]
+    elif "snap_palette_ref" in layout:
+        ref = layout["snap_palette_ref"]
+        if ref not in style:
+            reject(asset_name, f"snap_palette_ref {ref!r} not in style.json")
+        snap_hex = style[ref]
+    else:
+        snap_hex = style["palette"]
     palette_rgb = [hex_to_rgb(c) for c in snap_hex]
     palette_rgb_arr = np.array(palette_rgb, dtype=np.uint8)
     print(f"INFO    {asset_name}: snapping to {len(palette_rgb)}-color palette")
 
-    exp_w, exp_h = layout["input_dims_px"]
+    # Some layouts (character) have exact input dims; freeform/grid
+    # tilesets use *_approx since DALL-E delivers varying square sizes.
+    if "input_dims_px" in layout:
+        exp_w, exp_h = layout["input_dims_px"]
+    else:
+        exp_w, exp_h = layout["input_dims_px_approx"]
+        # Treat approx as a hint, not a gate.
     native_w, native_h = layout["native_dims_px"]
 
     src = explicit_path or (RAW_DIR / f"{asset_name}.png")
@@ -120,15 +160,13 @@ def process(
         reject(asset_name, f"source file not found: {src}")
 
     img = Image.open(src).convert("RGB")
-    print(f"INFO    {asset_name}: input dims {img.size} (expected {(exp_w, exp_h)})")
-    if img.size != (exp_w, exp_h):
-        if strict:
-            reject(
-                asset_name,
-                f"strict mode: dim mismatch {img.size} != {(exp_w, exp_h)}",
-            )
-        print(f"INFO    {asset_name}: will downsample directly to native "
-              f"{(native_w, native_h)} (BOX filter — averages AI noise)")
+    print(f"INFO    {asset_name}: input dims {img.size} "
+          f"(expected ~{(exp_w, exp_h)}, downsampling to native {(native_w, native_h)})")
+    if strict and img.size != (exp_w, exp_h):
+        reject(
+            asset_name,
+            f"strict mode: dim mismatch {img.size} != {(exp_w, exp_h)}",
+        )
 
     # PHASE 1: Aggressive pre-key on the INPUT image.
     # Any pixel that is unmistakably the magenta background — high red,
@@ -229,19 +267,8 @@ def main() -> None:
     )
     args = p.parse_args()
 
-    asset_class = args.asset_class
-    if asset_class is None:
-        if args.name.startswith("character_") or args.name == "trainer_red":
-            asset_class = "character_full_v3_upscaled"
-        elif args.name.startswith("tile_"):
-            asset_class = "tile"
-        else:
-            sys.stderr.write(
-                f"cannot infer asset class from {args.name!r}; pass --asset-class\n"
-            )
-            sys.exit(2)
-
-    process(args.name, asset_class, args.path, args.strict)
+    # asset_class can be None — get_layout infers from name.
+    process(args.name, args.asset_class, args.path, args.strict)
 
 
 if __name__ == "__main__":
