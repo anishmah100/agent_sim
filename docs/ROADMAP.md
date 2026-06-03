@@ -89,20 +89,25 @@ Goal: Go backend ticks at 60Hz, serves a hard-coded world over WebSocket.
 
 ## Milestone 4 — Agent SDK + scripted bots (Week 5)
 
-Goal: an agent connects, registers, receives obs, submits actions. Three example bots run concurrently.
+Goal: an agent connects, registers, receives obs, submits actions. Example bots run concurrently. Both structured-only and multimodal vision modes work end-to-end.
 
 **Tasks:**
-- Python SDK: `pip install`-able. Typed observation models. Async API.
+- Python SDK: `pip install`-able. Typed observation models. Async API. Supports `vision.mode = structured | image | both` per docs/OBSERVATION_MODEL.md §10b.
 - TypeScript SDK: same shape, npm-installable.
-- Example: `examples/heuristic_bot.py` — rule-based wanderer.
-- Example: `examples/hello_qwen.py` — connects to a local llama.cpp Qwen instance.
-- Example: `examples/hello_anthropic.py` — connects to Anthropic Claude API.
-- Test all three running simultaneously against the engine.
+- **In-Go rasterizer**: renders a per-agent N×N tile crop into PNG/WebP at observation time. Reads from the shared art atlas (same file the frontend uses).
+- **Default crop size locked**: experiment with 5×5, 7×7, 11×11; pick by which reads best in a multimodal LLM at minimum token cost. Document in docs/OBSERVATION_MODEL.md.
+- Example: `examples/heuristic_bot.py` — rule-based wanderer (structured).
+- Example: `examples/hello_qwen.py` — local llama.cpp Qwen (structured).
+- Example: `examples/hello_anthropic.py` — Anthropic Claude (structured).
+- Example: `examples/hello_claude_vision.py` — Anthropic Claude with vision, requests `mode: both`, demos spatial reasoning from the image crop.
+- Test all four running simultaneously against the engine.
 
 **Gate:**
-- 3 bots running. Each takes actions. Each respects its observation cadence.
-- Screenshots: 3 distinct characters visible in the world, each doing things.
-- The Anthropic bot demonstrates persona-driven in-character speech.
+- 4 bots running. Each takes actions. Each respects its observation cadence.
+- The Anthropic-vision bot makes a movement decision that's clearly informed by the image crop (e.g. "I see water to my west, I'll go east instead").
+- Engine cache: co-located agents share the same rendered image (validated via instrumentation).
+- Screenshots: 4 distinct characters visible in the world, each doing things.
+- Pixels match: a snapshot of the engine's rendered image of position X matches the frontend's render of position X within tolerance.
 
 ---
 

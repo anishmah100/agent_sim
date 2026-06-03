@@ -382,6 +382,37 @@ the maintainer approved this plan.
 
 ---
 
+---
+
+## Q31: Multimodal / vision agents (mid-session add)
+
+**Question (from the maintainer):** Some agents should operate on images instead
+of structured observations. Add a path where an agent can ask for an
+image of its surroundings (e.g. a 5×5 tile crop around its position) as
+an alternative or supplement to the JSON observation. Crop size TBD.
+
+**Answer baked in:**
+
+- Image observations are a first-class observation mode, NOT a v2 add-on.
+  See `docs/OBSERVATION_MODEL.md` §10b for full spec.
+- Agents register with `vision: { mode: structured | image | both,
+  image: { crop_tiles, render_scale, format, fog, ... } }`.
+- The engine has an in-Go rasterizer that uses the SAME atlas the
+  frontend uses — same pixels server-side and client-side, no
+  divergence.
+- The image rides in the same WS observation frame as structured data,
+  not a separate fetch. Multimodal LLMs that want both spatial reasoning
+  AND entity targeting use `mode: both`.
+- Default crop size: open question, locked by experiment in Milestone 4
+  (agent SDK + first multimodal example bot).
+
+**Implications:**
+- Wire schema reserves a `view_image` field in the observation message;
+  absent for structured-only agents (zero overhead).
+- Engine art atlas must be loadable in Go (`art/build_atlas.py` writes
+  a format both Go and the frontend can consume).
+- A multimodal example agent ships with the v1 SDK.
+
 ## What's NOT decided / open
 
 These came up but were deferred:

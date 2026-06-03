@@ -202,3 +202,37 @@ type WorldSnapshot struct {
 	MapID    string   `json:"map_id"`
 	Entities []Entity `json:"entities"`
 }
+
+// AgentObservation is what we send to one connected agent each tick.
+// It's a strict superset of viewer info — it adds the agent's own
+// internal state + the optional image crop.
+//
+// The ViewImage field is the multimodal hook (docs/OBSERVATION_MODEL.md
+// §10b). For structured-only agents it's nil; for vision agents the
+// rasterizer fills it with a PNG/WebP crop of the area around the
+// agent. Renderer lands in Milestone 4; field is reserved here so the
+// schema stays stable as SDKs get written.
+type AgentObservation struct {
+	ObsID     uint64    `json:"obs_id"`
+	WorldTick uint64    `json:"world_tick"`
+	Self      *Entity   `json:"self"`
+
+	// Visible entities, audible events, etc. land here in Milestone 4.
+
+	// ViewImage is populated for agents that registered with
+	// vision.mode in {"image", "both"}. nil for structured-only.
+	ViewImage *ViewImage `json:"view_image,omitempty"`
+}
+
+// ViewImage is the rendered crop of the world around the agent. Bytes
+// are PNG or WebP per the format field; the engine rasterizer reads
+// from the shared art atlas so server-rendered pixels match what the
+// frontend would draw for the same position.
+type ViewImage struct {
+	Format        string     `json:"format"`           // "png" | "webp"
+	Width         uint16     `json:"width"`            // = crop_tiles_w * render_scale
+	Height        uint16     `json:"height"`           // = crop_tiles_h * render_scale
+	Data          []byte     `json:"data"`             // raw image bytes
+	CenteredOnPos [2]float64 `json:"centered_on_pos"`  // agent tile coords at render time
+	Facing        Facing     `json:"facing"`
+}

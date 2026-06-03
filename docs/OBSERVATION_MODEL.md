@@ -182,6 +182,107 @@ Scenarios can add fields to:
 
 Scenarios CAN'T add top-level fields. The schema is extensible only at the explicit extension points.
 
+## §10b — Image observations (for multimodal / vision agents)
+
+Some agents are better served by an **image** of their surroundings than a
+structured JSON observation. Multimodal LLMs (Claude with vision, GPT-4o,
+Gemini, qwen2-vl, etc.) and CV-trained models can reason directly from
+pixels. The engine supports this as a FIRST-CLASS observation mode
+alongside the structured one — agents can request either or both.
+
+### Agent registration
+
+An agent's `register` payload includes a `vision` config:
+
+```
+vision: {
+  mode: "structured" | "image" | "both",
+  radius_tiles: int,                     // structured vision radius (default 12)
+  image: {
+    enabled: bool,
+    crop_tiles: [w, h],                  // e.g. [5, 5] = 5x5 tile crop centered on agent
+    render_scale: int,                   // px per tile, default 16 (native)
+    format: "png" | "webp",              // png default; webp for smaller bytes
+    include_chrome: bool,                // false = pure world; true = adds simple HUD overlays
+    fog_outside_vision_radius: bool      // true = black out beyond structured vision_radius
+  }
+}
+```
+
+Crop size open question: 5x5 was the first instinct (80x80 px at native).
+Larger crops (e.g. 11x11 = 176x176 px) give the agent more spatial
+context but cost more tokens for vision LLMs. We'll pick the default per
+v1 by experimentation; per-agent override is always available.
+
+### Observation payload addition
+
+When an agent has `vision.mode in ("image", "both")`, every observation
+push includes a `view_image` field alongside the structured fields:
+
+```
+view_image: {
+  format: "png" | "webp",
+  width: int,                           // = crop_tiles[0] * render_scale
+  height: int,                          // = crop_tiles[1] * render_scale
+  data: bytes,                          // raw image bytes
+  centered_on_pos: [x, y],              // agent tile coords at time of render
+  facing: "N"|"S"|"E"|"W",
+}
+```
+
+`view_image` is keyed to the same `obs_id` and `world_tick` as the
+structured observation — they describe the SAME world state.
+
+### Engine-side rendering
+
+The engine maintains a lightweight in-Go rasterizer that:
+1. Looks up the agent's position + facing
+2. Walks the requested crop window over the tilemap
+3. Composites tiles + entity sprites (loaded from the same atlas the
+   frontend uses) into an RGBA buffer
+4. Optionally applies fog-of-war mask
+5. Encodes PNG / WebP
+6. Caches by (chunk_id, render_scale, time_bucket) so co-located agents
+   share renders
+
+The renderer reuses the atlas + tile manifest written by `art/build_atlas.py`
+— it's the same data the frontend consumes. Same pixels server-side and
+client-side.
+
+### Performance and cost notes
+
+- Per-observation PNG cost: ~80×80 RGBA at 5×5 crop ≈ 25 KB raw, ~3–6 KB
+  PNG-compressed. With 1k agents at 1Hz that's ~3 MB/s of image bytes,
+  manageable.
+- Render cost: a 5×5 rasterize is roughly 25 tile blits + 1–3 sprite
+  blits. Microseconds in Go. Cache hits for co-located agents make this
+  cheaper still.
+- Token cost on the LLM side: a 5×5 tile crop is small enough that vision
+  models price it near minimum (Claude bills 1k tokens for an image of
+  this size). Larger crops scale linearly.
+
+### What an image observation gives up vs structured
+
+- Image obs does NOT carry entity IDs — agent can't say "attack X" without
+  pairing it with structured info, which is why `mode: "both"` exists.
+- Image obs does NOT carry `audible` speech — that's still text-mode.
+  Multimodal agents typically receive image + text together (image for
+  spatial reasoning, text for speech + persona + goals).
+- Image obs does NOT carry the static known-map (§5). That stays
+  text-mode.
+
+The recommended default for v1 multimodal users: `mode: "both"`. They
+get the image for spatial reasoning AND the structured payload for
+entity targeting + speech / persona context.
+
+### Implementation status
+
+- **Spec**: locked here. ✓
+- **Wire schema**: hook added to `docs/WIRE_PROTOCOL.md`.
+- **Engine rasterizer**: planned, lands alongside Milestone 4
+  (agent SDK + first bots) so example bots can demo both modes.
+- **Default crop size**: TBD by experiment in Milestone 4.
+
 ## §11 — Action interface (paired with observation)
 
 For completeness — what the agent sends back:

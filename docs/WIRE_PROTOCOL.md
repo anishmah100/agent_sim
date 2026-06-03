@@ -36,6 +36,36 @@ How the browser, the agents, and the engine talk to each other.
 2. Browser connects to `/ws/viewer`. Engine reads the cookie, looks up the user, assigns the WS to their viewer session.
 3. Anonymous viewing (not logged in) is allowed but restricted: can spectate but not control any agent.
 
+## Image observations
+
+Agents register with a `vision.mode` of `structured`, `image`, or
+`both`. When images are requested, every `observation` message includes
+a `view_image` field. See `docs/OBSERVATION_MODEL.md` §10b for the
+schema and rationale.
+
+Wire-level shape:
+
+```
+ObservationDelta {
+  ... structured fields ...
+  view_image: ViewImage?
+}
+
+ViewImage {
+  format: ImageFormat (enum: PNG, WEBP)
+  width: uint16
+  height: uint16
+  data: [ubyte]
+  centered_on_pos: Pos
+  facing: Facing
+}
+```
+
+The image bytes live in the same WS frame as the structured payload —
+no separate fetch. For multimodal agents this is the lowest-latency
+path; for structured-only agents the field is absent and there's zero
+overhead.
+
 ## Message types
 
 ### Engine → Agent
