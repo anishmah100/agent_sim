@@ -165,6 +165,14 @@ export class EntityLayer {
     let facingMark: Graphics | null = null;
 
     const spec = this.atlas?.get(characterId);
+    // Drop shadow under the character — classic JRPG polish detail. A
+    // small dark ellipse at the feet grounds the character so they
+    // don't look like they're floating above the tiles.
+    if (spec) {
+      const shadow = new Graphics();
+      shadow.ellipse(FOOTPRINT_W / 2, FOOTPRINT_H - 2, 5, 1.6).fill({ color: 0x000000, alpha: 0.32 });
+      wrap.addChild(shadow);
+    }
     if (spec) {
       const sprite = new AnimatedSprite(spec.anims.walk_down);
       sprite.animationSpeed = 0.13;

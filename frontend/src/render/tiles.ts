@@ -51,10 +51,20 @@ export function setTileAtlas(a: TileAtlas | null): void {
   atlas = a;
 }
 
-/** Get the best available texture for a tile kind: atlas-backed if the
- *  atlas has loaded, else a generated palette-color placeholder. */
+/** Get a tile texture for the given kind. When the atlas is loaded,
+ *  picks a random VARIANT (grass_tuft, grass_pebble, etc.) most of the
+ *  time, with the plain default getting the lion's share — gives the
+ *  world a painted-by-hand feel instead of stamped repetition. */
 export function getTileTexture(app: Application, kind: TileKind): Texture {
   if (atlas?.has(kind)) {
+    const variants = atlas.variantsFor(kind);
+    if (variants.length > 1) {
+      // 70% chance to use the default, 30% to use a random variant.
+      const useVariant = Math.random() < 0.3;
+      if (useVariant) {
+        return variants[Math.floor(Math.random() * variants.length)];
+      }
+    }
     const tex = atlas.defaultFor(kind);
     if (tex) return tex;
   }

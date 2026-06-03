@@ -73,11 +73,14 @@ export class TilemapLayer {
         const sp = new Sprite(tex);
         sp.x = x * TILE_SIZE_PX;
         sp.y = y * TILE_SIZE_PX;
-        // Source tiles are ~127×133 px (full DALL-E detail preserved).
-        // Scale so each tile fills its 16×16 footprint with crisp
-        // pixel-art rendering (NEAREST sampler set on the texture).
-        sp.width = TILE_SIZE_PX;
-        sp.height = TILE_SIZE_PX;
+        // Source tiles are ~117×111 px (full DALL-E detail preserved).
+        // Scale so each tile fills its 16×16 footprint. We render each
+        // tile 1 world-pixel WIDER and TALLER than its grid slot to
+        // overlap the next tile — this hides any subpixel seam that
+        // would otherwise show as a thin dark line at non-integer
+        // viewport zoom levels (the standard tilemap extrusion trick).
+        sp.width = TILE_SIZE_PX + 1;
+        sp.height = TILE_SIZE_PX + 1;
         this.container.addChild(sp);
       }
     }
