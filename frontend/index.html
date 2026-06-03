@@ -18,6 +18,57 @@
       }
       #app { width: 100vw; height: 100vh; }
       canvas { display: block; image-rendering: pixelated; }
+
+      /* HUD overlay */
+      .hud-topright {
+        position: fixed;
+        top: 56px;
+        right: 16px;
+        background: rgba(24, 20, 37, 0.85);
+        border: 1px solid #3a4466;
+        border-radius: 4px;
+        padding: 8px 12px;
+        color: #ead4aa;
+        font-size: 12px;
+        text-align: right;
+        z-index: 8;
+      }
+      .hud-topright .clock { color: #feae34; font-weight: 600; }
+      .hud-topright .phase { opacity: 0.7; font-size: 11px; text-transform: capitalize; }
+      .hud-topright .weather { opacity: 0.7; font-size: 11px; }
+
+      .hud-topleft {
+        position: fixed;
+        top: 56px;
+        left: 16px;
+        width: 220px;
+        background: rgba(24, 20, 37, 0.92);
+        border: 1px solid #3a4466;
+        border-radius: 4px;
+        padding: 10px 12px;
+        color: #ead4aa;
+        font-size: 12px;
+        z-index: 8;
+      }
+      .hud-topleft h3 { margin: 0 0 2px 0; color: #feae34; font-size: 14px; }
+      .hud-topleft .archetype { opacity: 0.6; font-size: 11px; margin-bottom: 8px; text-transform: capitalize; }
+      .hud-topleft .stat { margin-bottom: 6px; }
+      .hud-topleft .stat .label { color: #8b9bb4; margin-right: 6px; font-size: 11px; }
+      .hud-topleft .stat .num { font-variant-numeric: tabular-nums; }
+      .hud-topleft .stat .bar { height: 4px; background: #3a4466; border-radius: 2px; margin-top: 3px; overflow: hidden; }
+      .hud-topleft .stat .bar .fill { height: 100%; transition: width 0.15s ease-out; }
+      .hud-topleft .inventory { margin-top: 8px; padding-top: 8px; border-top: 1px solid #3a4466; }
+      .hud-topleft .inventory .title { color: #8b9bb4; font-size: 11px; margin-bottom: 4px; }
+      .hud-topleft .inventory ul { margin: 0; padding-left: 16px; font-size: 11px; }
+
+      /* Leaderboards */
+      .leaderboards { display: flex; flex-direction: column; gap: 12px; }
+      .leaderboards .board h4 { margin: 0 0 4px 0; color: #feae34; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+      .leaderboards .board ol { margin: 0; padding-left: 20px; font-size: 12px; }
+      .leaderboards .board li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
+      .leaderboards .board .who { color: #ead4aa; }
+      .leaderboards .board .num { color: #feae34; font-variant-numeric: tabular-nums; }
+      .leaderboards .board .empty { color: #8b9bb4; font-size: 11px; font-style: italic; margin: 4px 0 0 0; }
     </style>
   </head>
   <body>

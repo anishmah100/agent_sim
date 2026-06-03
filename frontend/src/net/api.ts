@@ -9,6 +9,7 @@ export interface WorldInfo {
   version: string;
   scenario: string;
   world: string;
+  world_dims: [number, number];
   tick_rate: number;
   tick: number;
   uptime_s: number;

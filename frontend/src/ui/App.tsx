@@ -21,6 +21,8 @@ import type { TileMapData } from "../render/Tilemap";
 import type { EntityState } from "../render/Entity";
 import { Inspector } from "./Inspector";
 import { WorldRulebook } from "./WorldRulebook";
+import { Leaderboards } from "./Leaderboards";
+import { HUD } from "./HUD";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
@@ -31,6 +33,8 @@ export function App() {
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = createSignal<EntityState | null>(null);
   const [rulebookOpen, setRulebookOpen] = createSignal(false);
+  const [leaderboardsOpen, setLeaderboardsOpen] = createSignal(false);
+  const [hudOpen, setHudOpen] = createSignal(true);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
@@ -164,6 +168,36 @@ export function App() {
         <span style={{ "margin-left": "auto", display: "flex", gap: "8px" }}>
           <button
             type="button"
+            onClick={() => setHudOpen(!hudOpen())}
+            style={{
+              padding: "4px 10px",
+              background: hudOpen() ? "#feae34" : "#3a4466",
+              color: hudOpen() ? "#181425" : "#ead4aa",
+              border: "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            hud
+          </button>
+          <button
+            type="button"
+            onClick={() => setLeaderboardsOpen(true)}
+            style={{
+              padding: "4px 10px",
+              background: "#3a4466",
+              color: "#ead4aa",
+              border: "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            leaderboards
+          </button>
+          <button
+            type="button"
             onClick={() => setRulebookOpen(true)}
             style={{
               padding: "4px 10px",
@@ -197,7 +231,58 @@ export function App() {
 
       <Inspector entity={selectedSnapshot()} onClose={closeInspector} />
 
+      {hudOpen() && (
+        <HUD
+          tick={liveTick() ?? 0}
+          dayPhase="day"
+          weather="clear"
+          worldDims={worldInfo()?.world_dims ?? [0, 0]}
+          selected={selectedSnapshot()}
+        />
+      )}
+
       {rulebookOpen() && <WorldRulebook onClose={() => setRulebookOpen(false)} />}
+
+      {leaderboardsOpen() && (
+        <div
+          style={{
+            position: "fixed",
+            top: "60px",
+            right: "16px",
+            width: "320px",
+            "max-height": "70vh",
+            background: "rgba(24, 20, 37, 0.96)",
+            border: "1px solid #3a4466",
+            "border-radius": "6px",
+            padding: "12px 14px",
+            color: "#ead4aa",
+            "font-size": "13px",
+            "z-index": "50",
+            overflow: "auto",
+          }}
+        >
+          <div style={{ display: "flex", "align-items": "center", gap: "8px", "margin-bottom": "8px" }}>
+            <strong style={{ color: "#feae34" }}>Leaderboards</strong>
+            <button
+              type="button"
+              onClick={() => setLeaderboardsOpen(false)}
+              style={{
+                "margin-left": "auto",
+                padding: "2px 8px",
+                background: "#3a4466",
+                color: "#ead4aa",
+                border: "1px solid #5a6988",
+                "border-radius": "3px",
+                cursor: "pointer",
+                "font-size": "11px",
+              }}
+            >
+              close
+            </button>
+          </div>
+          <Leaderboards />
+        </div>
+      )}
 
       <div
         style={{
