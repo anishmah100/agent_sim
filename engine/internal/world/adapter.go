@@ -59,6 +59,25 @@ func (a *WorldAdapter) SpawnEntity(e syscore.Entity) error {
 	return nil
 }
 
+// SpawnEntityFromSpec builds a real *Entity from the spec, adds it to
+// the world + spatial index, and returns an Entity handle bound to the
+// fresh underlying.
+func (a *WorldAdapter) SpawnEntityFromSpec(spec syscore.EntitySpec) (syscore.Entity, error) {
+	e := &Entity{
+		EntityID:    spec.ID,
+		Archetype:   spec.Archetype,
+		LogicalTile: spec.Pos,
+		DisplayName: spec.DisplayName,
+		Extras:      spec.Extras,
+	}
+	if e.Extras == nil {
+		e.Extras = map[string]any{}
+	}
+	a.W.SpawnEntity(e)
+	a.Spatial.Add(spec.ID, spec.Pos)
+	return &EntityAdapter{E: e, W: a.W}, nil
+}
+
 func (a *WorldAdapter) RemoveEntity(id string) error {
 	a.W.RemoveEntity(id)
 	a.Spatial.Remove(id)

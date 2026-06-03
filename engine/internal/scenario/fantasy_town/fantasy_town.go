@@ -12,6 +12,7 @@ package fantasy_town
 import (
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/combat"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/construction"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/inventory"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/loot"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/money"
@@ -41,6 +42,7 @@ func Install(w *world.World) *world.SystemHost {
 	host.Install(inventory.New())
 	host.Install(property.New())
 	host.Install(resources.New())
+	host.Install(construction.New())
 	host.Install(trade.New())
 	host.Install(loot.New())
 	host.Install(quests.New())

@@ -25,6 +25,12 @@ type World interface {
 	SpawnEntity(Entity) error
 	RemoveEntity(id string) error
 
+	// SpawnEntityFromSpec creates a fresh world entity from the given
+	// spec and adds it at the spec's tile. Used by systems that need to
+	// produce new entities (construction → blueprint/building, loot →
+	// dropped item) without knowing the concrete *world.Entity type.
+	SpawnEntityFromSpec(spec EntitySpec) (Entity, error)
+
 	EmitSound(at [2]int, kind string)
 	QueueEvent(eventbus.Event)
 	GetService(name string) any
@@ -46,6 +52,17 @@ type World interface {
 	EnterBuilding(entityID, buildingID string, maxTicks int) bool
 	ExitBuilding(entityID string) bool
 	InsideBuilding(entityID string) string
+}
+
+// EntitySpec describes a not-yet-spawned entity. Pass to
+// World.SpawnEntityFromSpec; the world allocates a real entity at the
+// given tile with these fields.
+type EntitySpec struct {
+	ID          string
+	Archetype   string
+	Pos         [2]int
+	DisplayName string
+	Extras      map[string]any
 }
 
 // Entity is the opaque handle systems mutate. The concrete world

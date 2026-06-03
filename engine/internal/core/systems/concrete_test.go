@@ -29,6 +29,7 @@ func (s *stubWorld) EntityByID(string) Entity          { return nil }
 func (s *stubWorld) EntityIDs() []string               { return nil }
 func (s *stubWorld) MutateEntity(string, func(Entity)) {}
 func (s *stubWorld) SpawnEntity(Entity) error          { return nil }
+func (s *stubWorld) SpawnEntityFromSpec(EntitySpec) (Entity, error) { return nil, nil }
 func (s *stubWorld) RemoveEntity(string) error         { return nil }
 func (s *stubWorld) EmitSound([2]int, string)          {}
 func (s *stubWorld) QueueEvent(eventbus.Event)         {}
