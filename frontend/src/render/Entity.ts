@@ -193,16 +193,25 @@ export class EntityLayer {
       body = g;
     }
 
+    // Labels render at HIGH resolution then scale DOWN. Renders the
+    // text at e.g. 32 px font size into a texture, then we scale the
+    // sprite to fit. Avoids the blurry small-font-size problem because
+    // PixiJS rasterizes Text once at the configured fontSize, and
+    // scaling down with NEAREST keeps the rasterization crisp.
     const label = new Text({
       text: e.display_name ?? e.entity_id,
       style: {
         fontFamily: "ui-sans-serif, system-ui, sans-serif",
-        fontSize: 6,
-        fill: 0xead4aa,
-        stroke: { color: 0x181425, width: 2 },
+        fontSize: 14,                       // raster at clean modern size
+        fontWeight: "600",
+        fill: 0xfee761,                     // Endesga warm yellow
+        stroke: { color: 0x181425, width: 3 },
         align: "center",
       },
+      resolution: 2,                        // 2× crispness
     });
+    // Scale-down so it fits over the character at world scale (~tile px).
+    label.scale.set(0.4);
     label.anchor.set(0.5, 1);
     label.x = FOOTPRINT_W / 2;
     if (spec) {

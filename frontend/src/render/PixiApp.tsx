@@ -24,6 +24,8 @@ import { EntityLayer, type EntityState } from "./Entity";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
+import { TileAtlas } from "./TileAtlas";
+import { setTileAtlas } from "./tiles";
 
 export interface PixiHandle {
   app: Application;
@@ -93,10 +95,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     entities.tick(delta.deltaMS);
   });
 
-  // Kick off the character atlas load in the background. When it
-  // resolves, the entity layer upgrades existing placeholders to real
-  // AnimatedSprites on the next setAll() call. Failure is non-fatal —
-  // entities just keep their placeholder bodies.
+  // Kick off the character atlas load in the background.
   void CharacterAtlas.load().then(
     (atlas) => {
       entities.setAtlas(atlas);
@@ -104,6 +103,20 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
     (err) => {
       console.warn("character atlas load failed; using placeholders:", err);
+    },
+  );
+
+  // Kick off the tile atlas load too. When it resolves, swap the
+  // placeholder colored quads for real Endesga-palette tile sprites
+  // and re-render the tilemap.
+  void TileAtlas.load().then(
+    (atlas) => {
+      setTileAtlas(atlas);
+      if (currentWorld) tilemap.loadTileMap(currentWorld);
+      console.log("tile atlas loaded — real overworld tiles now rendered");
+    },
+    (err) => {
+      console.warn("tile atlas load failed; using placeholder colors:", err);
     },
   );
 

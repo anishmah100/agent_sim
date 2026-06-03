@@ -1,14 +1,13 @@
 // Tilemap rendering layer.
 //
-// Wraps @pixi/tilemap. Given a TileMapData (the in-house v0 format —
-// see worlds/dev_test.json), builds a CompositeTilemap that PixiJS
-// renders as one batched draw call regardless of map size.
-//
-// When we swap to LDtk, this class stays — only loadTileMap() changes
-// to consume the LDtk parser's output. The render path is unchanged.
+// v1 implementation: one PixiJS Sprite per tile in a Container. This
+// scales fine to dev_test's 640 tiles and avoids the @pixi/tilemap
+// vs PixiJS v8 sub-rectangle texture bug we hit when trying its
+// CompositeTilemap path. Once we move to chunked 1000x1000 worlds
+// we'll swap to @pixi/tilemap or our own batched draw — the interface
+// of TilemapLayer stays the same.
 
-import { Application, Container } from "pixi.js";
-import { CompositeTilemap } from "@pixi/tilemap";
+import { Application, Container, Sprite } from "pixi.js";
 import { TILE_SIZE_PX, getTileTexture, type TileKind } from "./tiles";
 
 export interface TileMapData {
@@ -18,9 +17,8 @@ export interface TileMapData {
   width_tiles: number;
   height_tiles: number;
   tiles_legend: Record<string, TileKind>;
-  tiles: string[];            // rows of single-char legend keys
-  entities: TileMapEntity[];  // shipped with the world JSON for now;
-                              // will come from engine WS once that lands
+  tiles: string[];
+  entities: TileMapEntity[];
 }
 
 export interface TileMapEntity {
@@ -33,22 +31,16 @@ export interface TileMapEntity {
 
 export class TilemapLayer {
   readonly container: Container;
-  private composite: CompositeTilemap;
 
   constructor(private app: Application) {
     this.container = new Container();
     this.container.label = "tilemap";
-    this.composite = new CompositeTilemap();
-    this.container.addChild(this.composite);
   }
 
-  /** Replace the rendered tilemap with a new map. Cheap: clears the
-   *  composite and re-adds one tile per cell. Even at 1000x1000 this
-   *  is well under a frame. */
+  /** Replace the rendered tilemap with a new map. Destroys + rebuilds
+   *  all child sprites. Cheap up to a few thousand tiles. */
   loadTileMap(data: TileMapData): void {
     if (data.tile_size_px !== TILE_SIZE_PX) {
-      // Hard-fail rather than silently misrender. Tile size is a
-      // bedrock invariant — see docs/ART_STYLE_GUIDE.md.
       throw new Error(
         `tile size mismatch: data has ${data.tile_size_px}, renderer is ${TILE_SIZE_PX}`,
       );
@@ -59,7 +51,11 @@ export class TilemapLayer {
       );
     }
 
-    this.composite.clear();
+    // Tear down existing sprites.
+    for (const child of [...this.container.children]) {
+      child.destroy();
+    }
+
     for (let y = 0; y < data.height_tiles; y++) {
       const row = data.tiles[y];
       if (row.length !== data.width_tiles) {
@@ -74,13 +70,20 @@ export class TilemapLayer {
           throw new Error(`unknown tile char ${JSON.stringify(ch)} at (${x},${y})`);
         }
         const tex = getTileTexture(this.app, kind);
-        this.composite.tile(tex, x * TILE_SIZE_PX, y * TILE_SIZE_PX);
+        const sp = new Sprite(tex);
+        sp.x = x * TILE_SIZE_PX;
+        sp.y = y * TILE_SIZE_PX;
+        // Source tiles are ~127×133 px (full DALL-E detail preserved).
+        // Scale so each tile fills its 16×16 footprint with crisp
+        // pixel-art rendering (NEAREST sampler set on the texture).
+        sp.width = TILE_SIZE_PX;
+        sp.height = TILE_SIZE_PX;
+        this.container.addChild(sp);
       }
     }
   }
 
   destroy(): void {
-    this.composite.destroy();
     this.container.destroy({ children: true });
   }
 }
