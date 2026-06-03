@@ -132,6 +132,222 @@
   ],
   "decorations": [
     {
+      "x": 13,
+      "y": 18,
+      "sprite": "bld:000",
+      "height_tiles": 3.0,
+      "footprint_w": 4,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 45,
+      "y": 18,
+      "sprite": "bld:001",
+      "height_tiles": 3.0,
+      "footprint_w": 4,
+      "footprint_h": 2,
+      "walkable": false
+    },
+    {
+      "x": 39,
+      "y": 21,
+      "sprite": "bld:008",
+      "height_tiles": 1.0,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 20,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 20,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 22,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 22,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 24,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 24,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 26,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 26,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 28,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 28,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 30,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 32,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 32,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 34,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 34,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 36,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 36,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 38,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 38,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 40,
+      "y": 4,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
+      "x": 40,
+      "y": 18,
+      "sprite": "bld:014",
+      "height_tiles": 0.8,
+      "footprint_w": 1,
+      "footprint_h": 1,
+      "walkable": false
+    },
+    {
       "x": 0,
       "y": 0,
       "sprite": "veg:004",
@@ -2925,23 +3141,16 @@
       "walkable": false
     },
     {
-      "x": 16,
-      "y": 18,
+      "x": 14,
+      "y": 19,
       "sprite": "veg:037",
       "height_tiles": 2.0,
       "walkable": false
     },
     {
       "x": 15,
-      "y": 17,
-      "sprite": "veg:004",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 14,
       "y": 19,
-      "sprite": "veg:037",
+      "sprite": "veg:000",
       "height_tiles": 2.0,
       "walkable": false
     },
@@ -2955,20 +3164,6 @@
     {
       "x": 49,
       "y": 18,
-      "sprite": "veg:004",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 48,
-      "y": 18,
-      "sprite": "veg:036",
-      "height_tiles": 2.0,
-      "walkable": false
-    },
-    {
-      "x": 46,
-      "y": 17,
       "sprite": "veg:004",
       "height_tiles": 2.0,
       "walkable": false
@@ -3212,28 +3407,7 @@
       "walkable": true
     },
     {
-      "x": 20,
-      "y": 4,
-      "sprite": "veg:011",
-      "height_tiles": 0.8,
-      "walkable": true
-    },
-    {
-      "x": 26,
-      "y": 4,
-      "sprite": "veg:042",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
       "x": 29,
-      "y": 4,
-      "sprite": "veg:010",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 34,
       "y": 4,
       "sprite": "veg:010",
       "height_tiles": 0.7,
@@ -3499,13 +3673,6 @@
       "walkable": true
     },
     {
-      "x": 47,
-      "y": 17,
-      "sprite": "veg:011",
-      "height_tiles": 0.8,
-      "walkable": true
-    },
-    {
       "x": 10,
       "y": 18,
       "sprite": "veg:010",
@@ -3538,20 +3705,6 @@
       "y": 18,
       "sprite": "veg:009",
       "height_tiles": 1.1,
-      "walkable": true
-    },
-    {
-      "x": 28,
-      "y": 18,
-      "sprite": "veg:042",
-      "height_tiles": 0.7,
-      "walkable": true
-    },
-    {
-      "x": 45,
-      "y": 18,
-      "sprite": "veg:010",
-      "height_tiles": 0.7,
       "walkable": true
     },
     {

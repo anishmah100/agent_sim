@@ -14,6 +14,7 @@
   "dependencies": {
     "@kobalte/core": "^0.13.10",
     "@pixi/tilemap": "^5.0.2",
+    "pixi-filters": "^6.1.5",
     "pixi-ldtk-loader": "^2.3.3",
     "pixi-viewport": "^6.0.3",
     "pixi.js": "^8.13.4",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.18.10",
+    "playwright": "^1.60.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.7",
     "vite-plugin-solid": "^2.11.4",

@@ -22,6 +22,7 @@ import { Viewport } from "pixi-viewport";
 import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
 import { DecorationLayer } from "./Decoration";
+import { InteriorLayer } from "./Interior";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
@@ -81,6 +82,15 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   viewport.addChild(decorations.container);
   viewport.addChild(entities.container);
   viewport.addChild(fxAbove);
+
+  // Interior overlay — fixed-position container on the stage (NOT in
+  // the viewport) so it doesn't pan/zoom with the world.
+  const interior = new InteriorLayer(app);
+  app.stage.addChild(interior.container);
+  decorations.onBuildingClick(async (ev) => {
+    await interior.show(ev.sprite);
+  });
+  interior.onExit(() => interior.hide());
 
   // Click handler — installed once. App-level listeners register
   // through the returned onClick().

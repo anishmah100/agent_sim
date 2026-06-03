@@ -26,7 +26,16 @@ export interface TileMapDecoration {
   x: number;
   y: number;
   sprite: string;
+  /** Render height in tiles. Width comes from the sprite's aspect
+   *  ratio unless footprint_w is given. */
   height_tiles?: number;
+  /** Render width in tiles. For multi-tile buildings; falls back to
+   *  aspect-based width when omitted. */
+  footprint_w?: number;
+  /** Number of tiles the engine treats as blocking. The footprint is
+   *  anchored at (x, y) at the SOUTH edge — y is the southernmost
+   *  blocked row, x is the WEST edge. Defaults to 1. */
+  footprint_h?: number;
   walkable?: boolean;
 }
 

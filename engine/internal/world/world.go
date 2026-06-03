@@ -121,7 +121,9 @@ type fileDecoration struct {
 	Y           int     `json:"y"`
 	Sprite      string  `json:"sprite"`
 	HeightTiles float64 `json:"height_tiles,omitempty"`
-	Walkable    *bool   `json:"walkable,omitempty"` // pointer so we can distinguish absent from false
+	FootprintW  int     `json:"footprint_w,omitempty"`
+	FootprintH  int     `json:"footprint_h,omitempty"`
+	Walkable    *bool   `json:"walkable,omitempty"`
 }
 
 type fileEntity struct {
@@ -196,10 +198,41 @@ func Load(path string) (*World, error) {
 		if d.Walkable != nil {
 			walkable = *d.Walkable
 		}
-		if !walkable {
-			w.walkable[d.Y][d.X] = false
-			if d.HeightTiles >= 1.5 && d.Y-1 >= 0 {
-				w.walkable[d.Y-1][d.X] = false
+		if walkable {
+			continue
+		}
+		fpW := d.FootprintW
+		if fpW < 1 {
+			fpW = 1
+		}
+		fpH := d.FootprintH
+		if fpH < 1 {
+			fpH = 1
+		}
+		// (X, Y) is the SW corner of the footprint. Block every tile in
+		// the FPW × FPH slab anchored there.
+		for dy := 0; dy < fpH; dy++ {
+			for dx := 0; dx < fpW; dx++ {
+				ny := d.Y - dy
+				nx := d.X + dx
+				if nx < 0 || nx >= w.WidthTiles || ny < 0 || ny >= w.HeightTiles {
+					continue
+				}
+				w.walkable[ny][nx] = false
+			}
+		}
+		// Tall objects (trees, buildings ≥ 1.5 tiles) also block ONE row
+		// above their footprint — the canopy/roof reaches into that
+		// tile so a character walking there would visually disappear.
+		if d.HeightTiles >= 1.5 {
+			ny := d.Y - fpH
+			if ny >= 0 {
+				for dx := 0; dx < fpW; dx++ {
+					nx := d.X + dx
+					if nx >= 0 && nx < w.WidthTiles {
+						w.walkable[ny][nx] = false
+					}
+				}
 			}
 		}
 	}

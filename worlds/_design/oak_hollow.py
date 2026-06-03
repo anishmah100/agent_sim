@@ -251,7 +251,64 @@ def is_blocking(m: Map, x: int, y: int) -> bool:
     return t in (WATER, WALL, STONE, PATH, FLOOR, VOID)
 
 
-def place_decorations(m: Map) -> list[dict]:
+def place_buildings(m: Map, decs: list[dict], placed: set[tuple[int, int]]) -> None:
+    """Add multi-tile building sprites around the village. Each entry
+    is (sprite, x, y, fp_w, fp_h, h_tiles) where (x, y) is the SW
+    footprint corner. The footprint slab is marked in `placed` to keep
+    trees + other decorations away."""
+    # Layout — drop buildings on grass north of the plaza, framing it.
+    # All cottages 3-wide × 2-tall footprint, render 3 tiles tall so
+    # the roof rises above the footprint (HG-style).
+    BUILDINGS = [
+        # sprite, x, y (SW corner), fp_w, fp_h, h_tiles
+        ("bld:000", 13, 18, 4, 2, 3.0),   # red cottage west of plaza
+        ("bld:001", 45, 18, 4, 2, 3.0),   # dark cottage east of plaza
+        ("bld:005", 23, 22, 6, 2, 2.5),   # red-awning market south of plaza
+        ("bld:008", 39, 21, 1, 1, 1.0),   # well east of market
+    ]
+    for (sprite, x, y, fpw, fph, h) in BUILDINGS:
+        # Refuse to place if any cell is already occupied (or off-map,
+        # or non-grass).
+        ok = True
+        for dx in range(fpw):
+            for dy in range(fph):
+                nx = x + dx
+                ny = y - dy
+                if not (0 <= nx < m.w and 0 <= ny < m.h):
+                    ok = False; break
+                if m.grid[ny][nx] not in (GRASS, DIRT):
+                    ok = False; break
+                if (nx, ny) in placed:
+                    ok = False; break
+            if not ok:
+                break
+        if not ok:
+            continue
+        for dx in range(fpw):
+            for dy in range(fph):
+                placed.add((x + dx, y - dy))
+        decs.append({
+            "x": x, "y": y, "sprite": sprite,
+            "height_tiles": h, "footprint_w": fpw, "footprint_h": fph,
+            "walkable": False,
+        })
+
+    # Fence ring around the village clearing — short walls of fence
+    # segments along the plaza's north + south edge.
+    FENCE_Y_TOP = 4
+    FENCE_Y_BOTTOM = 18
+    for x in range(20, 41, 2):
+        for y in (FENCE_Y_TOP, FENCE_Y_BOTTOM):
+            if 0 <= y < m.h and m.grid[y][x] == GRASS and (x, y) not in placed:
+                placed.add((x, y))
+                decs.append({
+                    "x": x, "y": y, "sprite": "bld:014",
+                    "height_tiles": 0.8, "footprint_w": 1, "footprint_h": 1,
+                    "walkable": False,
+                })
+
+
+def place_decorations(m: Map, seeded_placed: set[tuple[int, int]] | None = None) -> list[dict]:
     """Place trees + bushes intentionally. Returns a list of decoration
     specs. We do NOT place on top of water, paths, plaza stone, or hall
     interior — only on grass and dirt.
@@ -275,7 +332,7 @@ def place_decorations(m: Map) -> list[dict]:
         return (h ^ (h >> 16)) & 0xFFFFFFFF
 
     decs: list[dict] = []
-    placed: set[tuple[int, int]] = set()
+    placed: set[tuple[int, int]] = set(seeded_placed or [])
     tree_footprints: set[tuple[int, int]] = set()
 
     # Vegetation IDs picked from our 40-sprite vegetation library:
@@ -455,7 +512,14 @@ ENTITIES = [
 
 def main() -> None:
     m = build_oak_hollow()
-    decs = place_decorations(m)
+    # Buildings FIRST — their footprints get registered before trees so
+    # the perim-center tree clusters skip building tiles.
+    decs: list[dict] = []
+    building_placed: set[tuple[int, int]] = set()
+    place_buildings(m, decs, building_placed)
+    # Decorations seeded with the building footprints so trees don't
+    # land on top of cottages.
+    decs.extend(place_decorations(m, seeded_placed=building_placed))
     out = {
         "$schema": "in-house v0 tile format. To be replaced by LDtk import once the editor is wired up.",
         "map_id": "dev_test",

@@ -8,6 +8,7 @@
 // collision occupant map.
 
 import { Assets, Container, Graphics, Sprite, Texture } from "pixi.js";
+import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 
 const ENGINE_URL =
@@ -16,32 +17,50 @@ const OBJ_URL = (cat: string, file: string) =>
   `${ENGINE_URL}/art/processed/objects/${cat}/${file}`;
 
 export interface DecorationSpec {
-  /** Footprint tile (engine's collision cell). */
+  /** SOUTH-WEST footprint corner. For 1×1 sprites this is just "the
+   *  tile they sit on"; for multi-tile buildings, this is the
+   *  west-most and south-most cell of the rectangular footprint. */
   x: number;
   y: number;
-  /** Object library identifier — e.g. "veg:000" → vegetation/obj_000.png. */
   sprite: string;
-  /** Render size in TILES tall. Default 2. Width is computed from
-   *  the source aspect ratio. Trees: 2.5–3. Bushes: 1–1.5. */
+  /** Render size in TILES tall. Trees: ~2. Buildings: 3-4. */
   height_tiles?: number;
-  /** Whether the engine should treat the footprint tile as walkable.
-   *  Trees: false. Mushrooms/flowers: true. v1 client doesn't enforce
-   *  — we just record the intent in the world data. */
+  /** Render width in TILES. If omitted, width derives from sprite
+   *  aspect ratio scaled to height_tiles. Set explicitly for multi-
+   *  tile buildings so footprint and render width agree. */
+  footprint_w?: number;
+  /** Render footprint height in tiles (south rows blocked at ground
+   *  level). Defaults to 1 for grounded sprites (trees), can be
+   *  bigger for buildings that block a 2- or 3-tile-deep slab. */
+  footprint_h?: number;
   walkable?: boolean;
+}
+
+export interface BuildingClickEvent {
+  /** "bld:000" etc */
+  sprite: string;
+  /** SW footprint corner in tile coords */
+  x: number;
+  y: number;
 }
 
 export class DecorationLayer {
   readonly container: Container;
   private cache = new Map<string, Texture>();
+  private clickHandlers: Array<(ev: BuildingClickEvent) => void> = [];
 
   constructor() {
     this.container = new Container();
     this.container.label = "decorations";
-    // Sort by zIndex so taller trees draw behind characters that walk
-    // in front of them. We assign zIndex = footprint_y so trees south
-    // of a character render after (= on top of) the character. v1 keeps
-    // this layer entirely below the entity layer — fine for now.
     this.container.sortableChildren = true;
+  }
+
+  onBuildingClick(handler: (ev: BuildingClickEvent) => void): () => void {
+    this.clickHandlers.push(handler);
+    return () => {
+      const i = this.clickHandlers.indexOf(handler);
+      if (i >= 0) this.clickHandlers.splice(i, 1);
+    };
   }
 
   async load(specs: DecorationSpec[]): Promise<void> {
@@ -75,33 +94,70 @@ export class DecorationLayer {
   private addSprite(spec: DecorationSpec, tex: Texture): void {
     const wrap = new Container();
     const heightTiles = spec.height_tiles ?? 2.0;
+    const footprintW = spec.footprint_w ?? 1;
     const targetH = heightTiles * TILE_SIZE_PX;
-    const scale = targetH / tex.height;
-    const targetW = tex.width * scale;
+    // If footprint_w is given, force render width to match the
+    // footprint exactly (buildings); otherwise use sprite aspect.
+    const targetW = spec.footprint_w
+      ? footprintW * TILE_SIZE_PX
+      : tex.width * (targetH / tex.height);
 
-    // Drop shadow under the footprint — same trick we use for chars.
+    // Footprint center in local coords. (x, y) is the SW corner of the
+    // footprint, so the centre is half-a-footprint east of x.
+    const footprintCenterX = (footprintW * TILE_SIZE_PX) / 2;
+    const footprintBottom = TILE_SIZE_PX - 1;
+
     const shadow = new Graphics();
     shadow.ellipse(
-      TILE_SIZE_PX / 2,
-      TILE_SIZE_PX - 2,
+      footprintCenterX,
+      footprintBottom,
       Math.max(5, targetW * 0.35),
-      Math.max(2, targetW * 0.12),
+      Math.max(2, targetW * 0.10),
     ).fill({ color: 0x000000, alpha: 0.28 });
     wrap.addChild(shadow);
 
     const sp = new Sprite(tex);
     sp.anchor.set(0.5, 1.0); // bottom-center
-    sp.x = TILE_SIZE_PX / 2;
-    sp.y = TILE_SIZE_PX - 1;
+    sp.x = footprintCenterX;
+    sp.y = footprintBottom;
     sp.width = targetW;
     sp.height = targetH;
     wrap.addChild(sp);
 
     wrap.x = spec.x * TILE_SIZE_PX;
     wrap.y = spec.y * TILE_SIZE_PX;
-    // Y-sort key — south = drawn later = on top.
     wrap.zIndex = spec.y;
     this.container.addChild(wrap);
+
+    // Buildings get hover + click. Pokemon-style enter UX: mouse-over
+    // glows an outline; click emits a building-click event that the
+    // top-level UI handles (opens the interior view).
+    const isBuilding = spec.sprite.startsWith("bld:") &&
+                       (spec.footprint_w ?? 1) >= 2;  // small props (well, signpost) excluded
+    if (isBuilding) {
+      sp.eventMode = "static";
+      sp.cursor = "pointer";
+      const hoverFilter = new OutlineFilter({
+        thickness: 2,
+        color: 0xfff2a8,
+        alpha: 0.85,
+        knockout: false,
+      });
+      sp.on("pointerover", () => {
+        sp.filters = [hoverFilter];
+      });
+      sp.on("pointerout", () => {
+        sp.filters = [];
+      });
+      sp.on("pointertap", () => {
+        const ev: BuildingClickEvent = {
+          sprite: spec.sprite,
+          x: spec.x,
+          y: spec.y,
+        };
+        for (const h of this.clickHandlers) h(ev);
+      });
+    }
   }
 
   clear(): void {
