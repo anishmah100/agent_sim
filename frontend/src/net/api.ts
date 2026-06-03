@@ -21,3 +21,13 @@ export async function fetchWorldInfo(): Promise<WorldInfo> {
   if (!r.ok) throw new Error(`world info ${r.status}`);
   return (await r.json()) as WorldInfo;
 }
+
+/** Fetch the world tilemap JSON. In v0 the file is served by Vite as
+ *  a static asset; once the engine owns world ingestion (Milestone 3
+ *  onward) this moves to /api/v1/world/render or comes through the
+ *  viewer WS as a chunked stream. */
+export async function fetchWorldMap(name = "dev_test"): Promise<unknown> {
+  const r = await fetch(`/worlds/${name}.json`);
+  if (!r.ok) throw new Error(`world map ${r.status}`);
+  return r.json();
+}

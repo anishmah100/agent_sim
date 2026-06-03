@@ -6,39 +6,49 @@
 //   │  TopBar   (world clock · tick · my-agent pill · snap button) │
 //   ├──────────────────────────────────────────────────────────────┤
 //   │                                                              │
-//   │                                                              │
 //   │                  WorldCanvas (PixiJS)                        │
 //   │                                                              │
 //   │  ┌─────────┐                          ┌────────────────────┐ │
 //   │  │ Minimap │                          │   Drama feed       │ │
 //   │  └─────────┘                          └────────────────────┘ │
 //   └──────────────────────────────────────────────────────────────┘
-//
-// Each panel is a Solid component (DOM, themed with Kobalte primitives).
-// WorldCanvas hosts a PixiJS application, isolated from Solid reactivity.
 
 import { onMount, onCleanup, createSignal } from "solid-js";
 import { mountPixiApp, type PixiHandle } from "../render/PixiApp";
-import { fetchWorldInfo, type WorldInfo } from "../net/api";
+import { fetchWorldInfo, fetchWorldMap, type WorldInfo } from "../net/api";
+import type { TileMapData } from "../render/Tilemap";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
   const [connError, setConnError] = createSignal<string | null>(null);
+  const [worldLoadError, setWorldLoadError] = createSignal<string | null>(null);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
 
   onMount(async () => {
-    try {
-      setWorldInfo(await fetchWorldInfo());
-    } catch (e) {
-      setConnError((e as Error).message);
-    }
+    // Engine info is best-effort — frontend is useful for solo dev
+    // even if the engine isn't running yet (we just render the world
+    // file directly).
+    fetchWorldInfo()
+      .then(setWorldInfo)
+      .catch((e) => setConnError((e as Error).message));
+
     pixiHandle = await mountPixiApp(canvasContainer);
+
+    try {
+      const mapData = (await fetchWorldMap("dev_test")) as TileMapData;
+      pixiHandle.loadWorld(mapData);
+    } catch (e) {
+      setWorldLoadError((e as Error).message);
+    }
   });
 
   onCleanup(() => {
     pixiHandle?.destroy();
+    pixiHandle = null;
   });
+
+  const fitToWorld = () => pixiHandle?.fitToWorld();
 
   return (
     <div
@@ -48,7 +58,6 @@ export function App() {
         height: "100%",
       }}
     >
-      {/* world canvas behind everything */}
       <div
         ref={canvasContainer}
         style={{
@@ -58,7 +67,6 @@ export function App() {
         }}
       />
 
-      {/* top bar */}
       <div
         style={{
           position: "absolute",
@@ -79,14 +87,33 @@ export function App() {
         <strong style={{ color: "#feae34" }}>agent_sim</strong>
         <span style={{ opacity: "0.65" }}>
           {worldInfo()
-            ? `scenario=${worldInfo()!.scenario} · world=${worldInfo()!.world} · tick=${worldInfo()!.tick}`
+            ? `engine=${worldInfo()!.scenario} · tick=${worldInfo()!.tick}`
             : connError()
-              ? <span style={{ color: "#e43b44" }}>engine offline: {connError()}</span>
-              : "connecting…"}
+              ? <span style={{ color: "#e43b44" }}>engine offline (ok for solo render)</span>
+              : "connecting to engine…"}
+        </span>
+        {worldLoadError() && (
+          <span style={{ color: "#e43b44" }}>world load failed: {worldLoadError()}</span>
+        )}
+        <span style={{ "margin-left": "auto", display: "flex", gap: "8px" }}>
+          <button
+            type="button"
+            onClick={fitToWorld}
+            style={{
+              padding: "4px 10px",
+              background: "#3a4466",
+              color: "#ead4aa",
+              border: "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            fit to world
+          </button>
         </span>
       </div>
 
-      {/* minimap placeholder */}
       <div
         style={{
           position: "absolute",
@@ -106,7 +133,6 @@ export function App() {
         minimap (Milestone 9)
       </div>
 
-      {/* drama feed placeholder */}
       <div
         style={{
           position: "absolute",

@@ -70,9 +70,9 @@ def expected_dims(style: dict, asset_class: str) -> tuple[tuple[int, int], int]:
     if asset_class in layouts:
         layout = layouts[asset_class]
         return tuple(layout["input_dims_px"]), int(layout["scale_factor"])
-    if asset_class.startswith("character"):
-        # default to walk-only upscaled sheet
-        layout = layouts["walk_v2_upscaled"]
+    if asset_class.startswith("character") or asset_class == "trainer_red":
+        # Default character layout — the v3 upscaled full sheet.
+        layout = layouts["character_full_v3_upscaled"]
         return tuple(layout["input_dims_px"]), int(layout["scale_factor"])
     if asset_class.startswith("tile"):
         raise ValueError("tile assets need explicit layout in style.json")
@@ -248,11 +248,9 @@ def main() -> None:
 
     asset_class = args.asset_class
     if asset_class is None:
-        # Infer from name. Newer prompts produce upscaled walk-only sheets.
-        if "_v2" in args.name and args.name.startswith("character_"):
-            asset_class = "walk_v2_upscaled"
-        elif args.name.startswith("character_"):
-            asset_class = "walk_v2_upscaled"
+        # Default everything character-shaped to the v3 upscaled layout.
+        if args.name.startswith("character_") or args.name == "trainer_red":
+            asset_class = "character_full_v3_upscaled"
         elif args.name.startswith("tile_"):
             asset_class = "tile"
         else:
