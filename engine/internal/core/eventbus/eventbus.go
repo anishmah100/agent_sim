@@ -37,9 +37,10 @@ type WorldCtx interface {
 
 // Bus is the publish-subscribe channel for typed events.
 type Bus struct {
-	mu          sync.RWMutex
-	subscribers map[string][]Handler
-	queue       []Event
+	mu             sync.RWMutex
+	subscribers    map[string][]Handler
+	wildcardSubs   []Handler
+	queue          []Event
 }
 
 func New() *Bus {
@@ -54,6 +55,16 @@ func (b *Bus) Subscribe(kind string, h Handler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.subscribers[kind] = append(b.subscribers[kind], h)
+}
+
+// SubscribeAll registers a handler that fires on EVERY event regardless
+// of kind. Used by the historian for write-everything event logging
+// and by observability layers (e.g. Prometheus event counters). Order:
+// wildcard subscribers fire AFTER kind-specific subscribers.
+func (b *Bus) SubscribeAll(h Handler) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.wildcardSubs = append(b.wildcardSubs, h)
 }
 
 // Queue records an event for the next Drain. Safe to call from any
@@ -83,10 +94,14 @@ func (b *Bus) Drain(world WorldCtx) int {
 	pending := b.queue
 	b.queue = nil
 	subs := b.subscribers
+	wildcards := b.wildcardSubs
 	b.mu.Unlock()
 
 	for _, ev := range pending {
 		for _, h := range subs[ev.Kind()] {
+			h(world, ev)
+		}
+		for _, h := range wildcards {
 			h(world, ev)
 		}
 	}

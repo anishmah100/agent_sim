@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/anishmah100/agent_sim/engine/internal/historian"
 	"github.com/anishmah100/agent_sim/engine/internal/scenario/fantasy_town"
 	"github.com/anishmah100/agent_sim/engine/internal/wire"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
@@ -29,9 +30,11 @@ const tickRate = 60
 const tickDuration = time.Second / tickRate
 
 var (
-	flagAddr     = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
-	flagWorld    = flag.String("world", "worlds/dev_test.json", "world JSON file")
-	flagScenario = flag.String("scenario", "fantasy_town", "scenario pack id")
+	flagAddr      = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
+	flagWorld     = flag.String("world", "worlds/dev_test.json", "world JSON file")
+	flagScenario  = flag.String("scenario", "fantasy_town", "scenario pack id")
+	flagEventLog  = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
+	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
 )
 
 func main() {
@@ -52,6 +55,20 @@ func main() {
 	if *flagScenario == "fantasy_town" {
 		host = fantasy_town.Install(w)
 		log.Printf("installed scenario: %s (%d verbs)", fantasy_town.Name, host.Registry.VerbCount())
+	}
+
+	// Historian listens to every event on the bus. Wired after the
+	// scenario installs systems so it sees subscriber-issued events too.
+	hist, err := historian.New(*flagRingSize, *flagEventLog)
+	if err != nil {
+		log.Fatalf("historian init: %v", err)
+	}
+	defer hist.Close()
+	if host != nil {
+		hist.Attach(host.Bus)
+		if *flagEventLog != "" {
+			log.Printf("historian appending events to %s", *flagEventLog)
+		}
 	}
 
 	startedAt := time.Now()
@@ -89,6 +106,7 @@ func main() {
 	mux.HandleFunc("/api/v1/agent/register", agents.HandleRegister)
 	mux.HandleFunc("/api/v1/leaderboards", wire.LeaderboardsHandler(w))
 	mux.HandleFunc("/api/v1/world/affordances", wire.AffordanceManifestHandler(host))
+	mux.HandleFunc("/api/v1/world/history", historian.Handler(hist))
 
 	// Static world JSON + art atlases. The engine serves these because:
 	// 1. Same-origin = no CORS pain.
