@@ -106,6 +106,16 @@ func (r *ConcreteRegistry) ServiceLookup(name string) any {
 	return r.services[name]
 }
 
+// InstallServicesInto copies every service registered with this
+// registry into the given World, so that verb handlers and other
+// systems can reach them via w.GetService(name). Call once after all
+// systems have registered, before the first action is dispatched.
+func (r *ConcreteRegistry) InstallServicesInto(w World) {
+	for name, svc := range r.services {
+		w.RegisterService(name, svc)
+	}
+}
+
 // VerbCount returns how many verbs are registered (observability).
 func (r *ConcreteRegistry) VerbCount() int {
 	return len(r.verbs)
