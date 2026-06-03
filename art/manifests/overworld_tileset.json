@@ -1,0 +1,97 @@
+{
+  "$schema": "Per-tile names for the 64-cell overworld grid. Each cell is 16×16 native (col*16, row*16, 16, 16) in art/processed/overworld_tileset.png. Names map to the TileKind enum the frontend renderer + engine pathfinder use. Multiple cells can share the same TileKind — they are visual variants the renderer can pick from at random for ground-layer texture variety.",
+
+  "sheet": "overworld_tileset.png",
+  "native_dims_px": [128, 128],
+  "cell_size_native": 16,
+  "grid_cols": 8,
+  "grid_rows": 8,
+
+  "$tile_naming_comment": "Row 1: grass + grass variants + grass→dirt edges. Row 2: grass→dirt corners. Row 3: dirt + variants + dirt→grass edges. Row 4: cobblestone + variants + stone→grass edges. Row 5: water + variants + water→grass edges. Row 6: water corners + deep water + props. Row 7: sand + variants + sand→grass edges. Row 8: cliff faces + cliff top + cliff edges.",
+
+  "cells": [
+    {"row": 0, "col": 0, "name": "grass",              "kind": "grass"},
+    {"row": 0, "col": 1, "name": "grass_tuft",         "kind": "grass"},
+    {"row": 0, "col": 2, "name": "grass_pebble",       "kind": "grass"},
+    {"row": 0, "col": 3, "name": "grass_mushroom",     "kind": "grass"},
+    {"row": 0, "col": 4, "name": "grass_edge_top",     "kind": "grass"},
+    {"row": 0, "col": 5, "name": "grass_edge_right",   "kind": "grass"},
+    {"row": 0, "col": 6, "name": "grass_edge_bottom",  "kind": "grass"},
+    {"row": 0, "col": 7, "name": "grass_edge_left",    "kind": "grass"},
+
+    {"row": 1, "col": 0, "name": "grass_corner_nw_outer", "kind": "grass"},
+    {"row": 1, "col": 1, "name": "grass_corner_ne_outer", "kind": "grass"},
+    {"row": 1, "col": 2, "name": "grass_corner_se_outer", "kind": "grass"},
+    {"row": 1, "col": 3, "name": "grass_corner_sw_outer", "kind": "grass"},
+    {"row": 1, "col": 4, "name": "grass_corner_nw_inner", "kind": "grass"},
+    {"row": 1, "col": 5, "name": "grass_corner_ne_inner", "kind": "grass"},
+    {"row": 1, "col": 6, "name": "grass_corner_se_inner", "kind": "grass"},
+    {"row": 1, "col": 7, "name": "grass_corner_sw_inner", "kind": "grass"},
+
+    {"row": 2, "col": 0, "name": "dirt",               "kind": "dirt"},
+    {"row": 2, "col": 1, "name": "dirt_tracks",        "kind": "dirt"},
+    {"row": 2, "col": 2, "name": "dirt_pebbles",       "kind": "dirt"},
+    {"row": 2, "col": 3, "name": "dirt_cracked",       "kind": "dirt"},
+    {"row": 2, "col": 4, "name": "dirt_edge_top",      "kind": "dirt"},
+    {"row": 2, "col": 5, "name": "dirt_edge_right",    "kind": "dirt"},
+    {"row": 2, "col": 6, "name": "dirt_edge_bottom",   "kind": "dirt"},
+    {"row": 2, "col": 7, "name": "dirt_edge_left",     "kind": "dirt"},
+
+    {"row": 3, "col": 0, "name": "stone",              "kind": "stone"},
+    {"row": 3, "col": 1, "name": "stone_dark_brick",   "kind": "stone"},
+    {"row": 3, "col": 2, "name": "stone_edge_fade",    "kind": "stone"},
+    {"row": 3, "col": 3, "name": "stone_grate",        "kind": "stone"},
+    {"row": 3, "col": 4, "name": "stone_edge_top",     "kind": "stone"},
+    {"row": 3, "col": 5, "name": "stone_edge_right",   "kind": "stone"},
+    {"row": 3, "col": 6, "name": "stone_edge_bottom",  "kind": "stone"},
+    {"row": 3, "col": 7, "name": "stone_edge_left",    "kind": "stone"},
+
+    {"row": 4, "col": 0, "name": "water",              "kind": "water"},
+    {"row": 4, "col": 1, "name": "water_ripple",       "kind": "water"},
+    {"row": 4, "col": 2, "name": "water_lily",         "kind": "water"},
+    {"row": 4, "col": 3, "name": "water_fish",         "kind": "water"},
+    {"row": 4, "col": 4, "name": "water_edge_top",     "kind": "water"},
+    {"row": 4, "col": 5, "name": "water_edge_right",   "kind": "water"},
+    {"row": 4, "col": 6, "name": "water_edge_bottom",  "kind": "water"},
+    {"row": 4, "col": 7, "name": "water_edge_left",    "kind": "water"},
+
+    {"row": 5, "col": 0, "name": "water_corner_nw",    "kind": "water"},
+    {"row": 5, "col": 1, "name": "water_corner_ne",    "kind": "water"},
+    {"row": 5, "col": 2, "name": "water_corner_se",    "kind": "water"},
+    {"row": 5, "col": 3, "name": "water_corner_sw",    "kind": "water"},
+    {"row": 5, "col": 4, "name": "water_deep",         "kind": "water"},
+    {"row": 5, "col": 5, "name": "water_rock",         "kind": "water"},
+    {"row": 5, "col": 6, "name": "water_dock",         "kind": "water"},
+    {"row": 5, "col": 7, "name": "water_foam",         "kind": "water"},
+
+    {"row": 6, "col": 0, "name": "sand",               "kind": "stone"},
+    {"row": 6, "col": 1, "name": "sand_shells",        "kind": "stone"},
+    {"row": 6, "col": 2, "name": "sand_wet",           "kind": "stone"},
+    {"row": 6, "col": 3, "name": "sand_to_grass",      "kind": "stone"},
+    {"row": 6, "col": 4, "name": "sand_to_water",      "kind": "stone"},
+    {"row": 6, "col": 5, "name": "sand_edge_top",      "kind": "stone"},
+    {"row": 6, "col": 6, "name": "sand_edge_right",    "kind": "stone"},
+    {"row": 6, "col": 7, "name": "sand_edge_bottom",   "kind": "stone"},
+
+    {"row": 7, "col": 0, "name": "cliff_face",         "kind": "wall"},
+    {"row": 7, "col": 1, "name": "cliff_face_crack",   "kind": "wall"},
+    {"row": 7, "col": 2, "name": "cliff_top",          "kind": "wall"},
+    {"row": 7, "col": 3, "name": "cliff_top_bush",     "kind": "wall"},
+    {"row": 7, "col": 4, "name": "cliff_corner_left",  "kind": "wall"},
+    {"row": 7, "col": 5, "name": "cliff_corner_right", "kind": "wall"},
+    {"row": 7, "col": 6, "name": "cliff_inner",        "kind": "wall"},
+    {"row": 7, "col": 7, "name": "cliff_solid_stone",  "kind": "wall"}
+  ],
+
+  "$kind_default_cell_comment": "When the world JSON says tile_kind=K but doesn't specify which variant, the renderer picks this default cell. Tile_to_default name lookup happens in the frontend.",
+  "kind_defaults": {
+    "grass":      "grass",
+    "dirt":       "dirt",
+    "path":       "stone",
+    "water":      "water",
+    "stone":      "stone",
+    "wall":       "cliff_face",
+    "floor_wood": "dirt",
+    "void":       "cliff_solid_stone"
+  }
+}

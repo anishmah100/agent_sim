@@ -15,6 +15,9 @@ export interface EntityState {
   pos: [number, number];
   facing: "N" | "S" | "E" | "W";
   display_name?: string;
+  /** Optional engine-driven animation state. When set, the renderer
+   *  plays this action's frames once instead of the walk cycle. */
+  current_action?: "attack" | "interact" | "hit" | null;
 }
 
 // Footprint = 16x16 (one tile). Sprite container is anchored at top-left
@@ -28,22 +31,15 @@ const FOOTPRINT_H = TILE_SIZE_PX;
 // Map engine archetype string → character_id used by the atlas. As we
 // add more characters this grows. v0 starting set rotates the cast so
 // the placeholder NPCs become visibly different sprites.
-const ARCHETYPE_TO_CHARACTER: Record<string, string> = {
-  // dev_test world uses "human" + display_name to differentiate. Until
-  // engine sends a real character_id field, we hash on entity_id to
-  // pick from the rotation.
-  human: "trainer_red",
-};
 const CHARACTER_ROTATION = [
   "trainer_red", "trainer_lyra_blue", "wizard", "baker",
   "iron_guard", "child", "cloaked_wanderer",
 ];
 
 function pickCharacterId(state: EntityState): string {
-  const mapped = ARCHETYPE_TO_CHARACTER[state.archetype];
-  if (mapped !== undefined && state.archetype !== "human") return mapped;
-  // Deterministic hash on entity_id so the same NPC always gets the
-  // same sprite across reloads.
+  // If the engine sent a known character archetype, use it directly.
+  if (CHARACTER_ROTATION.includes(state.archetype)) return state.archetype;
+  // Otherwise hash on entity_id for stable assignment.
   let h = 0;
   for (const c of state.entity_id) h = (h * 31 + c.charCodeAt(0)) | 0;
   const idx = Math.abs(h) % CHARACTER_ROTATION.length;
@@ -170,22 +166,24 @@ export class EntityLayer {
 
     const spec = this.atlas?.get(characterId);
     if (spec) {
-      // Real sprite. AnimatedSprite handles per-anim frame cycling; we
-      // swap the textures field when facing changes. Default to idle
-      // (frame 0 of the appropriate walk direction).
+      // Each frame is its own PNG (loaded by CharacterAtlas). We scale
+      // every character to TARGET_DISPLAY_HEIGHT world-px based on the
+      // tallest frame in its sheet (spec.ref_frame_h) so frames within
+      // an animation stay at consistent visual size and the feet land
+      // at the same y across frames.
       const sprite = new AnimatedSprite(spec.anims.walk_down);
-      sprite.animationSpeed = 0.13;        // ~8 fps walk
+      sprite.animationSpeed = 0.13;
       sprite.loop = true;
-      sprite.anchor.set(spec.anchor_px[0] / spec.frame_w,
-                        spec.anchor_px[1] / spec.frame_h);
-      // 12-tall native sprite scaled 2x = 24-tall display, ~1.5 tiles
-      // tall, matching HeartGold's character-to-tile ratio.
-      sprite.scale.set(2);
-      // Sit on the bottom-center of the 16x16 footprint.
+      // Bottom-center anchor — every frame was tight-cropped to its
+      // character bbox, so bottom-center = foot pixel.
+      sprite.anchor.set(0.5, 1);
+      const TARGET_DISPLAY_HEIGHT = 28;        // world-px = ~1.75 tiles
+      const scale = TARGET_DISPLAY_HEIGHT / spec.ref_frame_h;
+      sprite.scale.set(scale);
       sprite.x = FOOTPRINT_W / 2;
       sprite.y = FOOTPRINT_H;
       sprite.texture.source.scaleMode = "nearest";
-      sprite.stop();                       // start in idle
+      sprite.stop();
       body = sprite;
     } else {
       const g = new Graphics();
@@ -207,13 +205,15 @@ export class EntityLayer {
     });
     label.anchor.set(0.5, 1);
     label.x = FOOTPRINT_W / 2;
-    // Label sits 2 px above the sprite's head. Sprite head pixel is
-    // computed from spec.anchor_px (foot pixel in native) and scale.
-    // For a 12-tall sprite anchored at y=11 with 2× scale, head is at
-    // worldY = FOOTPRINT_H - frame_h*scale*(anchor_y/frame_h) = 16 - 22 = -6.
-    label.y = spec
-      ? FOOTPRINT_H - spec.anchor_px[1] * 2 - 2
-      : -10;
+    // Label sits 2 px above the sprite's HEAD. Body extends from the
+    // foot anchor (FOOTPRINT_H) upward by ref_frame_h × scale world px.
+    if (spec) {
+      const TARGET_DISPLAY_HEIGHT = 28;
+      const headY = FOOTPRINT_H - TARGET_DISPLAY_HEIGHT;
+      label.y = headY - 2;
+    } else {
+      label.y = -10;
+    }
 
     wrap.addChild(body);
     if (facingMark) wrap.addChild(facingMark);
@@ -247,18 +247,28 @@ export class EntityLayer {
     if (re.body instanceof AnimatedSprite) {
       const spec = this.atlas?.get(re.characterId);
       if (spec) {
-        const animKey = facingToAnim(next.facing);
+        // Action animations take priority. When current_action is set,
+        // play that anim's textures once. Otherwise default to walk
+        // direction.
+        let animKey: CharacterAnim;
+        if (next.current_action === "attack") {
+          animKey = "attack_release";
+        } else if (next.current_action === "interact") {
+          animKey = "interact";
+        } else if (next.current_action === "hit") {
+          animKey = "hit";
+        } else {
+          animKey = facingToAnim(next.facing);
+        }
         const desired = spec.anims[animKey];
-        // Swap the textures sequence only when facing actually changed
-        // — re-assigning textures resets the playhead which would
-        // otherwise jitter every tick.
-        if (turned || re.body.textures !== desired) {
+        const actionChanged = re.state.current_action !== next.current_action;
+        if (turned || actionChanged || re.body.textures !== desired) {
           re.body.textures = desired;
           re.body.play();
         }
-        // Idle: if we haven't moved in ~250ms, freeze on frame 0 of the
-        // current direction. Looks like a HeartGold idle.
-        const idleNow = performance.now() - re.movingSince > 250;
+        // Idle (for walk anims only): freeze on frame 0 after 250ms idle.
+        const isWalk = animKey.startsWith("walk_");
+        const idleNow = isWalk && performance.now() - re.movingSince > 250;
         if (idleNow && re.body.playing) {
           re.body.gotoAndStop(0);
         } else if (!idleNow && !re.body.playing) {

@@ -1,17 +1,17 @@
-// CharacterAtlas — loads processed character spritesheets + manifest
-// once, exposes per-character named animations.
+// CharacterAtlas — loads every character animation frame as a separate
+// texture from /art/processed/frames/<character>/<row>_<frame>.png.
 //
-// Asset URLs come from the engine (/art/manifests/characters.json and
-// /art/processed/<sheet>.png) so the frontend and the multimodal
-// agent rasterizer read the SAME files.
+// We DO NOT slice from a packed spritesheet — every DALL-E sheet has
+// slightly different cell sizes and irregular frame positions. Loading
+// each frame as its own file removes all slicing math.
 
-import { Assets, Texture, Rectangle } from "pixi.js";
+import { Assets, Texture } from "pixi.js";
 
 const ENGINE_URL =
   import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
-
 const MANIFEST_URL = `${ENGINE_URL}/art/manifests/characters.json`;
-const SHEET_URL = (file: string) => `${ENGINE_URL}/art/processed/${file}`;
+const FRAME_URL = (charId: string, anim: string, idx: number) =>
+  `${ENGINE_URL}/art/processed/frames/${charId}/${anim}_${idx}.png`;
 
 export type CharacterAnim =
   | "walk_down" | "walk_up" | "walk_left" | "walk_right"
@@ -20,22 +20,14 @@ export type CharacterAnim =
 export interface CharacterSpec {
   id: string;
   display_name: string;
-  /** Per-anim frame textures. The renderer feeds these into AnimatedSprite. */
+  /** Per-anim frame textures. Each texture is its own image — sizes
+   *  may vary slightly between frames in the same animation. */
   anims: Record<CharacterAnim, Texture[]>;
-  /** First frame of each direction's walk — also serves as the idle pose. */
+  /** First frame of each direction's walk — also the idle pose. */
   idle: Record<"N" | "S" | "E" | "W", Texture>;
-  /** Pixel dims used so the renderer can scale uniformly. */
-  frame_w: number;
-  frame_h: number;
-  /** Anchor in pixels (bottom-center by default). */
-  anchor_px: [number, number];
-}
-
-interface ManifestSheetShape {
-  native_dims_px: [number, number];
-  frame_box_px: [number, number];
-  frame_anchor_px: [number, number];
-  rows: Array<{ name: string; row_index: number; frames: number }>;
+  /** Tallest frame across all 20 animations. Used to compute a uniform
+   *  display scale so the character doesn't grow/shrink between frames. */
+  ref_frame_h: number;
 }
 
 interface ManifestCharacter {
@@ -45,57 +37,91 @@ interface ManifestCharacter {
 }
 
 interface Manifest {
-  sheet_shape: ManifestSheetShape;
   characters: ManifestCharacter[];
 }
 
-/** Loaded atlas: one entry per character. Populated by loadCharacterAtlas(). */
+/** Maps the 5 sheet rows to the 8 animation slots. */
+const ROW_NAMES: Array<"walk_down" | "walk_up" | "walk_left" | "walk_right" | "action"> = [
+  "walk_down", "walk_up", "walk_left", "walk_right", "action",
+];
+const ACTION_FRAMES: Array<{ idx: number; anim: CharacterAnim }> = [
+  { idx: 0, anim: "attack_windup" },
+  { idx: 1, anim: "attack_release" },
+  { idx: 2, anim: "hit" },
+  { idx: 3, anim: "interact" },
+];
+
 export class CharacterAtlas {
   private characters = new Map<string, CharacterSpec>();
   private fallback: CharacterSpec | null = null;
 
   has(id: string): boolean { return this.characters.has(id); }
-
   get(id: string): CharacterSpec | null {
     return this.characters.get(id) ?? this.fallback;
   }
-
   list(): CharacterSpec[] {
     return Array.from(this.characters.values());
   }
 
   static async load(): Promise<CharacterAtlas> {
     const atlas = new CharacterAtlas();
-    const manifest = await fetchManifest();
-    const shape = manifest.sheet_shape;
-    const [fw, fh] = shape.frame_box_px;
-    const anchor = shape.frame_anchor_px;
+    const r = await fetch(MANIFEST_URL);
+    if (!r.ok) throw new Error(`character manifest ${r.status}`);
+    const manifest = (await r.json()) as Manifest;
 
-    // Each character: load its sheet PNG and slice out the rows × frames.
     for (const c of manifest.characters) {
-      let baseTex: Texture;
-      try {
-        baseTex = await Assets.load<Texture>(SHEET_URL(c.sheet));
-      } catch (e) {
-        console.warn(`character sheet load failed for ${c.id}: ${e}`);
+      const anims: Record<CharacterAnim, Texture[]> = {
+        walk_down: [], walk_up: [], walk_left: [], walk_right: [],
+        attack_windup: [], attack_release: [], hit: [], interact: [],
+      };
+      let maxH = 0;
+      let ok = true;
+
+      // Walk rows: load 4 frames each.
+      for (const row of ROW_NAMES) {
+        if (row === "action") continue;
+        for (let i = 0; i < 4; i++) {
+          try {
+            const tex = await Assets.load<Texture>(FRAME_URL(c.id, row, i));
+            tex.source.scaleMode = "nearest";
+            anims[row].push(tex);
+            if (tex.height > maxH) maxH = tex.height;
+          } catch (e) {
+            console.warn(`frame load failed for ${c.id}/${row}_${i}:`, e);
+            ok = false;
+          }
+        }
+      }
+
+      // Action row: 4 frames mapped to attack/hit/interact.
+      for (const af of ACTION_FRAMES) {
+        try {
+          const tex = await Assets.load<Texture>(FRAME_URL(c.id, "action", af.idx));
+          tex.source.scaleMode = "nearest";
+          anims[af.anim].push(tex);
+          if (tex.height > maxH) maxH = tex.height;
+        } catch (e) {
+          console.warn(`action frame load failed for ${c.id}/${af.idx}:`, e);
+          ok = false;
+        }
+      }
+
+      if (!ok) {
+        console.warn(`skipping ${c.id} — frames missing`);
         continue;
       }
-      // Disable smoothing — pixel art must render crisp.
-      baseTex.source.scaleMode = "nearest";
 
-      const anims = sliceAnims(baseTex, shape, fw, fh);
-      const idle = {
-        N: anims.walk_up[0],
-        S: anims.walk_down[0],
-        E: anims.walk_right[0],
-        W: anims.walk_left[0],
-      };
       const spec: CharacterSpec = {
         id: c.id,
         display_name: c.display_name,
-        anims, idle,
-        frame_w: fw, frame_h: fh,
-        anchor_px: [anchor[0], anchor[1]],
+        anims,
+        idle: {
+          N: anims.walk_up[0],
+          S: anims.walk_down[0],
+          E: anims.walk_right[0],
+          W: anims.walk_left[0],
+        },
+        ref_frame_h: maxH,
       };
       atlas.characters.set(c.id, spec);
       if (atlas.fallback === null) atlas.fallback = spec;
@@ -103,53 +129,3 @@ export class CharacterAtlas {
     return atlas;
   }
 }
-
-async function fetchManifest(): Promise<Manifest> {
-  const r = await fetch(MANIFEST_URL);
-  if (!r.ok) throw new Error(`manifest fetch ${r.status}`);
-  return (await r.json()) as Manifest;
-}
-
-function sliceAnims(
-  base: Texture, _shape: ManifestSheetShape, fw: number, fh: number,
-): Record<CharacterAnim, Texture[]> {
-  const cellW = 32;                      // matches style.json -> cell_w_native
-  const cellPad = 8;                     // = (cellW - fw) / 2
-  const out: Record<CharacterAnim, Texture[]> = {
-    walk_down: [], walk_up: [], walk_left: [], walk_right: [],
-    attack_windup: [], attack_release: [], hit: [], interact: [],
-  };
-
-  const cut = (anim: CharacterAnim, row: number, frame: number) => {
-    const x = frame * cellW + cellPad;
-    const y = row * fh;
-    const rect = new Rectangle(x, y, fw, fh);
-    out[anim].push(new Texture({ source: base.source, frame: rect }));
-  };
-
-  // Walk rows: 0=down, 1=up, 2=left, 3=right, each with 4 frames.
-  const walkRows: Array<{ row: number; key: CharacterAnim }> = [
-    { row: 0, key: "walk_down" },
-    { row: 1, key: "walk_up" },
-    { row: 2, key: "walk_left" },
-    { row: 3, key: "walk_right" },
-  ];
-  for (const { row, key } of walkRows) {
-    for (let f = 0; f < 4; f++) cut(key, row, f);
-  }
-
-  // Action row (4): col 0 = attack_windup, 1 = attack_release, 2 = hit, 3 = interact.
-  cut("attack_windup", 4, 0);
-  cut("attack_release", 4, 1);
-  cut("hit", 4, 2);
-  cut("interact", 4, 3);
-
-  // Verify slice integrity — fail fast if any frame ended up empty.
-  for (const k of Object.keys(out) as CharacterAnim[]) {
-    if (out[k].length === 0) {
-      throw new Error(`character atlas slice missing anim ${k}`);
-    }
-  }
-  return out;
-}
-

@@ -146,32 +146,31 @@ def process(
     palette_rgb_arr = np.array(palette_rgb, dtype=np.uint8)
     print(f"INFO    {asset_name}: snapping to {len(palette_rgb)}-color palette")
 
-    # Some layouts (character) have exact input dims; freeform/grid
-    # tilesets use *_approx since DALL-E delivers varying square sizes.
-    if "input_dims_px" in layout:
-        exp_w, exp_h = layout["input_dims_px"]
-    else:
-        exp_w, exp_h = layout["input_dims_px_approx"]
-        # Treat approx as a hint, not a gate.
-    native_w, native_h = layout["native_dims_px"]
-
     src = explicit_path or (RAW_DIR / f"{asset_name}.png")
     if not src.exists():
         reject(asset_name, f"source file not found: {src}")
 
     img = Image.open(src).convert("RGB")
-    print(f"INFO    {asset_name}: input dims {img.size} "
-          f"(expected ~{(exp_w, exp_h)}, downsampling to native {(native_w, native_h)})")
-    if strict and img.size != (exp_w, exp_h):
-        reject(
-            asset_name,
-            f"strict mode: dim mismatch {img.size} != {(exp_w, exp_h)}",
-        )
+    preserve_src = bool(layout.get("preserve_source_resolution", False))
+
+    if preserve_src:
+        print(f"INFO    {asset_name}: input dims {img.size} — "
+              "preserve_source_resolution=true (no downsample)")
+    else:
+        if "input_dims_px" in layout:
+            exp_w, exp_h = layout["input_dims_px"]
+        else:
+            exp_w, exp_h = layout["input_dims_px_approx"]
+        native_w, native_h = layout["native_dims_px"]
+        print(f"INFO    {asset_name}: input dims {img.size} "
+              f"(expected ~{(exp_w, exp_h)}, downsampling to {(native_w, native_h)})")
+        if strict and img.size != (exp_w, exp_h):
+            reject(
+                asset_name,
+                f"strict mode: dim mismatch {img.size} != {(exp_w, exp_h)}",
+            )
 
     # PHASE 1: Aggressive pre-key on the INPUT image.
-    # Any pixel that is unmistakably the magenta background — high red,
-    # very low green, high blue — becomes pure (255, 0, 255). This stops
-    # AI-gen's "almost magenta" speckle from contaminating downsample.
     src_arr = np.array(img, dtype=np.uint8)
     magenta_mask_src = (
         (src_arr[..., 0] >= 200)
@@ -179,29 +178,29 @@ def process(
         & (src_arr[..., 2] >= 200)
     )
     src_arr[magenta_mask_src] = (255, 0, 255)
-    img = Image.fromarray(src_arr, mode="RGB")
     pct_pre_keyed = 100.0 * magenta_mask_src.sum() / magenta_mask_src.size
     print(f"INFO    {asset_name}: pre-keyed {pct_pre_keyed:.1f}% of input "
           "pixels as background")
 
-    # PHASE 2: BOX-filter downsample to native. Magenta-background
-    # cells stay magenta; cells that span character/background mix.
-    img_native = img.resize((native_w, native_h), Image.BOX)
-    arr = np.array(img_native, dtype=np.uint8)              # (H, W, 3)
+    if preserve_src:
+        # No downsample. Work at source resolution. The intake just
+        # cleans up the magenta + palette-snaps; the original detail
+        # stays intact.
+        arr = src_arr
+    else:
+        # Legacy path: BOX-filter downsample to native dims.
+        img = Image.fromarray(src_arr, mode="RGB")
+        img_native = img.resize((native_w, native_h), Image.BOX)
+        arr = np.array(img_native, dtype=np.uint8)
 
-    # PHASE 3: Per-pixel transparency decision BEFORE palette snap.
-    # A pixel is "background" if it's clearly more magenta than
-    # character — green channel is the deciding factor (magenta has
-    # G=0; every character color has G>=39 except hair/outline at G=39).
-    # Tunable: G<60 + R>140 + B>140 catches all halo bleed AND pure
-    # magenta. Tested on the trainer_red sheet — yields zero halo.
+    # PHASE 2: Per-pixel transparency decision BEFORE palette snap.
     bg_mask = (
         (arr[..., 1] < 60)
         & (arr[..., 0] > 140)
         & (arr[..., 2] > 140)
     )
 
-    # PHASE 4: Palette quantize the non-background pixels only.
+    # PHASE 3: Palette quantize the non-background pixels only.
     flat = arr.reshape(-1, 3)
     visible_flat_mask = ~bg_mask.reshape(-1)
     snapped_flat = flat.copy()
@@ -228,23 +227,31 @@ def process(
     out = PROCESSED_DIR / f"{asset_name}.png"
     Image.fromarray(rgba, mode="RGBA").save(out)
 
-    # 4x preview for eyeballing in a viewer.
-    Image.fromarray(rgba, mode="RGBA").resize(
-        (native_w * 4, native_h * 4), Image.NEAREST
-    ).save(PROCESSED_DIR / f"{asset_name}.preview_4x.png")
-
-    # 16x preview — useful when native is tiny (16x24 chars).
-    Image.fromarray(rgba, mode="RGBA").resize(
-        (native_w * 16, native_h * 16), Image.NEAREST
-    ).save(PROCESSED_DIR / f"{asset_name}.preview_16x.png")
+    H, W = arr.shape[:2]
+    # 1× preview is the same as the processed image; only generate a
+    # downscaled "thumb" if the source is huge. For preserve-source the
+    # output IS the source-resolution sheet — no upscale preview needed.
+    if not preserve_src:
+        Image.fromarray(rgba, mode="RGBA").resize(
+            (W * 4, H * 4), Image.NEAREST
+        ).save(PROCESSED_DIR / f"{asset_name}.preview_4x.png")
+        Image.fromarray(rgba, mode="RGBA").resize(
+            (W * 16, H * 16), Image.NEAREST
+        ).save(PROCESSED_DIR / f"{asset_name}.preview_16x.png")
+    else:
+        # A 0.5x "thumb" for easy at-a-glance browsing.
+        Image.fromarray(rgba, mode="RGBA").resize(
+            (W // 2, H // 2), Image.NEAREST
+        ).save(PROCESSED_DIR / f"{asset_name}.thumb.png")
 
     print(
-        f"OK      {asset_name}: native {arr.shape[1]}x{arr.shape[0]}, "
+        f"OK      {asset_name}: out {arr.shape[1]}x{arr.shape[0]}, "
         f"visible px {n_visible} ({100*n_visible/arr.shape[0]/arr.shape[1]:.1f}%), "
         f"palette snap shifted {snap_pct:.2f}% of pixels, "
         f"unique visible colors: {unique_after}"
     )
-    print(f"        -> processed/{asset_name}.png + preview_4x + preview_16x")
+    suffix = " + thumb" if preserve_src else " + preview_4x + preview_16x"
+    print(f"        -> processed/{asset_name}.png{suffix}")
 
 
 def main() -> None:

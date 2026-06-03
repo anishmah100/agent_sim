@@ -29,12 +29,14 @@ const (
 // in the world. Pos is in tile coordinates (integer logically — we
 // store as float for fractional movement during walks).
 type Entity struct {
-	EntityID    string         `json:"entity_id"`
-	Archetype   string         `json:"archetype"`
-	Pos         [2]float64     `json:"pos"`
-	Facing      Facing         `json:"facing"`
-	DisplayName string         `json:"display_name,omitempty"`
-	Extras      map[string]any `json:"extras,omitempty"` // scenario-defined, opaque to engine
+	EntityID      string         `json:"entity_id"`
+	Archetype     string         `json:"archetype"`
+	Pos           [2]float64     `json:"pos"`
+	Facing        Facing         `json:"facing"`
+	DisplayName   string         `json:"display_name,omitempty"`
+	Extras        map[string]any `json:"extras,omitempty"` // scenario-defined
+	CurrentAction string         `json:"current_action,omitempty"` // "attack" | "interact" | "hit"
+	actionTicks   uint64         // remaining ticks before CurrentAction clears
 }
 
 // World holds the live state for one world (one process = one world,
@@ -123,6 +125,24 @@ func (w *World) Tick() {
 	// interpolation needed). Every ~1 second (60 ticks) the NPC picks
 	// a new direction.
 	for _, e := range w.entities {
+		// Decrement action timer; clear action when done.
+		if e.actionTicks > 0 {
+			e.actionTicks--
+			if e.actionTicks == 0 {
+				e.CurrentAction = ""
+			}
+			continue                                // pause walking during action
+		}
+
+		// Once every ~5 seconds, randomly pick an action to demo.
+		if w.rng.IntN(300) == 0 {
+			actions := []string{"attack", "interact", "hit"}
+			e.CurrentAction = actions[w.rng.IntN(len(actions))]
+			e.actionTicks = 36                      // ~600 ms
+			e.Facing = FacingS                      // face camera for the demo
+			continue
+		}
+
 		if w.tick%60 == 0 || w.rng.IntN(240) == 0 {
 			e.Facing = randFacing(w.rng)
 		}

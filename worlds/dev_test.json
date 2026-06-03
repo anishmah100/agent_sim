@@ -1,5 +1,5 @@
 {
-  "$schema": "in-house v0 tile format. To be replaced by LDtk once the editor is integrated. See docs/STACK.md.",
+  "$schema": "in-house v0 tile format. To be replaced by LDtk once the editor is integrated.",
 
   "map_id": "dev_test",
   "display_name": "Development Test World",
@@ -42,26 +42,12 @@
   ],
 
   "entities": [
-    {
-      "entity_id": "test_npc_1",
-      "archetype": "human",
-      "pos": [8, 7],
-      "facing": "S",
-      "display_name": "test villager (placeholder)"
-    },
-    {
-      "entity_id": "test_npc_2",
-      "archetype": "human",
-      "pos": [12, 5],
-      "facing": "E",
-      "display_name": "test merchant (placeholder)"
-    },
-    {
-      "entity_id": "test_npc_3",
-      "archetype": "human",
-      "pos": [20, 11],
-      "facing": "N",
-      "display_name": "test wanderer (placeholder)"
-    }
+    {"entity_id": "npc_trainer_red",        "archetype": "trainer_red",        "pos": [6,  3], "facing": "S", "display_name": "Red the trainer"},
+    {"entity_id": "npc_trainer_lyra_blue",  "archetype": "trainer_lyra_blue",  "pos": [10, 3], "facing": "S", "display_name": "Lyra"},
+    {"entity_id": "npc_wizard",             "archetype": "wizard",             "pos": [14, 3], "facing": "S", "display_name": "Old Sage"},
+    {"entity_id": "npc_baker",              "archetype": "baker",              "pos": [18, 3], "facing": "S", "display_name": "Baker"},
+    {"entity_id": "npc_iron_guard",         "archetype": "iron_guard",         "pos": [22, 3], "facing": "S", "display_name": "Iron Guard"},
+    {"entity_id": "npc_child",              "archetype": "child",              "pos": [26, 11], "facing": "S", "display_name": "Village child"},
+    {"entity_id": "npc_cloaked_wanderer",   "archetype": "cloaked_wanderer",   "pos": [22, 13], "facing": "S", "display_name": "Hooded wanderer"}
   ]
 }

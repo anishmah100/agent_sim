@@ -9,6 +9,7 @@
 // rest of the renderer stays the same.
 
 import { Application, Graphics, RenderTexture, Texture, type Renderer } from "pixi.js";
+import { TileAtlas } from "./TileAtlas";
 
 /** Logical tile categories the engine can place. Maps 1:1 with the
  *  in-house tile JSON format (see worlds/dev_test.json). Mirrors the
@@ -39,34 +40,37 @@ const TILE_COLORS: Record<TileKind, number> = {
 
 export const TILE_SIZE_PX = 16;
 
-/** Cache so we don't re-render the same tile texture per tile. Keyed
- *  by TileKind. Built lazily on first request. */
-let cache: Map<TileKind, Texture> | null = null;
+/** Cache for the placeholder solid-color textures. Used until the
+ *  TileAtlas finishes loading. */
+let placeholderCache: Map<TileKind, Texture> | null = null;
+/** Atlas-backed textures. Once installed, getTileTexture prefers these
+ *  over placeholders. */
+let atlas: TileAtlas | null = null;
 
-/** Get or build the placeholder texture for a tile kind. Each texture
- *  is exactly TILE_SIZE_PX square and uses one Endesga 32 color. The
- *  textures live as long as the Pixi Application — they're freed when
- *  the app is destroyed (so the Map is also reset). */
+export function setTileAtlas(a: TileAtlas | null): void {
+  atlas = a;
+}
+
+/** Get the best available texture for a tile kind: atlas-backed if the
+ *  atlas has loaded, else a generated palette-color placeholder. */
 export function getTileTexture(app: Application, kind: TileKind): Texture {
-  if (cache === null) cache = new Map();
-  const hit = cache.get(kind);
+  if (atlas?.has(kind)) {
+    const tex = atlas.defaultFor(kind);
+    if (tex) return tex;
+  }
+  if (placeholderCache === null) placeholderCache = new Map();
+  const hit = placeholderCache.get(kind);
   if (hit !== undefined) return hit;
 
   const g = new Graphics()
     .rect(0, 0, TILE_SIZE_PX, TILE_SIZE_PX)
     .fill(TILE_COLORS[kind]);
-
-  // A small 1px-darker border per tile reads as a grid at full zoom,
-  // and disappears (subpixel) at low zoom — exactly what we want for a
-  // placeholder so adjacent tiles of the same kind are visually
-  // separable while we iterate.
   const darker = ((TILE_COLORS[kind] & 0xfefefe) >> 1);
   g.rect(0, 0, TILE_SIZE_PX, 1).fill(darker);
   g.rect(0, 0, 1, TILE_SIZE_PX).fill(darker);
-
   const tex = renderToTexture(app.renderer as Renderer, g);
   g.destroy();
-  cache.set(kind, tex);
+  placeholderCache.set(kind, tex);
   return tex;
 }
 
@@ -86,7 +90,9 @@ function renderToTexture(renderer: Renderer, g: Graphics): Texture {
 /** Reset the cache. Call when the Pixi Application is destroyed —
  *  RenderTextures become invalid against a destroyed renderer. */
 export function resetTileCache(): void {
-  if (cache === null) return;
-  for (const tex of cache.values()) tex.destroy(true);
-  cache = null;
+  if (placeholderCache !== null) {
+    for (const tex of placeholderCache.values()) tex.destroy(true);
+    placeholderCache = null;
+  }
+  atlas = null;
 }
