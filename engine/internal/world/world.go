@@ -1,11 +1,7 @@
 // Package world owns the authoritative game state and the per-tick
-// simulation. Everything else (wire protocol, scenario hooks, viewer
-// broadcast) reads or writes through this package.
-//
-// Per docs/ARCHITECTURE.md §2: the engine knows entity_id, position,
-// facing, an opaque state blob, and the registered verb list. Nothing
-// scenario-specific lives here. Money, combat, HP — all that lives in
-// the scenario pack and rides in entity.Extras.
+// simulation. See docs/MOVEMENT_AND_COLLISION.md for the position
+// model: logical tile is discrete (integer), render position is a
+// float lerp the engine computes for the wire payload.
 package world
 
 import (
@@ -25,24 +21,73 @@ const (
 	FacingW Facing = "W"
 )
 
-// Entity is the authoritative server-side representation of one thing
-// in the world. Pos is in tile coordinates (integer logically — we
-// store as float for fractional movement during walks).
+// TICKS_PER_STEP — number of engine ticks for one tile-to-tile walk.
+// At 60Hz, 24 ticks ≈ 400 ms per tile, similar to HeartGold walk speed.
+const TicksPerStep = 24
+
+type Tile = [2]int
+
+// Entity is the authoritative server-side representation. Position is
+// stored discretely as LogicalTile + WalkProgress; the client lerps for
+// smooth rendering.
 type Entity struct {
-	EntityID      string         `json:"entity_id"`
-	Archetype     string         `json:"archetype"`
-	Pos           [2]float64     `json:"pos"`
-	Facing        Facing         `json:"facing"`
-	DisplayName   string         `json:"display_name,omitempty"`
-	Extras        map[string]any `json:"extras,omitempty"` // scenario-defined
-	CurrentAction string         `json:"current_action,omitempty"` // "attack" | "interact" | "hit"
-	actionTicks   uint64         // remaining ticks before CurrentAction clears
+	EntityID    string         `json:"entity_id"`
+	Archetype   string         `json:"archetype"`
+	DisplayName string         `json:"display_name,omitempty"`
+	Extras      map[string]any `json:"extras,omitempty"`
+
+	LogicalTile  Tile    `json:"-"`
+	WalkFromTile Tile    `json:"-"`
+	WalkProgress float64 `json:"-"`
+	walkPath     []Tile  // queued path; first elem = next tile to enter
+
+	Facing        Facing `json:"facing"`
+	CurrentAction string `json:"current_action,omitempty"`
+	actionTicks   int    // demo random action timer
+
+	// targetTile is the original move-target; emitted in observations so
+	// the agent can confirm what it's walking toward.
+	targetTile Tile
+
+	// Computed render position broadcast on the wire.
+	renderPos [2]float64
 }
 
-// World holds the live state for one world (one process = one world,
-// per docs/ARCHITECTURE.md §5). Concurrency model: all writes happen on
-// the tick goroutine; reads can happen from broadcast goroutines under
-// a RLock.
+// MarshalJSON emits the render-friendly fields the frontend expects.
+func (e *Entity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		EntityID      string     `json:"entity_id"`
+		Archetype     string     `json:"archetype"`
+		DisplayName   string     `json:"display_name,omitempty"`
+		Pos           [2]float64 `json:"pos"`
+		Facing        Facing     `json:"facing"`
+		CurrentAction string     `json:"current_action,omitempty"`
+		LogicalTile   [2]int     `json:"logical_tile"`
+	}{
+		EntityID:      e.EntityID,
+		Archetype:     e.Archetype,
+		DisplayName:   e.DisplayName,
+		Pos:           e.renderPos,
+		Facing:        e.Facing,
+		CurrentAction: e.CurrentAction,
+		LogicalTile:   e.LogicalTile,
+	})
+}
+
+// recomputeRenderPos updates renderPos based on the walk state. Called
+// every tick.
+func (e *Entity) recomputeRenderPos() {
+	if e.WalkProgress >= 1 {
+		e.renderPos[0] = float64(e.LogicalTile[0])
+		e.renderPos[1] = float64(e.LogicalTile[1])
+		return
+	}
+	e.renderPos[0] = float64(e.WalkFromTile[0]) +
+		(float64(e.LogicalTile[0])-float64(e.WalkFromTile[0]))*e.WalkProgress
+	e.renderPos[1] = float64(e.WalkFromTile[1]) +
+		(float64(e.LogicalTile[1])-float64(e.WalkFromTile[1]))*e.WalkProgress
+}
+
 type World struct {
 	MapID       string
 	WidthTiles  int
@@ -52,29 +97,42 @@ type World struct {
 	tick     uint64
 	entities map[string]*Entity
 	rng      *rand.Rand
+
+	// Static walkability map (terrain only). True = walkable terrain.
+	walkable [][]bool
+
+	// Per-tile dynamic occupancy by entities. Mid-walk an entity claims
+	// BOTH its WalkFromTile and LogicalTile.
+	occupants map[Tile]string
 }
 
-// fileWorld is the on-disk shape of worlds/<name>.json. Matches the
-// in-house tile format described in worlds/dev_test.json. We don't read
-// tile data here — the engine doesn't need it for movement (collision
-// is layered in once the scenario pack is wired). The frontend loads
-// the static JSON directly for now.
 type fileWorld struct {
-	MapID       string            `json:"map_id"`
-	WidthTiles  int               `json:"width_tiles"`
-	HeightTiles int               `json:"height_tiles"`
-	Entities    []json.RawMessage `json:"entities"`
+	MapID        string             `json:"map_id"`
+	WidthTiles   int                `json:"width_tiles"`
+	HeightTiles  int                `json:"height_tiles"`
+	TilesLegend  map[string]string  `json:"tiles_legend"`
+	Tiles        []string           `json:"tiles"`
+	Entities     []json.RawMessage  `json:"entities"`
 }
 
 type fileEntity struct {
-	EntityID    string     `json:"entity_id"`
-	Archetype   string     `json:"archetype"`
-	Pos         [2]float64 `json:"pos"`
-	Facing      Facing     `json:"facing"`
-	DisplayName string     `json:"display_name"`
+	EntityID    string `json:"entity_id"`
+	Archetype   string `json:"archetype"`
+	Pos         [2]int `json:"pos"`
+	Facing      Facing `json:"facing"`
+	DisplayName string `json:"display_name"`
 }
 
-// Load parses the world's JSON file and constructs a populated World.
+// Walkable tile kinds. Anything not in this set blocks movement.
+var walkableKinds = map[string]bool{
+	"grass":      true,
+	"dirt":       true,
+	"path":       true,
+	"floor_wood": true,
+	"stone":      true,
+	"sand":       true,
+}
+
 func Load(path string) (*World, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -90,40 +148,186 @@ func Load(path string) (*World, error) {
 		WidthTiles:  fw.WidthTiles,
 		HeightTiles: fw.HeightTiles,
 		entities:    make(map[string]*Entity, len(fw.Entities)),
-		// Deterministic-ish seed for v0. Real seeds come from scenario
-		// config later.
-		rng: rand.New(rand.NewPCG(1, 2)),
+		rng:         rand.New(rand.NewPCG(1, 2)),
+		occupants:   make(map[Tile]string),
 	}
+
+	// Build walkability map from the tile legend.
+	w.walkable = make([][]bool, w.HeightTiles)
+	for y := 0; y < w.HeightTiles; y++ {
+		w.walkable[y] = make([]bool, w.WidthTiles)
+		row := ""
+		if y < len(fw.Tiles) {
+			row = fw.Tiles[y]
+		}
+		for x := 0; x < w.WidthTiles; x++ {
+			var kind string
+			if x < len(row) {
+				ch := string(row[x])
+				kind = fw.TilesLegend[ch]
+			}
+			w.walkable[y][x] = walkableKinds[kind]
+		}
+	}
+
 	for _, raw := range fw.Entities {
 		var fe fileEntity
 		if err := json.Unmarshal(raw, &fe); err != nil {
 			return nil, fmt.Errorf("parse entity: %w", err)
 		}
-		w.entities[fe.EntityID] = &Entity{
-			EntityID:    fe.EntityID,
-			Archetype:   fe.Archetype,
-			Pos:         fe.Pos,
-			Facing:      fe.Facing,
-			DisplayName: fe.DisplayName,
+		tile := Tile{fe.Pos[0], fe.Pos[1]}
+		e := &Entity{
+			EntityID:     fe.EntityID,
+			Archetype:    fe.Archetype,
+			DisplayName:  fe.DisplayName,
+			Facing:       fe.Facing,
+			LogicalTile:  tile,
+			WalkFromTile: tile,
+			WalkProgress: 1,
 		}
+		e.recomputeRenderPos()
+		w.entities[fe.EntityID] = e
+		w.occupants[tile] = fe.EntityID
 	}
 	return w, nil
 }
 
-// Tick advances simulation by one step. Called from the engine's main
-// loop at 60Hz. For v0 we just have a placeholder "wander" behaviour
-// so the frontend can see live state updates while we wire the rest.
-// Real verb dispatch + scenario rules land in milestone 3+.
+// IsWalkable returns true if (x,y) is on the map AND has walkable
+// terrain. Does not consider dynamic occupancy.
+func (w *World) IsWalkable(t Tile) bool {
+	if t[0] < 0 || t[0] >= w.WidthTiles || t[1] < 0 || t[1] >= w.HeightTiles {
+		return false
+	}
+	return w.walkable[t[1]][t[0]]
+}
+
+// CanEnter returns true if entity e can enter tile t right now:
+// walkable terrain AND not occupied by a different entity.
+func (w *World) CanEnter(e *Entity, t Tile) bool {
+	if !w.IsWalkable(t) {
+		return false
+	}
+	occ, ok := w.occupants[t]
+	if !ok {
+		return true
+	}
+	return occ == e.EntityID
+}
+
+// pickWanderTarget — find a random walkable tile within radius of an
+// entity that we can begin a path to. Used by the demo AI.
+func (w *World) pickWanderTarget(e *Entity, radius int) (Tile, bool) {
+	for tries := 0; tries < 20; tries++ {
+		dx := w.rng.IntN(2*radius+1) - radius
+		dy := w.rng.IntN(2*radius+1) - radius
+		t := Tile{e.LogicalTile[0] + dx, e.LogicalTile[1] + dy}
+		if w.IsWalkable(t) && t != e.LogicalTile {
+			return t, true
+		}
+	}
+	return Tile{}, false
+}
+
+// startMove kicks off an A*-pathed move toward target. Returns true if
+// a path was found and the first step has been committed.
+func (w *World) startMove(e *Entity, target Tile) bool {
+	if !w.IsWalkable(target) {
+		return false
+	}
+	if target == e.LogicalTile {
+		return true
+	}
+	path := w.findPath(e.LogicalTile, target, e)
+	if len(path) < 2 {
+		return false
+	}
+	// path[0] is current. Step to path[1].
+	next := path[1]
+	if !w.CanEnter(e, next) {
+		return false
+	}
+	// Claim the next tile.
+	w.occupants[next] = e.EntityID
+	e.WalkFromTile = e.LogicalTile
+	e.LogicalTile = next
+	e.WalkProgress = 0
+	e.walkPath = path[2:]
+	e.targetTile = target
+	e.CurrentAction = "move"
+	e.Facing = stepFacing(e.WalkFromTile, next)
+	return true
+}
+
+func stepFacing(from, to Tile) Facing {
+	if to[0] > from[0] {
+		return FacingE
+	}
+	if to[0] < from[0] {
+		return FacingW
+	}
+	if to[1] > from[1] {
+		return FacingS
+	}
+	return FacingN
+}
+
+// findPath: BFS — fine for our 32×20 dev_test and adequate up to
+// ~100×100. We swap in heap-backed A* once maps get bigger.
+func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
+	if start == goal {
+		return []Tile{start}
+	}
+	type node struct {
+		t      Tile
+		parent int // index into visited
+	}
+	visited := []node{{t: start, parent: -1}}
+	seen := map[Tile]int{start: 0}
+	queue := []int{0}
+	dirs := []Tile{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+	for len(queue) > 0 {
+		idx := queue[0]
+		queue = queue[1:]
+		cur := visited[idx].t
+		if cur == goal {
+			// reconstruct
+			path := []Tile{}
+			for i := idx; i != -1; i = visited[i].parent {
+				path = append([]Tile{visited[i].t}, path...)
+			}
+			return path
+		}
+		for _, d := range dirs {
+			n := Tile{cur[0] + d[0], cur[1] + d[1]}
+			if _, ok := seen[n]; ok {
+				continue
+			}
+			if !w.IsWalkable(n) {
+				continue
+			}
+			// Allow path through tiles occupied by OTHERS at planning
+			// time — they may move by the time we arrive. But block our
+			// path through trees / walls.
+			if occ, occupied := w.occupants[n]; occupied && occ != e.EntityID && n == goal {
+				// Dest is currently occupied; reject so the agent gets
+				// target_occupied at submission. (BFS allows transit but
+				// not stopping ON an occupant.)
+				continue
+			}
+			seen[n] = len(visited)
+			visited = append(visited, node{t: n, parent: idx})
+			queue = append(queue, len(visited)-1)
+		}
+	}
+	return nil
+}
+
 func (w *World) Tick() {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	w.tick++
 
-	// Move each NPC a tiny bit every tick. The pace is fractional so
-	// it reads as smooth walking on the client (no engine-side
-	// interpolation needed). Every ~1 second (60 ticks) the NPC picks
-	// a new direction.
 	for _, e := range w.entities {
 		// Decrement action timer; clear action when done.
 		if e.actionTicks > 0 {
@@ -131,69 +335,63 @@ func (w *World) Tick() {
 			if e.actionTicks == 0 {
 				e.CurrentAction = ""
 			}
-			continue                                // pause walking during action
-		}
-
-		// Once every ~5 seconds, randomly pick an action to demo.
-		if w.rng.IntN(300) == 0 {
-			actions := []string{"attack", "interact", "hit"}
-			e.CurrentAction = actions[w.rng.IntN(len(actions))]
-			e.actionTicks = 36                      // ~600 ms
-			e.Facing = FacingS                      // face camera for the demo
 			continue
 		}
 
-		if w.tick%60 == 0 || w.rng.IntN(240) == 0 {
-			e.Facing = randFacing(w.rng)
+		// Idle: pick a wander target.
+		if e.CurrentAction == "" && len(e.walkPath) == 0 && e.WalkProgress >= 1 {
+			// Once every ~5 s, demo a random action.
+			if w.rng.IntN(300) == 0 {
+				actions := []string{"attack", "interact", "hit"}
+				e.CurrentAction = actions[w.rng.IntN(len(actions))]
+				e.actionTicks = 36
+				e.Facing = FacingS
+				continue
+			}
+			// Otherwise wander.
+			if w.rng.IntN(120) == 0 {
+				if t, ok := w.pickWanderTarget(e, 6); ok {
+					w.startMove(e, t)
+				}
+			}
 		}
-		const speedTilesPerTick = 0.04
-		switch e.Facing {
-		case FacingN:
-			e.Pos[1] -= speedTilesPerTick
-		case FacingS:
-			e.Pos[1] += speedTilesPerTick
-		case FacingE:
-			e.Pos[0] += speedTilesPerTick
-		case FacingW:
-			e.Pos[0] -= speedTilesPerTick
+
+		// Advance walk.
+		if e.CurrentAction == "move" && e.WalkProgress < 1 {
+			e.WalkProgress += 1.0 / float64(TicksPerStep)
+			if e.WalkProgress >= 1 {
+				e.WalkProgress = 1
+				// Release the from-tile.
+				if w.occupants[e.WalkFromTile] == e.EntityID {
+					delete(w.occupants, e.WalkFromTile)
+				}
+				e.WalkFromTile = e.LogicalTile
+				// Take the next step if path has more tiles.
+				if len(e.walkPath) > 0 {
+					next := e.walkPath[0]
+					if !w.CanEnter(e, next) {
+						// Blocked mid-path. Stop and notify (event
+						// emission lands with the agent wire path).
+						e.walkPath = nil
+						e.CurrentAction = ""
+					} else {
+						w.occupants[next] = e.EntityID
+						e.WalkFromTile = e.LogicalTile
+						e.LogicalTile = next
+						e.WalkProgress = 0
+						e.walkPath = e.walkPath[1:]
+						e.Facing = stepFacing(e.WalkFromTile, next)
+					}
+				} else {
+					e.CurrentAction = ""
+				}
+			}
 		}
-		// Clamp to world bounds; flip facing if we hit an edge so the
-		// NPC bounces off instead of pinning to the wall.
-		if e.Pos[0] < 0 {
-			e.Pos[0] = 0
-			e.Facing = FacingE
-		} else if float64(w.WidthTiles-1) < e.Pos[0] {
-			e.Pos[0] = float64(w.WidthTiles - 1)
-			e.Facing = FacingW
-		}
-		if e.Pos[1] < 0 {
-			e.Pos[1] = 0
-			e.Facing = FacingS
-		} else if float64(w.HeightTiles-1) < e.Pos[1] {
-			e.Pos[1] = float64(w.HeightTiles - 1)
-			e.Facing = FacingN
-		}
+
+		e.recomputeRenderPos()
 	}
 }
 
-func randFacing(r *rand.Rand) Facing {
-	switch r.IntN(4) {
-	case 0:
-		return FacingN
-	case 1:
-		return FacingS
-	case 2:
-		return FacingE
-	default:
-		return FacingW
-	}
-}
-
-// Snapshot returns a read-only copy of the current entity list. Safe
-// to call from any goroutine; takes the read lock.
-//
-// For the v0 broadcast we send a full snapshot every push. Delta
-// encoding comes in milestone 5+ alongside AOI.
 func (w *World) Snapshot() WorldSnapshot {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -208,51 +406,28 @@ func (w *World) Snapshot() WorldSnapshot {
 	}
 }
 
-// Tick returns the current tick number (cheap; readlock).
-func (w *World) Tick0() uint64 {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	return w.tick
-}
-
-// WorldSnapshot is the wire-shape we send to viewers. Will be replaced
-// by a delta payload once AOI subscription lands.
 type WorldSnapshot struct {
 	Tick     uint64   `json:"tick"`
 	MapID    string   `json:"map_id"`
 	Entities []Entity `json:"entities"`
 }
 
-// AgentObservation is what we send to one connected agent each tick.
-// It's a strict superset of viewer info — it adds the agent's own
-// internal state + the optional image crop.
-//
-// The ViewImage field is the multimodal hook (docs/OBSERVATION_MODEL.md
-// §10b). For structured-only agents it's nil; for vision agents the
-// rasterizer fills it with a PNG/WebP crop of the area around the
-// agent. Renderer lands in Milestone 4; field is reserved here so the
-// schema stays stable as SDKs get written.
+// AgentObservation + ViewImage stubs reserved for the agent-WS path.
+// See docs/OBSERVATION_MODEL.md §10b. Implementation lands in the
+// agent SDK milestone.
+
 type AgentObservation struct {
-	ObsID     uint64    `json:"obs_id"`
-	WorldTick uint64    `json:"world_tick"`
-	Self      *Entity   `json:"self"`
-
-	// Visible entities, audible events, etc. land here in Milestone 4.
-
-	// ViewImage is populated for agents that registered with
-	// vision.mode in {"image", "both"}. nil for structured-only.
+	ObsID     uint64     `json:"obs_id"`
+	WorldTick uint64     `json:"world_tick"`
+	Self      *Entity    `json:"self"`
 	ViewImage *ViewImage `json:"view_image,omitempty"`
 }
 
-// ViewImage is the rendered crop of the world around the agent. Bytes
-// are PNG or WebP per the format field; the engine rasterizer reads
-// from the shared art atlas so server-rendered pixels match what the
-// frontend would draw for the same position.
 type ViewImage struct {
-	Format        string     `json:"format"`           // "png" | "webp"
-	Width         uint16     `json:"width"`            // = crop_tiles_w * render_scale
-	Height        uint16     `json:"height"`           // = crop_tiles_h * render_scale
-	Data          []byte     `json:"data"`             // raw image bytes
-	CenteredOnPos [2]float64 `json:"centered_on_pos"`  // agent tile coords at render time
+	Format        string     `json:"format"`
+	Width         uint16     `json:"width"`
+	Height        uint16     `json:"height"`
+	Data          []byte     `json:"data"`
+	CenteredOnPos [2]float64 `json:"centered_on_pos"`
 	Facing        Facing     `json:"facing"`
 }

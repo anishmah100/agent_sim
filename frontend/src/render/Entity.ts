@@ -166,22 +166,22 @@ export class EntityLayer {
 
     const spec = this.atlas?.get(characterId);
     if (spec) {
-      // Each frame is its own PNG (loaded by CharacterAtlas). We scale
-      // every character to TARGET_DISPLAY_HEIGHT world-px based on the
-      // tallest frame in its sheet (spec.ref_frame_h) so frames within
-      // an animation stay at consistent visual size and the feet land
-      // at the same y across frames.
       const sprite = new AnimatedSprite(spec.anims.walk_down);
       sprite.animationSpeed = 0.13;
       sprite.loop = true;
-      // Bottom-center anchor — every frame was tight-cropped to its
-      // character bbox, so bottom-center = foot pixel.
+      // Bottom-center anchor: every frame was tight-cropped, bottom
+      // pixel = foot.
       sprite.anchor.set(0.5, 1);
-      const TARGET_DISPLAY_HEIGHT = 28;        // world-px = ~1.75 tiles
+      // HeartGold standard: character is 1.5 tiles tall (24 world px
+      // on our 16 px tiles), centered horizontally on the footprint,
+      // foot pixel at the bottom row of the footprint tile (y = 15
+      // is the last pixel of a 16 px tile, not y = 16 which is the
+      // next tile).
+      const TARGET_DISPLAY_HEIGHT = 24;
       const scale = TARGET_DISPLAY_HEIGHT / spec.ref_frame_h;
       sprite.scale.set(scale);
       sprite.x = FOOTPRINT_W / 2;
-      sprite.y = FOOTPRINT_H;
+      sprite.y = FOOTPRINT_H - 1;
       sprite.texture.source.scaleMode = "nearest";
       sprite.stop();
       body = sprite;
@@ -205,11 +205,9 @@ export class EntityLayer {
     });
     label.anchor.set(0.5, 1);
     label.x = FOOTPRINT_W / 2;
-    // Label sits 2 px above the sprite's HEAD. Body extends from the
-    // foot anchor (FOOTPRINT_H) upward by ref_frame_h × scale world px.
     if (spec) {
-      const TARGET_DISPLAY_HEIGHT = 28;
-      const headY = FOOTPRINT_H - TARGET_DISPLAY_HEIGHT;
+      const TARGET_DISPLAY_HEIGHT = 24;
+      const headY = (FOOTPRINT_H - 1) - TARGET_DISPLAY_HEIGHT;
       label.y = headY - 2;
     } else {
       label.y = -10;
