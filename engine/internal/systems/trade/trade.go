@@ -44,6 +44,10 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 		res.Reason = "unknown_target"
 		return res
 	}
+	if !syscore.IsAgentArchetype(target.Archetype()) {
+		res.Reason = "not_a_target"
+		return res
+	}
 	if w.Chebyshev(e.Pos(), target.Pos()) > 1 {
 		res.Reason = "target_too_far"
 		return res

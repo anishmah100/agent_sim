@@ -85,11 +85,7 @@ func (s *System) RegisterWith(r syscore.Registry) {
 }
 
 func (s *System) seedSpawn(w syscore.World, e syscore.Entity) {
-	// Only agent-like archetypes carry contracts; items / buildings /
-	// resources don't. We accept the default-empty fallback in the
-	// helpers below rather than try to enumerate archetypes here.
-	switch e.Archetype() {
-	case "item", "building", "decoration", "tree", "rock":
+	if !syscore.IsAgentArchetype(e.Archetype()) {
 		return
 	}
 	if _, ok := e.GetExtra("contracts"); !ok {
@@ -113,6 +109,10 @@ func (s *System) handlePropose(w syscore.World, e syscore.Entity, env *syscore.A
 	target := w.EntityByID(p.Target)
 	if target == nil {
 		res.Reason = "unknown_target"
+		return res
+	}
+	if !syscore.IsAgentArchetype(target.Archetype()) {
+		res.Reason = "not_a_target"
 		return res
 	}
 	if target.ID() == e.ID() {

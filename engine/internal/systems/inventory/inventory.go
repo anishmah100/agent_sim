@@ -58,7 +58,7 @@ func (s *System) RegisterWith(r syscore.Registry) {
 }
 
 func (s *System) seedSpawn(w syscore.World, e syscore.Entity) {
-	if e.Archetype() == "item" || e.Archetype() == "building" || e.Archetype() == "decoration" {
+	if !syscore.IsAgentArchetype(e.Archetype()) {
 		return
 	}
 	if _, ok := e.GetExtra("inventory"); !ok {
@@ -172,6 +172,10 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 	target := w.EntityByID(p.Target)
 	if target == nil {
 		res.Reason = "unknown_target"
+		return res
+	}
+	if !syscore.IsAgentArchetype(target.Archetype()) {
+		res.Reason = "not_a_target"
 		return res
 	}
 	if w.Chebyshev(e.Pos(), target.Pos()) > 1 {

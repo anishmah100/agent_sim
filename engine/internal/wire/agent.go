@@ -27,6 +27,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
 
@@ -110,18 +111,48 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	// Bind to an existing entity (e.g. an NPC the user wants to control)
-	// or pick the first one for demo flow.
+	// or pick the first agent-eligible one for demo flow.
+	// Hard rule: an agent can only attach to an agent-archetype entity.
+	// Binding to a tree / rock / building / item is rejected — those are
+	// world objects, not bodies.
 	entityID := req.BindEntity
 	if entityID == "" {
-		ids := h.w.EntityIDs()
-		if len(ids) == 0 {
-			http.Error(rw, "no entities to bind", http.StatusServiceUnavailable)
+		for _, id := range h.w.EntityIDs() {
+			e := h.w.EntityByID(id)
+			if e == nil {
+				continue
+			}
+			if !syscore.IsAgentArchetype(e.Archetype) {
+				continue
+			}
+			// Skip entities already owned by a live agent.
+			h.mu.Lock()
+			taken := false
+			for _, c := range h.live {
+				if c.rec != nil && c.rec.EntityID == id {
+					taken = true
+					break
+				}
+			}
+			h.mu.Unlock()
+			if taken {
+				continue
+			}
+			entityID = id
+			break
+		}
+		if entityID == "" {
+			http.Error(rw, "no free agent-eligible entities", http.StatusServiceUnavailable)
 			return
 		}
-		entityID = ids[0]
 	}
-	if h.w.EntityByID(entityID) == nil {
+	target := h.w.EntityByID(entityID)
+	if target == nil {
 		http.Error(rw, "unknown bind_entity", http.StatusNotFound)
+		return
+	}
+	if !syscore.IsAgentArchetype(target.Archetype) {
+		http.Error(rw, "entity is a world object, not an agent body", http.StatusBadRequest)
 		return
 	}
 
