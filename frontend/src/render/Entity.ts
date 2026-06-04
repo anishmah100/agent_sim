@@ -5,7 +5,7 @@
 // (16×24, bottom-center anchored, facing-aware) so swapping in
 // AnimatedSprite from a real atlas is a single-method change later.
 
-import { AnimatedSprite, Container, Graphics, Sprite, Text } from "pixi.js";
+import { AnimatedSprite, Assets, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import type { CharacterAtlas, CharacterAnim } from "./CharacterAtlas";
@@ -41,6 +41,61 @@ export interface EntityState {
 // render correctly without per-character math.
 const FOOTPRINT_W = TILE_SIZE_PX;
 const FOOTPRINT_H = TILE_SIZE_PX;
+
+const ENGINE_URL =
+  import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
+
+// Closed set of world-object archetypes. Mirrors the engine taxonomy
+// in internal/core/systems/archetypes.go (these are entities that
+// EXIST for the engine's systems to target — Resources targets trees
+// and rocks, Construction targets blueprints, etc. — but they're not
+// agent bodies).
+const WORLD_OBJECT_ARCHETYPES = new Set([
+  "tree", "rock", "item", "blueprint",
+]);
+
+// Map a world-object entity to its sprite URL on the engine's
+// /art/processed/ path. The mapping reads entity_id when an archetype
+// has subtypes (tree_oak_1 → tree_oak, rock_iron_1 → boulder_iron_ore).
+function worldObjectSpriteUrl(e: EntityState): string {
+  const id = e.entity_id;
+  switch (e.archetype) {
+    case "tree": {
+      // tree_apple_1 → tree_apple, tree_pine_2 → tree_pine, etc.
+      const subtype = id.replace(/^tree_/, "").replace(/_\d+$/, "");
+      const name = subtype === "" ? "tree_oak" : `tree_${subtype}`;
+      return `${ENGINE_URL}/art/processed/v2_resources_world_master/${name}.png`;
+    }
+    case "rock": {
+      // rock_iron_1 → boulder_iron_ore; otherwise default boulder.
+      const name = id.includes("iron") ? "boulder_iron_ore" : "boulder_medium";
+      return `${ENGINE_URL}/art/processed/v2_resources_world_master/${name}.png`;
+    }
+    case "blueprint": {
+      // Per-extras.progress: 0 → ghost, 25 → foundation, 50 → walls
+      // partial, 75 → walls full, 100 → roof partial. The Construction
+      // system writes 'progress' into extras.
+      const extras = ((e as unknown as { extras?: Record<string, unknown> }).extras) ?? {};
+      const progress = Number(extras["progress"] ?? 0);
+      const stage = progress >= 100 ? 5
+        : progress >= 75 ? 4
+        : progress >= 50 ? 3
+        : progress >= 25 ? 2
+        : 1;
+      const stageNames = [
+        "cottage_stage_0_blueprint", "cottage_stage_1_foundation",
+        "cottage_stage_2_walls_partial", "cottage_stage_3_walls_full",
+        "cottage_stage_4_roof_partial", "cottage_stage_5_finished",
+      ];
+      return `${ENGINE_URL}/art/processed/v2_construction_stages/${stageNames[stage]}.png`;
+    }
+    case "item":
+      // Items use display_name when present (e.g. "wood_log") or
+      // fall back by extras.kind. v0: a sane default.
+      return `${ENGINE_URL}/art/processed/v2_items_master_v2/wood_log.png`;
+  }
+  return `${ENGINE_URL}/art/processed/v2_resources_world_master/tree_oak.png`;
+}
 
 // Map engine archetype string → character_id used by the atlas. As we
 // add more characters this grows. v0 starting set rotates the cast so
@@ -151,18 +206,11 @@ export class EntityLayer {
   }
 
   setAll(entities: EntityState[]): void {
-    // Filter out non-character archetypes. Resource entities like
-    // trees/rocks live in the engine so the Resources system can
-    // target them via chop/mine — they should NOT be drawn as
-    // character sprites by this layer (the placeholder character
-    // would render in place of the building/tree visual). The
-    // Decoration layer handles their visuals when present.
-    const NON_CHARACTER = new Set([
-      "tree", "rock", "item", "blueprint", "building", "decoration",
-    ]);
-    const visible = entities.filter((e) => !NON_CHARACTER.has(e.archetype));
-    const incoming = new Set(visible.map((e) => e.entity_id));
-    // Remove anything that disappeared or became invisible.
+    // Render every entity (characters + world objects). Characters
+    // use animated character sprites; world-object archetypes get a
+    // static sprite from the v2 master sheets via worldObjectSprite().
+    const incoming = new Set(entities.map((e) => e.entity_id));
+    // Remove anything that disappeared.
     for (const [id, re] of this.items) {
       if (!incoming.has(id)) {
         re.container.destroy({ children: true });
@@ -170,7 +218,7 @@ export class EntityLayer {
       }
     }
     // Add or update incoming.
-    for (const e of visible) {
+    for (const e of entities) {
       const existing = this.items.get(e.entity_id);
       if (existing) {
         this.update(existing, e);
@@ -187,8 +235,16 @@ export class EntityLayer {
   private create(e: EntityState): RenderedEntity {
     const wrap = new Container();
     wrap.label = `entity:${e.entity_id}`;
-    const characterId = pickCharacterId(e);
 
+    // World-object archetypes (trees / rocks / items / blueprints) get
+    // a static sprite from the v2 master sheets. They're entities so
+    // the engine can target them by ID; they render as their proper
+    // sprite so users can SEE them.
+    if (WORLD_OBJECT_ARCHETYPES.has(e.archetype)) {
+      return this.createWorldObject(e, wrap);
+    }
+
+    const characterId = pickCharacterId(e);
     let body: Sprite | AnimatedSprite | Graphics;
     let facingMark: Graphics | null = null;
 
@@ -287,6 +343,69 @@ export class EntityLayer {
       body,
       facingMark,
       label,
+      prevPos: [e.pos[0], e.pos[1]],
+      movingSince: performance.now(),
+    };
+  }
+
+  private createWorldObject(e: EntityState, wrap: Container): RenderedEntity {
+    // Static sprite from the master sheets. Loaded async; until then,
+    // a small placeholder so the entity still occupies space.
+    const placeholder = new Graphics()
+      .rect(2, 2, FOOTPRINT_W - 4, FOOTPRINT_H - 4)
+      .fill({ color: 0x265c42, alpha: 0.6 });
+    wrap.addChild(placeholder);
+
+    const url = worldObjectSpriteUrl(e);
+    void Assets.load<Texture>(url).then((tex) => {
+      tex.source.scaleMode = "nearest";
+      const sp = new Sprite(tex);
+      // Match the decoration-tree visual scale (~3 tiles tall) so v2
+      // tree entities don't look like saplings next to the v1
+      // decoration trees. Saplings stay 1 tile; rocks are tile-sized.
+      const isSapling = /sapling/i.test(e.entity_id);
+      const targetHeightTiles =
+        e.archetype === "tree" ? (isSapling ? 1 : 3)
+        : e.archetype === "blueprint" ? 3
+        : 1.2;   // rocks slightly bigger than 1 tile so they read
+      const targetH = targetHeightTiles * TILE_SIZE_PX;
+      const aspect = tex.width / tex.height;
+      const targetW = targetH * aspect;
+      sp.width = targetW;
+      sp.height = targetH;
+      sp.x = (FOOTPRINT_W - targetW) / 2;
+      sp.y = FOOTPRINT_H - targetH;
+      if (placeholder.parent) {
+        wrap.removeChild(placeholder);
+      }
+      placeholder.destroy();
+      wrap.addChild(sp);
+    }).catch((err) => {
+      console.warn(`world-object sprite failed for ${e.entity_id}:`, err);
+    });
+
+    // Subtle drop-shadow ellipse at the base, like characters.
+    const shadow = new Graphics();
+    shadow.ellipse(FOOTPRINT_W / 2, FOOTPRINT_H - 2, 5, 1.6)
+      .fill({ color: 0x000000, alpha: 0.28 });
+    wrap.addChildAt(shadow, 0);
+
+    // No hover outline on world-object entities — the viewport-level
+    // hit test in input.ts already handles click selection. Adding the
+    // OutlineFilter here produces a visible bounding-box halo even
+    // without active hover (Playwright + the viewport's catch-all
+    // hitArea caused pointerover to fire spuriously).
+
+    this.applyPos(wrap, e.pos);
+    this.container.addChild(wrap);
+
+    return {
+      state: { ...e },
+      characterId: e.archetype,    // placeholder — unused for world objects
+      container: wrap,
+      body: placeholder,           // initial body (replaced on tex load)
+      facingMark: null,
+      label: null as unknown as Text,  // no label for world objects
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
     };

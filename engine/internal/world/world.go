@@ -201,6 +201,22 @@ type fileEntity struct {
 	DisplayName string `json:"display_name"`
 }
 
+// objectArchetypes mirrors the closed set in
+// internal/core/systems/archetypes.go — kept duplicated here to avoid
+// importing systems from world (the cleaner direction is world →
+// systems, not the other way, and this taxonomy is engine-wide).
+// Keep these in sync.
+var objectArchetypes = map[string]bool{
+	"item":       true,
+	"tree":       true,
+	"rock":       true,
+	"building":   true,
+	"blueprint":  true,
+	"decoration": true,
+}
+
+func isAgentArchetype(a string) bool { return !objectArchetypes[a] }
+
 // Walkable tile kinds. Anything not in this set blocks movement.
 var walkableKinds = map[string]bool{
 	"grass":      true,
@@ -520,6 +536,17 @@ func (w *World) Tick() {
 	}
 
 	for _, e := range w.entities {
+		// World-object archetypes (trees, rocks, items, blueprints,
+		// buildings, decorations) DO NOT have a brain. The autonomous
+		// wander / demo-action / auto-enter behavior below would
+		// otherwise move them around the map every few seconds.
+		// (This was the cause of trees walking 25 tiles from their
+		// spawn point in 2 minutes.) Skip the per-tick behavior for
+		// them — composable-system OnTick callbacks already ran above
+		// and handle world-object state.
+		if !isAgentArchetype(e.Archetype) {
+			continue
+		}
 		// --- Inside a building: tick down, then exit. ---
 		if e.InsideBuilding != "" {
 			if e.insideTicks > 0 {
