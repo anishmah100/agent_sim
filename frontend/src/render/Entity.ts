@@ -151,8 +151,18 @@ export class EntityLayer {
   }
 
   setAll(entities: EntityState[]): void {
-    const incoming = new Set(entities.map((e) => e.entity_id));
-    // Remove anything that disappeared.
+    // Filter out non-character archetypes. Resource entities like
+    // trees/rocks live in the engine so the Resources system can
+    // target them via chop/mine — they should NOT be drawn as
+    // character sprites by this layer (the placeholder character
+    // would render in place of the building/tree visual). The
+    // Decoration layer handles their visuals when present.
+    const NON_CHARACTER = new Set([
+      "tree", "rock", "item", "blueprint", "building", "decoration",
+    ]);
+    const visible = entities.filter((e) => !NON_CHARACTER.has(e.archetype));
+    const incoming = new Set(visible.map((e) => e.entity_id));
+    // Remove anything that disappeared or became invisible.
     for (const [id, re] of this.items) {
       if (!incoming.has(id)) {
         re.container.destroy({ children: true });
@@ -160,7 +170,7 @@ export class EntityLayer {
       }
     }
     // Add or update incoming.
-    for (const e of entities) {
+    for (const e of visible) {
       const existing = this.items.get(e.entity_id);
       if (existing) {
         this.update(existing, e);

@@ -565,7 +565,7 @@ ENTITIES = [
     {"entity_id": "tree_pine_1", "archetype": "tree", "pos": [12, 6],   "facing": "S", "display_name": "Pine"},
     {"entity_id": "tree_pine_2", "archetype": "tree", "pos": [3, 6],    "facing": "S", "display_name": "Pine"},
     {"entity_id": "tree_oak_3",   "archetype": "tree", "pos": [10, 4],   "facing": "S", "display_name": "Oak"},
-    {"entity_id": "tree_apple_1", "archetype": "tree", "pos": [16, 5],   "facing": "S", "display_name": "Apple tree"},
+    {"entity_id": "tree_apple_1", "archetype": "tree", "pos": [11, 5],   "facing": "S", "display_name": "Apple tree"},
 
     # === Mineable rock entities — placed near the mason / quarry area ===
     {"entity_id": "rock_1", "archetype": "rock", "pos": [40, 36], "facing": "S", "display_name": "Boulder"},
