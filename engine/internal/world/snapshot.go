@@ -179,6 +179,14 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 			Pos:      e.LogicalTile,
 			Facing:   string(e.Facing),
 		},
+		// Initialize collection fields as empty slices, NOT nil. Go's
+		// json.Marshal renders nil as `null`, which the SDK's pydantic
+		// Observation model rejects (these are typed list[...], not
+		// Optional). Empty slices serialize to `[]` and clients can
+		// iterate without null-guards.
+		VisibleEntities: []VisibleEntityState{},
+		VisibleObjects:  []VisibleObjectState{},
+		Audible:         []AudibleEvent{},
 		WorldClock: WorldClockState{
 			Tick:     s.Tick,
 			DayPhase: dayPhaseFromTick(s.Tick),

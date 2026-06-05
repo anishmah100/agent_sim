@@ -8,6 +8,8 @@ package world
 // minimal surface.
 
 import (
+	"sync/atomic"
+
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/spatial"
 	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
@@ -167,8 +169,7 @@ func (a *WorldAdapter) UnlockWrite() { a.W.mu.Unlock() }
 func (a *WorldAdapter) LockRead()    { a.W.mu.RLock() }
 func (a *WorldAdapter) UnlockRead()  { a.W.mu.RUnlock() }
 func (a *WorldAdapter) IncrementTick() uint64 {
-	a.W.tick++
-	return a.W.tick
+	return atomic.AddUint64(&a.W.tick, 1)
 }
 
 // === EntityAdapter ===

@@ -41,7 +41,11 @@ async def main_async(args: argparse.Namespace) -> None:
     )
     harness.init_persona()
 
+    cycle = [0]
     async def brain(obs):
+        cycle[0] += 1
+        logging.getLogger("qwen_agent").info("brain cycle %d entered, obs_id=%s",
+                                              cycle[0], getattr(obs, "obs_id", "?"))
         reflex = harness.reflex(obs)
         if reflex is not None:
             return reflex.actions[0]

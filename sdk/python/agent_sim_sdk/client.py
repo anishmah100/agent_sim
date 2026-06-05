@@ -227,9 +227,23 @@ class Agent:
             vi = payload.get("view_image")
             if vi and isinstance(vi.get("data"), str):
                 vi["data"] = base64.b64decode(vi["data"])
+            # Defensive: older engine builds (or future bare-engine modes)
+            # may serialize empty slices as null. The pydantic Observation
+            # model types these as list[...], so coerce None → [] before
+            # validation. Engine v0.0.3+ initializes empty slices but we
+            # keep the coercion for forward + backward compat.
+            for key in ("visible_entities", "visible_objects", "audible",
+                        "recent_self_results"):
+                if payload.get(key) is None:
+                    payload[key] = []
             try:
                 obs = _ObservationAdapter.validate_python(payload)
-            except Exception:
+            except Exception as e:
+                import logging
+                logging.getLogger("agent_sim_sdk").warning(
+                    "observation validation failed: %s — payload keys=%s",
+                    e, list(payload.keys()),
+                )
                 continue
             await self._inbox.put(obs)
 

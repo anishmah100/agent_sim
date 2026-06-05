@@ -1,5 +1,7 @@
 package world
 
+import "sync/atomic"
+
 // Observation builder.
 //
 // Composes the per-agent payload from the engine's authoritative state:
@@ -254,10 +256,16 @@ func (w *World) BuildObservationFor(entityID string, obsID uint64, opts *AgentOb
 }
 
 // CurrentTick returns the latest engine tick (for cadence calc).
+//
+// Lock-free: reads w.tick atomically. Writes happen under w.mu.Lock()
+// at the top of every Tick() via atomic.AddUint64. Concurrent atomic
+// reads of an aligned uint64 are safe; the worst case is a stale tick
+// by one — fine for callers (event stamping, /world/info), and the
+// correct shape for any reader that might be inside Bus.Drain (which
+// runs under the world write lock — re-acquiring a read lock there
+// would deadlock since sync.RWMutex doesn't allow write→read re-entry).
 func (w *World) CurrentTick() uint64 {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-	return w.tick
+	return atomic.LoadUint64(&w.tick)
 }
 
 // MutateEntity runs `f` against the live entity holding the world

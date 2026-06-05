@@ -91,8 +91,11 @@ func (w *World) applyQueuedAction(entityID string, env *ActionEnvelope) ActionRe
 	// Fire historian hook on accepted actions so native engine verbs
 	// (move, speak, …) land in the run log + smoke scorer. SystemHost
 	// wires this to bus.Queue(ActionAccepted{...}); bare engine no-ops.
+	// Pass w.tick through so the callback doesn't have to read it back
+	// via CurrentTick — which would deadlock since we already hold
+	// the write lock here.
 	if res.Accepted && w.onActionAccepted != nil {
-		w.onActionAccepted(entityID, env.Verb, env.Raw)
+		w.onActionAccepted(entityID, env.Verb, w.tick, env.Raw)
 	}
 	return res
 }

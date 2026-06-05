@@ -200,12 +200,19 @@ type World struct {
 	// Used by SystemHost to emit an ActionAccepted historian event so
 	// native verbs (move, speak, …) that don't otherwise queue to the
 	// bus still show up in the run log + the scorer.
-	onActionAccepted func(entityID, verb string, raw []byte)
+	//
+	// CRITICAL: the hook fires inside Tick under the world write lock.
+	// It MUST NOT re-acquire any world lock (e.g. CurrentTick takes a
+	// read lock; sync.RWMutex doesn't allow write→read re-entry, that
+	// deadlocks the engine the first time any action lands). We pass
+	// the tick value through so the hook can build a stamped event
+	// without needing to read it back via a getter.
+	onActionAccepted func(entityID, verb string, tick uint64, raw []byte)
 }
 
 // SetOnActionAccepted installs the historian hook for accepted actions.
 // Call once after scenario install, before Tick() begins.
-func (w *World) SetOnActionAccepted(h func(entityID, verb string, raw []byte)) {
+func (w *World) SetOnActionAccepted(h func(entityID, verb string, tick uint64, raw []byte)) {
 	w.mu.Lock()
 	w.onActionAccepted = h
 	w.mu.Unlock()
@@ -634,7 +641,7 @@ func (w *World) Tick() {
 		w.mu.Unlock()
 	}()
 
-	w.tick++
+	atomic.AddUint64(&w.tick, 1)
 
 	// Drain queued actions FIRST. This serializes external agent intent
 	// with the tick clock — actions enqueued before tick N execute in

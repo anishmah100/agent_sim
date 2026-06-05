@@ -124,11 +124,15 @@ func (h *SystemHost) InstallInto() {
 	// shout, whisper, …) land in the historian. Without this, the
 	// only events on the bus come from systems that explicitly Queue();
 	// movement + speech were silent — the smoke scorer couldn't see them.
-	h.World.SetOnActionAccepted(func(entityID, verb string, raw []byte) {
+	//
+	// IMPORTANT: this fires inside Tick under the write lock. The hook
+	// receives the tick by parameter — calling h.World.CurrentTick()
+	// here would deadlock (write→read lock re-entry).
+	h.World.SetOnActionAccepted(func(entityID, verb string, tick uint64, raw []byte) {
 		h.Bus.Queue(ActionAccepted{
 			EntityID: entityID,
 			Verb:     verb,
-			Tick:     h.World.CurrentTick(),
+			Tick:     tick,
 		})
 	})
 }
