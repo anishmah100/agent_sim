@@ -87,7 +87,7 @@ Updated after each phase commit. Format:
 
 ### Wave 3
 - [done] AGENT-A6 — Rulebook MD+JSON pipeline (3d5d51c)
-- [pending] SUB-7 — Structured event-bus logging (JSONL + category gates)
+- [done] SUB-7 — Categorized JSONL logging + mute gate (5318091)
 - [pending] SUB-8 — Reasoning trace SDK + layered opt-in
 - [pending] AGENT-A2 — Layered observation renderer
 - [pending] AGENT-A3 — Heuristic reference bot

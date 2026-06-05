@@ -35,12 +35,28 @@ import (
 type AgentHub struct {
 	w *world.World
 
+	// Experiment-level flag. When false, the engine drops the
+	// `reasoning` field even if the agent opted in. Both must be true
+	// for traces to land in the historian. See
+	// docs/EXPERIMENT_SYSTEM_PLAN.md §8 + §11.
+	captureReasoning bool
+
+	// Optional callback the bus owner registers — receives the
+	// (entityID, actionID, verb, reasoning) tuple when both flags align.
+	// The wire layer doesn't import the historian directly, so main.go
+	// glues them together. nil = no capture even if flags are on.
+	OnReasoning func(entityID, actionID, verb, reasoning string)
+
 	mu       sync.Mutex
 	// agentSecret → agentRecord
 	registry map[string]*agentRecord
 	// agentID → live connection (only one at a time)
 	live map[string]*agentConn
 }
+
+// SetCaptureReasoning toggles the engine-level reasoning capture flag.
+// Call once at boot from main.go based on the experiment config.
+func (h *AgentHub) SetCaptureReasoning(on bool) { h.captureReasoning = on }
 
 // Count returns the number of currently-connected agents (used by
 // the /metrics endpoint).
@@ -57,6 +73,12 @@ type agentRecord struct {
 	Persona   map[string]any
 	VisionMode string
 	CadenceMs int
+
+	// ShareReasoning is the per-agent opt-in for capturing the
+	// `reasoning` trace attached to actions. Engine-level capture
+	// (-capture-reasoning) must ALSO be true for traces to land in
+	// the historian. See docs/EXPERIMENT_SYSTEM_PLAN.md §8.
+	ShareReasoning bool
 }
 
 type agentConn struct {
@@ -113,11 +135,12 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		UserToken   string                 `json:"user_token"`
-		PersonaBlob map[string]any         `json:"persona_blob"`
-		VisionMode  string                 `json:"vision_mode"`
-		CadenceMs   int                    `json:"cadence_ms"`
-		BindEntity  string                 `json:"bind_entity,omitempty"` // optional: claim an existing entity
+		UserToken      string                 `json:"user_token"`
+		PersonaBlob    map[string]any         `json:"persona_blob"`
+		VisionMode     string                 `json:"vision_mode"`
+		CadenceMs      int                    `json:"cadence_ms"`
+		BindEntity     string                 `json:"bind_entity,omitempty"` // optional: claim an existing entity
+		ShareReasoning bool                   `json:"share_reasoning,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(rw, "bad json", http.StatusBadRequest)
@@ -191,12 +214,13 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 	agentID := genID(16)
 	secret := genID(32)
 	rec := &agentRecord{
-		AgentID:    agentID,
-		EntityID:   entityID,
-		Secret:     secret,
-		Persona:    req.PersonaBlob,
-		VisionMode: req.VisionMode,
-		CadenceMs:  req.CadenceMs,
+		AgentID:        agentID,
+		EntityID:       entityID,
+		Secret:         secret,
+		Persona:        req.PersonaBlob,
+		VisionMode:     req.VisionMode,
+		CadenceMs:      req.CadenceMs,
+		ShareReasoning: req.ShareReasoning,
 	}
 	h.mu.Lock()
 	h.registry[secret] = rec
@@ -390,6 +414,17 @@ func (c *agentConn) handleMessage(raw []byte) {
 		var env world.ActionEnvelope
 		if err := json.Unmarshal(raw, &env); err != nil {
 			return
+		}
+		// Layered reasoning opt-in: forward to historian iff BOTH the
+		// experiment-level capture flag and the per-agent share flag are
+		// on, AND main.go installed an OnReasoning callback. Drop the
+		// reasoning field on the floor otherwise so it never reaches the
+		// trace log.
+		if env.Reasoning != "" &&
+			c.hub.captureReasoning &&
+			c.rec.ShareReasoning &&
+			c.hub.OnReasoning != nil {
+			c.hub.OnReasoning(c.rec.EntityID, env.ActionID, env.Verb, env.Reasoning)
 		}
 		res := c.hub.w.SubmitAction(c.rec.EntityID, &env)
 		c.ack(res)

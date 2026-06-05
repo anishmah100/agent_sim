@@ -35,17 +35,25 @@ async def register_agent(
     vision_mode: VisionMode = VisionMode.STRUCTURED,
     cadence_ms: int = 1000,
     bind_entity: Optional[str] = None,
+    share_reasoning: bool = False,
 ) -> AgentCredentials:
     """One-shot HTTP registration. Returns credentials to feed into Agent().
 
     Pass `bind_entity` to claim a specific existing entity (e.g.
     `npc_woodcutter`) instead of letting the engine pick the first
-    available agent-archetype body."""
+    available agent-archetype body.
+
+    Set `share_reasoning=True` to opt this agent's free-text reasoning
+    traces into the experiment's capture stream. The engine ignores
+    this unless it was launched with `-capture-reasoning` AS WELL —
+    layered opt-in keeps private bots' inner monologue out of the
+    log even when the experimenter forgets to flip the bot's flag."""
     body = {
         "user_token": user_token,
         "persona_blob": persona,
         "vision_mode": vision_mode.value,
         "cadence_ms": cadence_ms,
+        "share_reasoning": share_reasoning,
     }
     if bind_entity:
         body["bind_entity"] = bind_entity

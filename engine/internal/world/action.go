@@ -13,6 +13,11 @@ type ActionEnvelope struct {
 	InResponseToObs  uint64          `json:"in_response_to_obs,omitempty"`
 	Verb             string          `json:"verb"`
 	Priority         int             `json:"priority,omitempty"`
+	// Reasoning is a free-text trace the agent's tactical brain
+	// emits alongside the action. Captured only when the experiment's
+	// capture_reasoning flag AND the agent's share_reasoning flag are
+	// BOTH set — see docs/EXPERIMENT_SYSTEM_PLAN.md §8.
+	Reasoning        string          `json:"reasoning,omitempty"`
 	Raw              json.RawMessage `json:"-"`
 }
 

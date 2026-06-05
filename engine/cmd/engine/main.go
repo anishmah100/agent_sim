@@ -39,8 +39,9 @@ var (
 	flagBundle   = flag.String("bundle", "worlds/eldoria", "world bundle directory (contains bundle.toml + world.json). Preferred over -world/-scenario.")
 	flagWorld    = flag.String("world", "", "[legacy] direct path to a world.json. If set, overrides -bundle's world.")
 	flagScenario = flag.String("scenario", "", "[legacy] scenario package id. If set, overrides bundle's scenario.")
-	flagEventLog  = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
-	flagEventMute = flag.String("event-mute", "", "comma-separated list of event categories to drop (system, movement, combat, economy, social, agent_reasoning, world)")
+	flagEventLog          = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
+	flagEventMute         = flag.String("event-mute", "", "comma-separated list of event categories to drop (system, movement, combat, economy, social, agent_reasoning, world)")
+	flagCaptureReasoning  = flag.Bool("capture-reasoning", false, "engine-level enable for capturing per-action 'reasoning' traces. Per-agent share_reasoning must ALSO be true.")
 	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
 	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn. If empty, falls back to the bundle's npcs.config (if any).")
 	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
@@ -175,6 +176,19 @@ func main() {
 
 	hub := wire.NewViewerHub(ctx, w)
 	agents := wire.NewAgentHub(ctx, w)
+
+	// Layered reasoning capture. -capture-reasoning AND the per-agent
+	// share_reasoning flag must both be true for a trace to land in
+	// the historian. See docs/EXPERIMENT_SYSTEM_PLAN.md §8.
+	agents.SetCaptureReasoning(*flagCaptureReasoning)
+	agents.OnReasoning = func(entityID, actionID, verb, reasoning string) {
+		hist.LogReasoning(w.CurrentTick(), historian.ReasoningTrace{
+			EntityID:  entityID,
+			ActionID:  actionID,
+			Verb:      verb,
+			Reasoning: reasoning,
+		})
+	}
 
 	// Security middleware — CORS allowlist + per-IP rate limit on
 	// /register + JWT verification on /register. Each is opt-in via flag.

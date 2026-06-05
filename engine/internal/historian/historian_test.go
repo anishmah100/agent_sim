@@ -175,6 +175,42 @@ func TestCategoryGate_DropsDisabled(t *testing.T) {
 	}
 }
 
+func TestLogReasoning_LandsInRing(t *testing.T) {
+	h, err := New(8, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.LogReasoning(42, ReasoningTrace{
+		EntityID:  "hero",
+		ActionID:  "act-1",
+		Verb:      "move",
+		Reasoning: "heading to blacksmith to buy hammer",
+	})
+	recs := h.Recent(0, 0)
+	if len(recs) != 1 {
+		t.Fatalf("want 1 reasoning record, got %d", len(recs))
+	}
+	if recs[0].Category != CategoryReasoning {
+		t.Fatalf("category: want %q, got %q", CategoryReasoning, recs[0].Category)
+	}
+	if recs[0].Tick != 42 {
+		t.Fatalf("tick: %d", recs[0].Tick)
+	}
+}
+
+func TestLogReasoning_HonorsMute(t *testing.T) {
+	h, err := NewWithFilter(8, "", CategoryFilter{
+		Disabled: map[string]bool{CategoryReasoning: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.LogReasoning(7, ReasoningTrace{EntityID: "hero", ActionID: "x", Verb: "wait"})
+	if got := len(h.Recent(0, 0)); got != 0 {
+		t.Fatalf("muted reasoning should drop; got %d records", got)
+	}
+}
+
 func TestCategoryGate_NoFilterKeepsAll(t *testing.T) {
 	bus := eventbus.New()
 	h, err := New(8, "")

@@ -90,6 +90,54 @@ func classify(kind string) string {
 	return CategoryWorld
 }
 
+// ReasoningTrace is the historian's record shape for the per-action
+// free-text reasoning emitted by the tactical brain. The historian
+// records it in the same JSONL stream under category=agent_reasoning
+// so analysis tools can replay (action, reasoning) pairs in one pass.
+type ReasoningTrace struct {
+	EntityID  string `json:"entity_id"`
+	ActionID  string `json:"action_id"`
+	Verb      string `json:"verb"`
+	Reasoning string `json:"reasoning"`
+}
+
+// LogReasoning is the entry point main.go installs as wire.AgentHub.
+// OnReasoning. Writes a record under category=agent_reasoning regardless
+// of whether the agent_reasoning category is muted — the layered
+// opt-in (experiment + agent flags) already gated upstream, so muting
+// would be misleading at this point.
+func (h *Historian) LogReasoning(currentTick uint64, t ReasoningTrace) {
+	if h == nil {
+		return
+	}
+	if h.filter.Disabled != nil && h.filter.Disabled[CategoryReasoning] {
+		// Defensive: if the category is muted, drop anyway.
+		return
+	}
+	payload, _ := json.Marshal(t)
+	h.mu.Lock()
+	rec := Record{
+		Tick:     currentTick,
+		Seq:      h.seq,
+		Kind:     "ReasoningTrace",
+		Category: CategoryReasoning,
+		Payload:  json.RawMessage(payload),
+	}
+	h.seq++
+	h.ring[h.head] = rec
+	h.head = (h.head + 1) % h.cap
+	if h.head == 0 {
+		h.full = true
+	}
+	logFile := h.logFile
+	h.mu.Unlock()
+	if logFile != nil {
+		line, _ := json.Marshal(rec)
+		line = append(line, '\n')
+		_, _ = logFile.Write(line)
+	}
+}
+
 // Historian collects every event flowing through the bus.
 type Historian struct {
 	mu      sync.RWMutex
