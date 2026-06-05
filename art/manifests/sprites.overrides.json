@@ -1,0 +1,14 @@
+{
+  "_doc": "Hand-tuned overrides merged on top of the auto-detected catalog. Edit this file; regenerating sprites.json never blows away your tweaks. Keyed by sprite id (e.g. \"bld:000\"). Any field on the Sprite struct can be overridden; unspecified fields keep their auto-detected value.",
+  "_example": {
+    "bld:custom_palace": {
+      "path": "v2_custom_palace.png",
+      "label": "The Imperial Palace",
+      "kind": "civic",
+      "footprint_tiles": [8, 3],
+      "render_height_tiles": 6,
+      "enterable": true,
+      "interior_template": "town_hall"
+    }
+  }
+}

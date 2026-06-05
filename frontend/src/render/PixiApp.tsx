@@ -32,6 +32,7 @@ import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
 import { TileAtlas } from "./TileAtlas";
 import { setTileAtlas } from "./tiles";
+import { ArtCatalog, setArtCatalog } from "./ArtCatalog";
 
 export interface PixiHandle {
   app: Application;
@@ -157,6 +158,20 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
     (err) => {
       console.warn("character atlas load failed; using placeholders:", err);
+    },
+  );
+
+  // Art catalog — single source of truth for sprite ids. Loaded once;
+  // every resolver (Decoration / Entity / Interior / …) delegates here.
+  // Until the migration is finished, resolvers also keep their legacy
+  // fallbacks so a missing entry doesn't break rendering.
+  void ArtCatalog.load().then(
+    (cat) => {
+      setArtCatalog(cat);
+      console.log(`art catalog loaded: ${cat.size()} sprites`);
+    },
+    (err) => {
+      console.warn("art catalog load failed; resolvers will use legacy paths:", err);
     },
   );
 

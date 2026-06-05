@@ -10,6 +10,7 @@
 import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
+import { artCatalog } from "./ArtCatalog";
 
 // Padding (in tiles) around the viewport for decoration culling. Tall
 // decorations (trees, buildings) can poke up several tiles above their
@@ -233,21 +234,12 @@ export class DecorationLayer {
     wrap.zIndex = spec.y;
     this.container.addChild(wrap);
 
-    // Buildings get hover + click for interior entry. We use an
-    // EXPLICIT allowlist because the legacy bld:NNN range includes
-    // doors, lamps, signs, fences and other non-enterable props that
-    // would otherwise pop up an interior view. Audited by eye against
-    // art/processed/objects/buildings/obj_NNN.png and the v2 named
-    // building PNGs at art/processed/v2_*.png.
-    const enterableSprites: Record<string, true> = {
-      "bld:000": true,        // red-roof cottage
-      "bld:001": true,        // brown-roof cottage
-      "bld:blacksmith": true, // v2 stone smithy
-      "bld:town_hall": true,
-      "bld:granary": true,
-      "bld:watchtower": true,
-    };
-    const isBuilding = enterableSprites[spec.sprite] === true;
+    // Click-to-enter is driven by the art catalog's `enterable` flag,
+    // which is set per-sprite in art/manifests/sprites.json. Drops the
+    // old hard-coded `enterableSprites` Record entirely. Adding a new
+    // enterable building = one manifest edit.
+    const cat = artCatalog();
+    const isBuilding = cat ? cat.enterable(spec.sprite) : LEGACY_ENTERABLE.has(spec.sprite);
     if (isBuilding) {
       sp.eventMode = "static";
       sp.cursor = "pointer";
@@ -295,36 +287,69 @@ export class DecorationLayer {
 //   - v1 numeric: "bld:000", "veg:003", etc. — point at art/processed/objects/<cat>/obj_NNN.png
 //   - v2 named:   "bld:blacksmith", "veg:tree_oak", "fx:window_glow", "props:bed_red" etc.
 //     — point at the processed v2 sliced sheets.
+// Building IDs that historically opened an interior — used only as a
+// fallback when the art catalog hasn't loaded yet.
+const LEGACY_ENTERABLE = new Set([
+  "bld:000", "bld:001", "bld:blacksmith", "bld:town_hall",
+  "bld:granary", "bld:watchtower",
+]);
+
+// Legacy fallback for spriteUrl — kept ONLY for ids the catalog doesn't
+// yet cover (e.g. bld:stall_red_bread_open is still emitted by the
+// world generator under the bld: namespace; the catalog has it as
+// stall:red_bread_open). Once the generator is updated to use the
+// canonical category prefixes, this whole function can be deleted.
 const V2_BUILDING_NAMES = new Set([
   "blacksmith", "town_hall", "granary", "watchtower", "well",
 ]);
 function spriteUrl(id: string): string | null {
-  const [cat, num] = id.split(":");
-  if (!cat || !num) return null;
+  // Catalog wins when it has the id.
+  const cat = artCatalog();
+  if (cat) {
+    const u = cat.url(id);
+    if (u) return u;
+    // Also try the canonical-prefix alias for legacy ids the world
+    // generator still emits (bld:stall_*, bld:cottage_stage_*, etc.).
+    const aliasUrl = cat.url(legacyAlias(id));
+    if (aliasUrl) return aliasUrl;
+  }
 
-  // v2 named buildings — standalone PNGs at processed/v2_<name>.png
-  if (cat === "bld" && V2_BUILDING_NAMES.has(num)) {
+  // Legacy path templates — guarantee no regression while migration
+  // is in flight.
+  const [c, num] = id.split(":");
+  if (!c || !num) return null;
+  if (c === "bld" && V2_BUILDING_NAMES.has(num)) {
     return `${ENGINE_URL}/art/processed/v2_${num}.png`;
   }
-  // v2 vegetation/resources entities — sliced master sheet
-  if (cat === "veg" && /^[a-z]/.test(num)) {
+  if (c === "veg" && /^[a-z]/.test(num)) {
     return `${ENGINE_URL}/art/processed/v2_resources_world_master/${num}.png`;
   }
-  // v2 market stalls — sliced sheet
-  if (cat === "bld" && num.startsWith("stall_")) {
+  if (c === "bld" && num.startsWith("stall_")) {
     return `${ENGINE_URL}/art/processed/v2_market_stall/${num}.png`;
   }
-  // v2 construction stages — sliced sheet
-  if (cat === "bld" && (num.startsWith("cottage_stage_") || num.startsWith("wreckage_") || num.startsWith("scaffolding_"))) {
+  if (c === "bld" && (num.startsWith("cottage_stage_") || num.startsWith("wreckage_") || num.startsWith("scaffolding_"))) {
     return `${ENGINE_URL}/art/processed/v2_construction_stages/${num}.png`;
   }
-
-  // Legacy v1: numeric IDs → obj_NNN.png under category folder.
   const dir =
-    cat === "veg" ? "vegetation" :
-    cat === "bld" ? "buildings" :
-    cat === "int" ? "interior" :
-    cat === "item" ? "items" : null;
+    c === "veg" ? "vegetation" :
+    c === "bld" ? "buildings" :
+    c === "int" ? "interior" :
+    c === "item" ? "items" : null;
   if (!dir) return null;
   return OBJ_URL(dir, `obj_${num.padStart(3, "0")}.png`);
+}
+
+/** legacyAlias rewrites old-namespace ids to the catalog's canonical
+ *  prefix. bld:stall_red_bread_open → stall:red_bread_open;
+ *  bld:cottage_stage_0_blueprint → stage:cottage_stage_0_blueprint. */
+function legacyAlias(id: string): string {
+  const [c, num] = id.split(":");
+  if (!c || !num) return id;
+  if (c === "bld" && num.startsWith("stall_")) {
+    return "stall:" + num.slice("stall_".length);
+  }
+  if (c === "bld" && (num.startsWith("cottage_stage_") || num.startsWith("wreckage_") || num.startsWith("scaffolding_"))) {
+    return "stage:" + num;
+  }
+  return id;
 }
