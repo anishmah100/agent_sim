@@ -262,6 +262,7 @@ async def register_and_connect(
     vision_mode: VisionMode = VisionMode.STRUCTURED,
     cadence_ms: int = 1000,
     bind_entity: Optional[str] = None,
+    share_reasoning: bool = False,
     brain: Optional[Callable[[Observation], Awaitable[Optional[Action]]]] = None,
 ) -> Agent:
     """Convenience: register + connect + optionally run a brain loop.
@@ -272,6 +273,7 @@ async def register_and_connect(
         server, user_token=user_token, persona=persona,
         vision_mode=vision_mode, cadence_ms=cadence_ms,
         bind_entity=bind_entity,
+        share_reasoning=share_reasoning,
     )
     agent = Agent(creds)
     await agent.connect()
