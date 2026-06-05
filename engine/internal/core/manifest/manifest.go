@@ -29,12 +29,27 @@ type SystemDeclaration struct {
 type VerbDeclaration struct {
 	Verb             string          `json:"verb"`
 	Description      string          `json:"description"`
+	// Category is one of:
+	//   "core"   — engine-level primitive present in every world.
+	//   "common" — common-library verb, opt-in per world but reusable.
+	//   "novel"  — declared by this world's rules.star, world-specific.
+	// Defaults to "common" when the system doesn't set it; that matches
+	// the historical assumption (everything in scenarios/fantasy_town
+	// is reusable across fantasy worlds).
+	Category         string          `json:"category,omitempty"`
 	ParamsSchema     json.RawMessage `json:"params_schema"`
 	Preconditions    []string        `json:"preconditions"`
 	RejectionReasons []string        `json:"rejection_reasons"`
 	EmitsEvents      []string        `json:"emits_events,omitempty"`
 	Examples         []VerbExample   `json:"examples"`
 }
+
+// Category constants for VerbDeclaration.Category.
+const (
+	VerbCategoryCore   = "core"
+	VerbCategoryCommon = "common"
+	VerbCategoryNovel  = "novel"
+)
 
 type VerbExample struct {
 	Params json.RawMessage `json:"params"`
@@ -111,6 +126,13 @@ func (a *Aggregator) Build() Manifest {
 			}
 			if v.Examples == nil {
 				v.Examples = []VerbExample{}
+			}
+			// Default unset Category to "common" — historically all
+			// scenario/fantasy_town verbs are reusable across worlds.
+			// Engine-core primitives (movement, observation, audibility)
+			// explicitly set "core" when they land here in a later phase.
+			if v.Category == "" {
+				v.Category = VerbCategoryCommon
 			}
 		}
 	}

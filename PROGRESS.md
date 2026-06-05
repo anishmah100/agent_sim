@@ -63,8 +63,8 @@ this into the smoke run + the default `start.sh` launch.
 
 | Wave | Phases | Status | Notes |
 |---|---|---|---|
-| 1 | World 1–2 | pending | Bundle refactor + Starlark DSL |
-| 2 | Substrate 5–6 + Agent A1 | pending | |
+| 1 | World 1–2 | done | Bundle refactor + Starlark DSL (c13baf4, 728ed24) |
+| 2 | Substrate 5–6 + Agent A1 | in_progress | |
 | 3 | Agent A6, Substrate 7–8, Agent A2–A3 | pending | |
 | 4 | Agent A4–A5 + Substrate 9–10 + World 3 | pending | |
 | 5 | Agent A7–A8 + Substrate 11–13 | pending | |

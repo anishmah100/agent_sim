@@ -147,6 +147,19 @@ func (a *WorldAdapter) InsideBuilding(entityID string) string {
 	return e.InsideBuilding
 }
 
+// Tuning / TuningInt / TuningBool — declarative-ruleset access. Reads
+// from World.Rules with nil-safe defaults so legacy bundles that don't
+// declare [rules.file] keep working with the supplied defaults.
+func (a *WorldAdapter) Tuning(name string, defaultValue float64) float64 {
+	return a.W.Rules.GetFloat(name, defaultValue)
+}
+func (a *WorldAdapter) TuningInt(name string, defaultValue int) int {
+	return a.W.Rules.GetInt(name, defaultValue)
+}
+func (a *WorldAdapter) TuningBool(name string, defaultValue bool) bool {
+	return a.W.Rules.GetBool(name, defaultValue)
+}
+
 // LockWrite / UnlockWrite / LockRead / UnlockRead expose locking for
 // the pipeline. World uses sync.RWMutex internally.
 func (a *WorldAdapter) LockWrite()   { a.W.mu.Lock() }

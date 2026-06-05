@@ -100,6 +100,31 @@ func TestLoadBundle_DevTestHasNoRules(t *testing.T) {
 	}
 }
 
+func TestLoadBundle_EldoriaTuningsReachAdapter(t *testing.T) {
+	// End-to-end test: eldoria's rules.star declares attack_damage=10
+	// (vs the engine default of 12). After LoadBundle, that value must
+	// be visible through the WorldAdapter's Tuning API — that's the
+	// path systems (combat, money) take when applying gameplay rules.
+	dir := filepath.Join("..", "..", "..", "worlds", "eldoria")
+	w, _, err := LoadBundle(dir)
+	if err != nil {
+		t.Fatalf("LoadBundle: %v", err)
+	}
+	// Hand-build a WorldAdapter the way main.go does; we don't need a
+	// real Bus + spatial.Index here because we only exercise the tuning
+	// methods.
+	a := NewWorldAdapter(w, nil, nil)
+	if got := a.TuningInt("attack_damage", 12); got != 10 {
+		t.Fatalf("eldoria attack_damage through adapter: want 10, got %d", got)
+	}
+	if got := a.TuningInt("starting_gold", 10); got != 25 {
+		t.Fatalf("eldoria starting_gold through adapter: want 25, got %d", got)
+	}
+	if got := a.Tuning("hunger_per_tick", 0); got != 0.0008 {
+		t.Fatalf("eldoria hunger_per_tick through adapter: want 0.0008, got %v", got)
+	}
+}
+
 func TestReadBundle_SchemaCheck(t *testing.T) {
 	// Read all four bundles — none should fail the schema check.
 	for _, name := range []string{"eldoria", "dev_test", "dev_wilderness", "soak_1000x1000"} {

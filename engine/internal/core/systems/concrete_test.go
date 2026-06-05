@@ -40,6 +40,9 @@ func (s *stubWorld) IsWalkable([2]int) bool            { return true }
 func (s *stubWorld) EnterBuilding(string, string, int) bool { return false }
 func (s *stubWorld) ExitBuilding(string) bool          { return false }
 func (s *stubWorld) InsideBuilding(string) string      { return "" }
+func (s *stubWorld) Tuning(_ string, d float64) float64 { return d }
+func (s *stubWorld) TuningInt(_ string, d int) int      { return d }
+func (s *stubWorld) TuningBool(_ string, d bool) bool   { return d }
 func (s *stubWorld) Chebyshev(a, b [2]int) int         {
 	dx, dy := a[0]-b[0], a[1]-b[1]
 	if dx < 0 {

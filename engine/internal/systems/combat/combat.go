@@ -66,9 +66,10 @@ func (s *System) seedSpawn(w syscore.World, e syscore.Entity) {
 	if !syscore.IsAgentArchetype(e.Archetype()) {
 		return
 	}
+	maxHP := w.TuningInt("max_hp", DefaultMaxHP)
 	if _, ok := e.GetExtra("hp"); !ok {
-		e.SetExtra("hp", DefaultMaxHP)
-		e.SetExtra("max_hp", DefaultMaxHP)
+		e.SetExtra("hp", maxHP)
+		e.SetExtra("max_hp", maxHP)
 	}
 	if _, ok := e.GetExtra("defending"); !ok {
 		e.SetExtra("defending", false)
@@ -118,10 +119,13 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 		res.Reason = "target_too_far"
 		return res
 	}
-	dmg := DefaultAttackDamage
+	dmg := w.TuningInt("attack_damage", DefaultAttackDamage)
 	defending, _ := other.GetExtra("defending")
 	if d, _ := defending.(bool); d {
-		dmg /= 2
+		// Tuned ratio (0..1). Default 0.5 matches the legacy "halve damage"
+		// behaviour. Eldoria's rules.star declares defend_damage_mul=0.5.
+		mul := w.Tuning("defend_damage_mul", 0.5)
+		dmg = int(float64(dmg) * mul)
 	}
 	svc := w.GetService("combat").(CombatService)
 	svc.DealDamage(w, other.ID(), dmg, "attack", e.ID())
@@ -162,7 +166,7 @@ func (s *System) handleHeal(w syscore.World, e syscore.Entity, env *syscore.Acti
 	}
 	hp := extrasInt(target, "hp")
 	maxHP := extrasInt(target, "max_hp")
-	newHP := hp + DefaultHealAmount
+	newHP := hp + w.TuningInt("heal_amount", DefaultHealAmount)
 	if newHP > maxHP {
 		newHP = maxHP
 	}

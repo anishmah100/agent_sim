@@ -52,6 +52,18 @@ type World interface {
 	EnterBuilding(entityID, buildingID string, maxTicks int) bool
 	ExitBuilding(entityID string) bool
 	InsideBuilding(entityID string) string
+
+	// Declarative-ruleset access. Tunings live in worlds/<name>/rules.star
+	// and are loaded into World.Rules at bundle load. The methods are
+	// nil-safe — a world without a ruleset returns the supplied default,
+	// which keeps engine code working when run via the legacy --world flag.
+	//
+	// Systems should ALWAYS prefer these over package-level constants so
+	// that per-world tunings (eldoria's hunger_per_tick = 0.0008 vs another
+	// world's higher value) take effect without code changes.
+	Tuning(name string, defaultValue float64) float64
+	TuningInt(name string, defaultValue int) int
+	TuningBool(name string, defaultValue bool) bool
 }
 
 // EntitySpec describes a not-yet-spawned entity. Pass to

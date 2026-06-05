@@ -57,7 +57,7 @@ func (s *System) seedSpawn(w syscore.World, e syscore.Entity) {
 		return
 	}
 	if _, ok := e.GetExtra("gold"); !ok {
-		e.SetExtra("gold", DefaultStartingGold)
+		e.SetExtra("gold", w.TuningInt("starting_gold", DefaultStartingGold))
 	}
 }
 
@@ -96,7 +96,7 @@ func (s *System) handlePay(w syscore.World, e syscore.Entity, env *syscore.Actio
 
 func (s *System) handleWork(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
 	svc := w.GetService("money").(MoneyService)
-	svc.Grant(w, e.ID(), WorkPayment, "work_for_pay")
+	svc.Grant(w, e.ID(), w.TuningInt("work_payment", WorkPayment), "work_for_pay")
 	return syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb, Accepted: true}
 }
 
