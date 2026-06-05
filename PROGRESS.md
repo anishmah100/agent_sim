@@ -109,10 +109,10 @@ Updated after each phase commit. Format:
 ### Wave 6
 - [pending] AGENT-A9 — Qwen depth smoke (10 agents × 30 min on Eldoria)
 - [done] SUB-14 — Iteration orchestrator (e691180)
-- [pending] WORLD-4 — Docs + soak verification on regenerated Eldoria
+- [done] WORLD-4 — Docs + soak verification (e5e15b3)
 
 ### Wave 7
-- [pending] AGENT-LINT — No-engine-import lint on sdk/ + examples/
+- [done] AGENT-LINT — No-engine-import lint (e5e15b3)
 - [pending] AGENT-A10 — Second-order ToM extension (research)
 
 ## How a new session resumes
