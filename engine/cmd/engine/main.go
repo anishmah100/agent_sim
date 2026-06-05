@@ -196,6 +196,12 @@ func main() {
 			Reasoning: reasoning,
 		})
 	}
+	agents.OnReflection = func(entityID, note string) {
+		hist.LogReflection(w.CurrentTick(), historian.ReflectiveNote{
+			EntityID: entityID,
+			Note:     note,
+		})
+	}
 
 	// Security middleware — CORS allowlist + per-IP rate limit on
 	// /register + JWT verification on /register. Each is opt-in via flag.

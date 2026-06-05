@@ -58,9 +58,22 @@ OBSERVATION:
 RECENT TACTICAL NOTES:
 {chr(10).join(state.tactical_notes)}
 
-Propose 1–3 actions to make progress on the top goal. Each action MUST
-be a valid verb from the rulebook. Include a brief reasoning string
-explaining WHY this batch.
+Available verbs (pick whichever fits the goal — not just movement):
+  move:    {{verb:"move",    target:[x,y]}}          step toward absolute tile
+  speak:   {{verb:"speak",   text:"..."}}            broadcast within 3 tiles
+  shout:   {{verb:"shout",   text:"..."}}            broadcast within 15 tiles
+  whisper: {{verb:"whisper", target:"<entity_id>", text:"..."}}  only that entity hears
+  enter:   {{verb:"enter",   target:"<building_id>"}} step inside an adjacent door
+  exit:    {{verb:"exit"}}                            step back outside
+  pickup:  {{verb:"pickup",  target:"<item_id>"}}    grab a nearby item
+  give:    {{verb:"give",    target:"<entity_id>", item:"<item_id>"}}
+  pay:     {{verb:"pay",     target:"<entity_id>", amount:<int>}}
+  look_at: {{verb:"look_at", target:"<entity_id_or_direction>"}}  hint, no state change
+  wait:    {{verb:"wait", ticks:60}}                  hold position
+
+Propose 1–3 actions. Prefer DIVERSE verbs over repeated moves — talking
+to nearby NPCs, entering buildings, and reacting to audible cues are all
+valid progress. Keep reasoning short (1-2 sentences).
 
 Output JSON with keys: reasoning (1-2 sentences), actions (list of
 {{verb, ...args}}).

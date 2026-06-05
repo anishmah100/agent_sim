@@ -208,6 +208,19 @@ class Agent:
             raise RuntimeError("not connected")
         await self._ws.send(json.dumps({"type": "set_cadence", "interval_ms": interval_ms}))
 
+    async def reflect(self, note: str) -> None:
+        """Send a reflective note for historian capture.
+
+        Engine-side fan-out is gated by `-capture-reasoning` AND the
+        per-agent `share_reasoning=True` opt-in (same layered consent
+        as per-action reasoning). Fire-and-forget; no ack.
+        """
+        if not self._ws:
+            raise RuntimeError("not connected")
+        if not note:
+            return
+        await self._ws.send(json.dumps({"type": "reflection", "note": note}))
+
     async def _read_loop(self) -> None:
         assert self._ws
         async for raw in self._ws:

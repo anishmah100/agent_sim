@@ -118,14 +118,47 @@ func (h *Historian) LogReasoning(currentTick uint64, t ReasoningTrace) {
 		return
 	}
 	payload, _ := json.Marshal(t)
-	h.mu.Lock()
-	rec := Record{
+	h.appendRecord(Record{
 		Tick:     currentTick,
-		Seq:      h.seq,
 		Kind:     "ReasoningTrace",
 		Category: CategoryReasoning,
 		Payload:  json.RawMessage(payload),
+	})
+}
+
+// ReflectiveNote is the slow-loop counterpart to ReasoningTrace.
+// Emitted by the brain's reflective layer (~once per minute) when it
+// updates goals or theory-of-mind. Stored under the same
+// agent_reasoning category so a single jq query reads both.
+type ReflectiveNote struct {
+	EntityID string `json:"entity_id"`
+	Note     string `json:"note"`
+}
+
+// LogReflection — symmetrical with LogReasoning. Gated by the same
+// layered opt-in upstream.
+func (h *Historian) LogReflection(currentTick uint64, n ReflectiveNote) {
+	if h == nil {
+		return
 	}
+	if h.filter.Disabled != nil && h.filter.Disabled[CategoryReasoning] {
+		return
+	}
+	payload, _ := json.Marshal(n)
+	h.appendRecord(Record{
+		Tick:     currentTick,
+		Kind:     "ReflectiveNote",
+		Category: CategoryReasoning,
+		Payload:  json.RawMessage(payload),
+	})
+}
+
+// appendRecord — shared write path for LogReasoning + LogReflection.
+// Assigns seq under the mutex, then writes the JSONL line outside the
+// mutex (the file is append-only and Write is atomic on POSIX).
+func (h *Historian) appendRecord(rec Record) {
+	h.mu.Lock()
+	rec.Seq = h.seq
 	h.seq++
 	h.ring[h.head] = rec
 	h.head = (h.head + 1) % h.cap

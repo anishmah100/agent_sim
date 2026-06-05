@@ -59,17 +59,21 @@ class Harness:
 
     # ---- Layer 2: reflective ----
 
-    def maybe_reflect(self) -> None:
+    def maybe_reflect(self) -> Optional[str]:
         """Reflective layer — runs every Nth tactical cycle so we
-        amortize the bigger LLM call."""
+        amortize the bigger LLM call. Returns the new reflective note
+        if one was produced this cycle (caller may ship it to the
+        engine for historian capture); None otherwise."""
         self._ticks_since_reflection += 1
         if self._ticks_since_reflection < self.reflective_every:
-            return
+            return None
         self._ticks_since_reflection = 0
         recent = list(self.state.tactical_notes)
         resp = self.llm.reflect(reflective_prompt(self.state, recent))
+        new_note: Optional[str] = None
         if note := resp.get("reflective_note"):
             self.state.push_reflective_note(note)
+            new_note = note
         for upd in resp.get("goal_updates", []):
             action = upd.get("action")
             if action == "push":
@@ -84,6 +88,7 @@ class Harness:
             entry = self.state.agent_register.get(entity_id)
             if entry:
                 entry.theory_of_me = new_tom
+        return new_note
 
     # ---- Layer 3: tactical ----
 

@@ -46,6 +46,12 @@ type AgentHub struct {
 	// The wire layer doesn't import the historian directly, so main.go
 	// glues them together. nil = no capture even if flags are on.
 	OnReasoning func(entityID, actionID, verb, reasoning string)
+	// OnReflection — installed by main.go so reflective notes (the
+	// brain's slower "step back and think" output) land in the
+	// historian under the agent_reasoning category. Layered opt-in
+	// is identical to OnReasoning: needs both the engine flag and
+	// the per-agent share_reasoning toggle.
+	OnReflection func(entityID, note string)
 
 	mu       sync.Mutex
 	// agentSecret → agentRecord
@@ -428,6 +434,23 @@ func (c *agentConn) handleMessage(raw []byte) {
 		}
 		res := c.hub.w.SubmitAction(c.rec.EntityID, &env)
 		c.ack(res)
+	case "reflection":
+		// Per-agent reflective layer output. Routes to the historian
+		// the same way reasoning does — gated on both the engine-level
+		// capture flag AND the per-agent share_reasoning opt-in, so a
+		// quiet agent in a noisy run stays quiet. The hub's
+		// OnReflection callback handles the actual write.
+		var p struct {
+			Note string `json:"note"`
+		}
+		if err := json.Unmarshal(raw, &p); err != nil || p.Note == "" {
+			return
+		}
+		if c.hub.captureReasoning &&
+			c.rec.ShareReasoning &&
+			c.hub.OnReflection != nil {
+			c.hub.OnReflection(c.rec.EntityID, p.Note)
+		}
 	case "set_cadence":
 		var p struct{ IntervalMs int `json:"interval_ms"` }
 		if err := json.Unmarshal(raw, &p); err == nil && p.IntervalMs >= 200 {

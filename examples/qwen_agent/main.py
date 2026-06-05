@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 
 from agent_sim_sdk import register_agent, Agent, VisionMode
 
@@ -66,22 +67,48 @@ async def main_async(args: argparse.Namespace) -> None:
                 if reflex is not None:
                     await agent.act_batch(reflex)
                     continue
-                harness.maybe_reflect()
+                new_reflection = harness.maybe_reflect()
                 batch = harness.tactical(obs)
             except Exception as e:
                 log.warning("brain cycle %d failed: %s — skipping", cycle, e)
                 continue
+            # Ship the reflective note (if maybe_reflect produced one) so
+            # the historian can log it under category=agent_reasoning.
+            # Fire-and-forget; gated upstream by share_reasoning + the
+            # engine's -capture-reasoning flag.
+            if new_reflection:
+                try:
+                    await agent.reflect(new_reflection)
+                except Exception as e:
+                    log.warning("reflect ship failed: %s", e)
             try:
                 await agent.act_batch(batch)
             except Exception as e:
                 log.warning("act_batch(%s) failed: %s",
                             [a.verb for a in batch.actions], e)
-    async with Agent(creds) as agent:
-        driver_task = asyncio.create_task(driver(agent))
+    agent = Agent(creds)
+    await agent.connect()
+    driver_task = asyncio.create_task(driver(agent))
+    try:
+        await asyncio.sleep(args.runtime_seconds)
+    finally:
+        driver_task.cancel()
         try:
-            await asyncio.sleep(args.runtime_seconds)
-        finally:
-            driver_task.cancel()
+            await asyncio.wait_for(driver_task, timeout=2.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+            pass
+        # Bound the WS shutdown — websockets.close() can hang on a
+        # half-dead socket after engine kill (keepalive ping timeout).
+        # 2s is more than enough for a clean close; on timeout we
+        # hard-exit so the smoke harness's `wait` doesn't block forever.
+        try:
+            await asyncio.wait_for(agent.close(), timeout=2.0)
+        except (asyncio.TimeoutError, Exception):
+            pass
+    # Belt + suspenders: even if a stray asyncio task is still alive,
+    # the agent has done its job. Force-exit so the OS reclaims
+    # sockets and the parent's `wait` returns.
+    os._exit(0)
 
 
 def main() -> None:

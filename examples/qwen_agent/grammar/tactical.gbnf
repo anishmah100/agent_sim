@@ -2,15 +2,19 @@ root ::= "{" ws "\"reasoning\":" ws string "," ws "\"actions\":" ws action-list 
 
 action-list ::= "[" ws action ws ("," ws action ws)* "]"
 
-action ::= move-action | speak-action | wait-action | look-action | pickup-action | give-action | pay-action
+action ::= move-action | speak-action | shout-action | whisper-action | wait-action | look-action | pickup-action | give-action | pay-action | enter-action | exit-action
 
 move-action ::= "{" ws "\"verb\":" ws "\"move\"" "," ws "\"target\":" ws "[" ws integer ws "," ws integer ws "]" ws "}"
 speak-action ::= "{" ws "\"verb\":" ws "\"speak\"" "," ws "\"text\":" ws string ws "}"
+shout-action ::= "{" ws "\"verb\":" ws "\"shout\"" "," ws "\"text\":" ws string ws "}"
+whisper-action ::= "{" ws "\"verb\":" ws "\"whisper\"" "," ws "\"target\":" ws string "," ws "\"text\":" ws string ws "}"
 wait-action ::= "{" ws "\"verb\":" ws "\"wait\"" ("," ws "\"ticks\":" ws integer)? ws "}"
 look-action ::= "{" ws "\"verb\":" ws "\"look_at\"" "," ws "\"target\":" ws string ws "}"
 pickup-action ::= "{" ws "\"verb\":" ws "\"pickup\"" "," ws "\"target\":" ws string ws "}"
 give-action ::= "{" ws "\"verb\":" ws "\"give\"" "," ws "\"target\":" ws string "," ws "\"item\":" ws string ws "}"
 pay-action ::= "{" ws "\"verb\":" ws "\"pay\"" "," ws "\"target\":" ws string "," ws "\"amount\":" ws integer ws "}"
+enter-action ::= "{" ws "\"verb\":" ws "\"enter\"" "," ws "\"target\":" ws string ws "}"
+exit-action ::= "{" ws "\"verb\":" ws "\"exit\"" ws "}"
 
 string ::= "\"" [a-zA-Z0-9 .,!?'\\-]* "\""
 integer ::= "-"? [0-9]+
