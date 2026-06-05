@@ -36,6 +36,39 @@ register_tuning("speak_radius",        8)
 register_tuning("shout_radius",        30)
 register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
 
+# ---- Stats ----
+# Per-entity stats this world tracks. The engine creates the extras
+# slots at spawn (defaulting to `default`) and clamps to [min, max] on
+# every system write. Phase A6 surfaces these in the auto-generated
+# rulebook so agents know what they can read about themselves and others.
+
+register_stat({
+    "key":         "hp",
+    "kind":        "int",
+    "min":         0,
+    "max":         100,
+    "default":     100,
+    "description": "Hit points. 0 = dead. Restored by `heal` verb.",
+})
+
+register_stat({
+    "key":         "gold",
+    "kind":        "int",
+    "min":         0,
+    "max":         1000000,
+    "default":     25,
+    "description": "Currency. Earned via work_for_pay or trade; spent via pay.",
+})
+
+register_stat({
+    "key":         "hunger",
+    "kind":        "float",
+    "min":         0.0,
+    "max":         1.0,
+    "default":     0.0,
+    "description": "0 = sated, 1 = starving. Grows at hunger_per_tick; above hunger_damage_above drains hp.",
+})
+
 # ---- Items ----
 # Minimal starter set — Phase WORLD-3/SUB-6 will scatter these around
 # the world via the editor + procedural pass.

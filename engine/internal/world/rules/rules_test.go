@@ -144,6 +144,49 @@ func TestLoadStarlark_HermeticDeterministic(t *testing.T) {
 	}
 }
 
+func TestLoadStarlark_Stats(t *testing.T) {
+	const src = `
+register_stat({
+    "key":         "hunger",
+    "kind":        "float",
+    "min":         0.0,
+    "max":         1.0,
+    "default":     0.0,
+    "description": "0=sated 1=starving",
+})
+
+register_stat({
+    "key":         "hp",
+    "kind":        "int",
+    "min":         0,
+    "max":         100,
+    "default":     100,
+    "description": "Hit points.",
+})
+`
+	rs, err := LoadStarlarkString("stats.star", src)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	h, ok := rs.Stat("hunger")
+	if !ok {
+		t.Fatal("hunger not registered")
+	}
+	if h.Kind != "float" || h.Max != 1.0 {
+		t.Fatalf("hunger fields: %+v", h)
+	}
+	hp, ok := rs.Stat("hp")
+	if !ok {
+		t.Fatal("hp not registered")
+	}
+	if hp.Kind != "int" || hp.Default != 100 {
+		t.Fatalf("hp fields: %+v", hp)
+	}
+	if got := len(rs.StatKeys()); got != 2 {
+		t.Fatalf("StatKeys: want 2, got %d", got)
+	}
+}
+
 func TestRuleSet_NilSafe(t *testing.T) {
 	// Engine code may legitimately have a nil RuleSet (no rules.star
 	// declared) — every getter must tolerate that.

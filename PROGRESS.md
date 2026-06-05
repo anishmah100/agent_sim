@@ -81,7 +81,7 @@ Updated after each phase commit. Format:
 - [done] WORLD-2 — Starlark rule engine + RuleSet wiring (728ed24)
 
 ### Wave 2
-- [pending] SUB-5 — Layered verb refactor (engine core + common-library + plugin registry)
+- [done] SUB-5 — Layered verb refactor + per-world tuning access (5cf3f05)
 - [pending] SUB-6 — World rule schema (tunings + items + stats + novel verbs in Starlark)
 - [pending] AGENT-A1 — SDK & wire alignment for new Observation/Action shapes
 

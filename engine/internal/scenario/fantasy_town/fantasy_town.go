@@ -21,6 +21,7 @@ import (
 	"github.com/anishmah100/agent_sim/engine/internal/systems/resources"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/trade"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/verbalquests"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/vitals"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
 
@@ -39,6 +40,7 @@ func Install(w *world.World) *world.SystemHost {
 	// register no spawn hooks; they consume what's already there.
 	host.Install(combat.New())
 	host.Install(money.New())
+	host.Install(vitals.New())
 	host.Install(inventory.New())
 	host.Install(property.New())
 	host.Install(resources.New())
