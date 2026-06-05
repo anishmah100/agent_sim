@@ -77,7 +77,7 @@ Updated after each phase commit. Format:
 `[status] PHASE_ID — title — commit SHA (date)`
 
 ### Wave 1
-- [done] WORLD-1 — World bundle data refactor + scenario relocation (TBD-SHA)
+- [done] WORLD-1 — World bundle data refactor + scenario relocation (c13baf4)
 - [pending] WORLD-2 — Starlark rule engine + new genworld tool
 
 ### Wave 2
