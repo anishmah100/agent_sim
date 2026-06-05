@@ -66,7 +66,7 @@ this into the smoke run + the default `start.sh` launch.
 | 1 | World 1–2 | done | Bundle refactor + Starlark DSL (c13baf4, 728ed24) |
 | 2 | Substrate 5–6 + Agent A1 | done | 5cf3f05, 5df8609, 39763a4 |
 | 3 | Agent A6, Substrate 7–8, Agent A2–A3 | done | 3d5d51c, 5318091, bbba8a0, e0d9c83, 4572455 |
-| 4 | Agent A4–A5 + Substrate 9–10 + World 3 | in_progress | |
+| 4 | Agent A4–A5 + Substrate 9–10 + World 3 | done | 0385bdc, 09793e4, 909bce5, 9a0c970, ee72c24 |
 | 5 | Agent A7–A8 + Substrate 11–13 | pending | |
 | 6 | Agent A9 + Substrate 14 + World 4 | pending | Climactic Qwen depth smoke |
 | 7 | Lint + Agent A10 | pending | Second-order ToM |
@@ -97,7 +97,7 @@ Updated after each phase commit. Format:
 - [done] AGENT-A5 — Qwen harness + GBNF grammars (09793e4)
 - [done] SUB-9 — jsonl2sqlite derived view + indexes (909bce5)
 - [done] SUB-10 — Mechanical metrics catalog (9a0c970)
-- [pending] WORLD-3 — Visual world editor (dev-mode panel)
+- [done] WORLD-3 — Visual editor scaffold (ee72c24)
 
 ### Wave 5
 - [pending] AGENT-A7 — Mental-state inspector UI (3-tab drawer + dev panel)
