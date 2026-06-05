@@ -7,7 +7,7 @@ both) is set per connection.
 
 from .client import Agent, register_and_connect, register_agent, AgentCredentials
 from .models import (
-    Observation, Action, Pos, Facing,
+    Observation, Action, ActionBatch, ActionResult, ReasonCode, Pos, Facing,
     Move, Speak, Whisper, Shout, LookAt, Interact,
     Pickup, Drop, Equip, Give, Attack, Defend, Heal, Wait,
     Pay, WorkForPay, Trade, Loot,
@@ -23,7 +23,7 @@ __all__ = [
     "Agent",
     "register_and_connect", "register_agent", "AgentCredentials",
     "Observation",
-    "Action",
+    "Action", "ActionBatch", "ActionResult", "ReasonCode",
     "Pos",
     "Facing",
     "VisionMode",

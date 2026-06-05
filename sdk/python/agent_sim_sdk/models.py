@@ -326,3 +326,68 @@ Action = Annotated[
     ],
     Field(discriminator="verb"),
 ]
+
+
+# === Action batch + result (Phase AGENT-A1) ===
+#
+# The 4-layer agent brain (see docs/AGENT_ARCHITECTURE_PLAN.md) emits
+# 1–3 actions per tactical cycle alongside a free-text `reasoning`
+# trace. The engine consumes them serially under per-tick ordering and
+# pushes one action_ack per action.
+
+
+class ActionResult(BaseModel):
+    """Result of a single submitted action.
+
+    The engine currently emits `accepted` + `reason` (legacy). The
+    architecture plan extends this to a structured triple — `reason_code`
+    (enum the harness branches on), `context` (machine-readable details
+    like the blocker entity ID), and `human_text` (the LLM-friendly
+    explanation). The SDK accepts BOTH shapes: if the engine still
+    sends the legacy format, we expose `reason` and leave the new
+    fields as None; when the engine ships richer acks the SDK already
+    knows how to read them.
+    """
+
+    action_id: str
+    verb: str
+    accepted: bool
+    # Legacy field. Kept for backwards-compat.
+    reason: Optional[str] = None
+    # New, richer fields (populated when engine sends them).
+    reason_code: Optional[str] = None
+    context: Optional[dict[str, Any]] = None
+    human_text: Optional[str] = None
+
+
+# Reason codes the engine currently emits (and the rich ones it will
+# emit once the new ActionResult shape lands engine-side). Harness
+# code can branch on these constants rather than substring matching
+# free-form strings.
+class ReasonCode(str, Enum):
+    BLOCKED_BY_ENTITY     = "blocked_by_entity"
+    BLOCKED_BY_TERRAIN    = "blocked_by_terrain"
+    OUT_OF_RANGE          = "out_of_range"
+    PRECONDITION_FAILED   = "precondition_failed"
+    INSUFFICIENT_RESOURCE = "insufficient_resource"
+    TARGET_GONE           = "target_gone"
+    WORLD_RULE_VIOLATED   = "world_rule_violated"
+    UNKNOWN_ENTITY        = "unknown_entity"
+    UNKNOWN_TARGET        = "unknown_target"
+    RATE_LIMITED          = "rate_limited"
+
+
+class ActionBatch(BaseModel):
+    """A receding-horizon batch of 1–3 actions plus a free-text
+    reasoning trace, as the tactical brain emits each cycle.
+
+    The engine consumes actions serially; if any fails, the rest are
+    dropped — the brain re-plans next cycle. See
+    docs/AGENT_ARCHITECTURE_PLAN.md §"Layer 3 / Tactical brain".
+    """
+
+    actions: list[Action]
+    reasoning: Optional[str] = None  # free-text, layered opt-in for capture
+    # Optional per-action interrupts; if interrupt_if fires on a later
+    # observation, the queue is dropped and tactical re-runs.
+    interrupt_if: Optional[dict[str, Any]] = None

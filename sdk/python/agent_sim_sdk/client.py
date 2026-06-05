@@ -15,7 +15,7 @@ import httpx
 import websockets
 from pydantic import TypeAdapter
 
-from .models import Action, Observation, VisionMode
+from .models import Action, ActionBatch, ActionResult, Observation, VisionMode
 
 _ObservationAdapter = TypeAdapter(Observation)
 
@@ -82,6 +82,10 @@ class Agent:
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
         self._inbox: asyncio.Queue[Observation] = asyncio.Queue(maxsize=64)
         self._reader_task: Optional[asyncio.Task] = None
+        # Per-action-id futures the harness can await for the engine's ack.
+        # Populated by act_batch (and the legacy act); resolved by
+        # _read_loop when an "action_ack" frame arrives.
+        self._pending_acks: dict[str, asyncio.Future[ActionResult]] = {}
 
     async def __aenter__(self) -> "Agent":
         await self.connect()
@@ -110,26 +114,78 @@ class Agent:
         while True:
             yield await self._inbox.get()
 
-    async def act(self, action: Action) -> None:
-        """Send a typed action. The engine returns an action_ack on the
-        same stream; this SDK collects acks into observations'
-        recent_self_results for now."""
+    async def act(self, action: Action) -> ActionResult:
+        """Send ONE action. Returns the engine's ack as ActionResult.
+
+        Preserved for backward compatibility. New brain code should
+        use `act_batch` so the engine's per-tick ordering applies
+        across the whole receding-horizon plan.
+        """
+        return (await self.act_batch(ActionBatch(actions=[action])))[0]
+
+    async def act_batch(
+        self,
+        batch: ActionBatch,
+        *,
+        timeout: float = 5.0,
+    ) -> list[ActionResult]:
+        """Send a 1–3-action plan + reasoning trace. Awaits one ack
+        per action; returns them in the same order as `batch.actions`.
+
+        The engine consumes actions serially under the per-tick lock;
+        if any rejects, the remainder still ACK (they're just rejected
+        without effect). The tactical brain reads the results and
+        re-plans next cycle.
+
+        If `batch.reasoning` is set and the experiment has opted into
+        reasoning capture (see docs/EXPERIMENT_SYSTEM_PLAN.md §8),
+        the engine writes it to the trace log.
+        """
         if not self._ws:
             raise RuntimeError("not connected")
-        payload = {
-            "type": "action",
-            "action_id": str(uuid.uuid4()),
-            **action.model_dump(),
-        }
+        import logging
+        loop = asyncio.get_running_loop()
+        futures: list[asyncio.Future[ActionResult]] = []
+        for action in batch.actions:
+            action_id = str(uuid.uuid4())
+            f: asyncio.Future[ActionResult] = loop.create_future()
+            self._pending_acks[action_id] = f
+            futures.append(f)
+            payload = {
+                "type": "action",
+                "action_id": action_id,
+                **action.model_dump(),
+            }
+            if batch.reasoning:
+                payload["reasoning"] = batch.reasoning
+            try:
+                await self._ws.send(json.dumps(payload))
+            except Exception as e:
+                logging.getLogger("agent_sim_sdk").warning(
+                    "act_batch(%s) send failed: %s", payload.get("verb"), e,
+                )
+                # Resolve all pending futures we just created with a fake
+                # rejection so callers don't hang forever.
+                for fid in [a for a in self._pending_acks if self._pending_acks[a] is f]:
+                    self._pending_acks.pop(fid, None)
+                if not f.done():
+                    f.set_exception(e)
+                raise
         try:
-            await self._ws.send(json.dumps(payload))
-        except Exception as e:
-            # Bubble up but log first so silent send failures show in
-            # bot logs (instrumentation added during emergence debugging).
-            import logging
-            logging.getLogger("agent_sim_sdk").warning(
-                "act(%s) send failed: %s", payload.get("verb"), e,
+            return await asyncio.wait_for(
+                asyncio.gather(*futures), timeout=timeout,
             )
+        except asyncio.TimeoutError:
+            # Sweep abandoned futures so the pending_acks map doesn't
+            # leak. asyncio.wait_for cancels the gather (and inner
+            # futures), so they're already done — but still need
+            # removing from the pending map.
+            futures_set = set(map(id, futures))
+            for action_id, fut in list(self._pending_acks.items()):
+                if id(fut) in futures_set:
+                    if not fut.done():
+                        fut.cancel()
+                    self._pending_acks.pop(action_id, None)
             raise
 
     async def set_cadence(self, interval_ms: int) -> None:
@@ -144,8 +200,12 @@ class Agent:
                 msg = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode())
             except Exception:
                 continue
-            if msg.get("type") != "observation":
-                # Future: dispatch action_ack / world_event_notify here.
+            mtype = msg.get("type")
+            if mtype == "action_ack":
+                self._dispatch_ack(msg)
+                continue
+            if mtype != "observation":
+                # Future: dispatch world_event_notify here.
                 continue
             payload = msg
             # Decode view_image if present.
@@ -157,6 +217,33 @@ class Agent:
             except Exception:
                 continue
             await self._inbox.put(obs)
+
+    def _dispatch_ack(self, msg: dict) -> None:
+        """Resolve the pending future for an action_ack frame.
+
+        Handles both the legacy ack shape (accepted + reason) and the
+        forthcoming richer shape (reason_code + context + human_text)
+        — see ActionResult.
+        """
+        action_id = msg.get("action_id")
+        if not action_id:
+            return
+        fut = self._pending_acks.pop(action_id, None)
+        if fut is None or fut.done():
+            return
+        try:
+            result = ActionResult(
+                action_id=action_id,
+                verb=msg.get("verb", ""),
+                accepted=bool(msg.get("accepted", False)),
+                reason=msg.get("reason"),
+                reason_code=msg.get("reason_code"),
+                context=msg.get("context"),
+                human_text=msg.get("human_text"),
+            )
+            fut.set_result(result)
+        except Exception as e:
+            fut.set_exception(e)
 
 
 async def register_and_connect(

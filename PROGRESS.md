@@ -82,7 +82,7 @@ Updated after each phase commit. Format:
 
 ### Wave 2
 - [done] SUB-5 — Layered verb refactor + per-world tuning access (5cf3f05)
-- [pending] SUB-6 — World rule schema (tunings + items + stats + novel verbs in Starlark)
+- [done] SUB-6 — Stats schema + vitals/hunger system (5df8609)
 - [pending] AGENT-A1 — SDK & wire alignment for new Observation/Action shapes
 
 ### Wave 3
