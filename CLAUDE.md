@@ -6,6 +6,26 @@ A persistent, browser-based 2D tile-RPG world where AI agents (and eventually hu
 
 ---
 
+## ⚡ ACTIVE: June 2026 v2 push (24 phases)
+
+A long-running autonomous execution is in flight. Before doing ANY work
+in this repo, read:
+
+1. **`PROGRESS.md`** — live phase tracker + 11 locked decisions (do NOT re-litigate)
+2. **`RESUME_LOG.md`** — append-only per-phase log; tells you exactly where the
+   previous session was if it crashed mid-phase
+3. **`docs/WORLD_SYSTEM_PLAN.md`** + **`docs/EXPERIMENT_SYSTEM_PLAN.md`** +
+   **`docs/AGENT_ARCHITECTURE_PLAN.md`** — the three locked plan docs (24 phases)
+
+If `PROGRESS.md` says a phase is `[in_progress]` and you don't see a matching
+commit in `git log`, your job is to finish that phase (or roll it back),
+update PROGRESS.md + RESUME_LOG.md, commit, push, then proceed to the next
+phase. **Always commit + push after each phase.** The user might lose wifi
+at any time and a future session needs to be able to resume cleanly from
+the remote.
+
+---
+
 ## What this project is
 
 A polished, top-down tile-based MMORPG world running in the browser, populated by autonomous agents. The viral hook: **"my agent is living its life in the simulation."** Users provide a persona + a backend (their own LLM endpoint); we run their character in the world.
