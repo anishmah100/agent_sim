@@ -10,12 +10,17 @@ backends.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 
 import httpx
+
+
+_log = logging.getLogger("qwen_llm")
 
 
 GRAMMAR_DIR = Path(__file__).parent / "grammar"
@@ -45,10 +50,10 @@ class QwenLLM:
     # ---- LLMClient protocol ----
 
     def persona(self, prompt: str, max_tokens: int = 500) -> dict:
-        return self._call(prompt, self._persona_grammar, max_tokens)
+        return self._call(prompt, self._persona_grammar, max_tokens, layer="persona")
 
     def reflect(self, prompt: str, max_tokens: int = 500) -> dict:
-        return self._call(prompt, self._reflective_grammar, max_tokens)
+        return self._call(prompt, self._reflective_grammar, max_tokens, layer="reflect")
 
     def tactical(self, prompt: str, max_tokens: int = 600) -> dict:
         # 200 was too tight: a single reasoning sentence eats ~150-180
@@ -56,11 +61,12 @@ class QwenLLM:
         # nested keys to be truncated mid-stream, and the grammar can't
         # rescue a cut-off output. 600 gives generous headroom and the
         # grammar still stops generation early when the JSON closes.
-        return self._call(prompt, self._tactical_grammar, max_tokens)
+        return self._call(prompt, self._tactical_grammar, max_tokens, layer="tactical")
 
     # ---- internals ----
 
-    def _call(self, prompt: str, grammar: str, max_tokens: int) -> dict:
+    def _call(self, prompt: str, grammar: str, max_tokens: int,
+              layer: str = "?") -> dict:
         """Submit the prompt with the GBNF grammar attached. Returns
         the parsed JSON object.
 
@@ -78,11 +84,20 @@ class QwenLLM:
             "grammar": grammar,
         }
         url = f"{self.base_url.rstrip('/')}/chat/completions"
+        t0 = time.monotonic()
         with httpx.Client(timeout=self.timeout_s) as h:
             resp = h.post(url, json=body)
             resp.raise_for_status()
             data = resp.json()
+        dt_ms = int((time.monotonic() - t0) * 1000)
         text = data["choices"][0]["message"]["content"]
+        # Per-call diagnostic: layer + wall-clock + token usage if the
+        # server emitted it. The smoke scorer uses these to compute
+        # p50/p99 tactical latencies + spot Qwen overload at scale.
+        usage = data.get("usage") or {}
+        _log.info("llm[%s] %dms prompt=%dch resp=%dch usage=%s",
+                  layer, dt_ms, len(prompt), len(text),
+                  {k: usage.get(k) for k in ("prompt_tokens", "completion_tokens")} if usage else "{}")
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:

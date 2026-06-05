@@ -433,6 +433,16 @@ func (c *agentConn) handleMessage(raw []byte) {
 			c.hub.OnReasoning(c.rec.EntityID, env.ActionID, env.Verb, env.Reasoning)
 		}
 		res := c.hub.w.SubmitAction(c.rec.EntityID, &env)
+		// Diagnostic: log every rejection with the dispatcher's reason
+		// so the smoke + downstream analysis can see what verbs the
+		// agent attempted but the engine refused. Without this, an
+		// agent that thinks it's acting but is being rejected (bad
+		// target, locked door, target_too_far, ...) looks identical
+		// to one that's idle.
+		if !res.Accepted {
+			log.Printf("action rejected: agent=%s entity=%s verb=%s reason=%q",
+				c.rec.AgentID, c.rec.EntityID, env.Verb, res.Reason)
+		}
 		c.ack(res)
 	case "reflection":
 		// Per-agent reflective layer output. Routes to the historian

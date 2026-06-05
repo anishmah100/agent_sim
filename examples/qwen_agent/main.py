@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import logging
 import os
+import time
 
 from agent_sim_sdk import register_agent, Agent, VisionMode
 
@@ -60,28 +61,53 @@ async def main_async(args: argparse.Namespace) -> None:
         cycle = 0
         async for obs in agent.observations():
             cycle += 1
-            log.info("brain cycle %d entered, obs_id=%s",
-                     cycle, getattr(obs, "obs_id", "?"))
+            cycle_t0 = time.monotonic()
+            # Verbose: surface where the agent is + what it sees at the
+            # top of each cycle so a postmortem can reconstruct why a
+            # particular tactical batch came out the way it did.
+            self_state = getattr(obs, "self", None)
+            pos = getattr(self_state, "pos", None)
+            facing = getattr(self_state, "facing", None)
+            visible_ents = len(getattr(obs, "visible_entities", []) or [])
+            visible_objs = len(getattr(obs, "visible_objects", []) or [])
+            audible = len(getattr(obs, "audible", []) or [])
+            log.info(
+                "cycle %d obs_id=%s tick=%s pos=%s facing=%s visible_e=%d visible_o=%d audible=%d",
+                cycle, getattr(obs, "obs_id", "?"),
+                getattr(obs, "world_tick", "?"),
+                pos, facing, visible_ents, visible_objs, audible,
+            )
             try:
                 reflex = harness.reflex(obs)
                 if reflex is not None:
+                    log.info("cycle %d -> REFLEX batch verbs=%s reasoning=%r",
+                             cycle, [a.verb for a in reflex.actions],
+                             (reflex.reasoning or "")[:120])
                     await agent.act_batch(reflex)
                     continue
                 new_reflection = harness.maybe_reflect()
                 batch = harness.tactical(obs)
             except Exception as e:
-                log.warning("brain cycle %d failed: %s — skipping", cycle, e)
+                log.warning("cycle %d failed: %s — skipping", cycle, e)
                 continue
             # Ship the reflective note (if maybe_reflect produced one) so
             # the historian can log it under category=agent_reasoning.
             # Fire-and-forget; gated upstream by share_reasoning + the
             # engine's -capture-reasoning flag.
             if new_reflection:
+                log.info("cycle %d -> REFLECTION (%dch): %r",
+                         cycle, len(new_reflection), new_reflection[:200])
                 try:
                     await agent.reflect(new_reflection)
                 except Exception as e:
                     log.warning("reflect ship failed: %s", e)
             try:
+                log.info(
+                    "cycle %d -> TACTICAL verbs=%s reasoning=%r (cycle_dt=%dms)",
+                    cycle, [a.verb for a in batch.actions],
+                    (batch.reasoning or "")[:160],
+                    int((time.monotonic() - cycle_t0) * 1000),
+                )
                 await agent.act_batch(batch)
             except Exception as e:
                 log.warning("act_batch(%s) failed: %s",

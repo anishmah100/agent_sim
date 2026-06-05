@@ -99,9 +99,17 @@ def score(path: str) -> int:
     ]
 
     print(f"events:      {sum(by_kind.values())} total")
+    print(f"by_kind:     {dict(by_kind)}")
     print(f"by_category: {dict(by_category)}")
     print(f"verbs seen:  {sorted(verbs_seen)}")
     print(f"actors:      {sorted(unique_actors)}")
+    print(f"counters:    speech={len(speech_lines)} multi_turn={multi_turn} "
+          f"payments={payment_count} enters={enters} exits={exits} "
+          f"reasoning_traces={reasoning_count} reflections={reflection_count}")
+    if speech_lines[:3]:
+        print("speech sample:")
+        for s in speech_lines[:3]:
+            print(f"  - {s.get('Speaker','?')}: {s.get('Text','')!r}")
     print()
     print("pass criteria:")
     all_pass = True
