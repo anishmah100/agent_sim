@@ -119,12 +119,12 @@ var towns = []town{
 	{"Greenfield", "greenfield", 620, 780, 0},
 	{"Westgate", "westgate", 600, 950, 0},
 	{"Oakshade", "oakshade", 880, 800, 0},
-	{"Eastfall", "eastfall", 1120, 870, 0},
+	{"Eastfall", "eastfall", 1140, 850, 0},
 	{"Greenrun", "greenrun", 700, 1020, 0},
 	// Saltport satellites:
 	{"Cliffhaven", "cliffhaven", 1140, 530, 0},
 	{"Hawkspire", "hawkspire", 1110, 800, 0},
-	{"Saltwatch", "saltwatch", 1170, 1000, 0},
+	{"Saltwatch", "saltwatch", 1170, 880, 0},
 	// Dunehallow + Lakeshore satellites:
 	{"Sandholme", "sandholme", 920, 1380, 0},
 	{"Driftwell", "driftwell", 460, 1320, 0},
