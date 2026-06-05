@@ -100,7 +100,7 @@ Updated after each phase commit. Format:
 - [done] WORLD-3 — Visual editor scaffold (ee72c24)
 
 ### Wave 5
-- [pending] AGENT-A7 — Mental-state inspector UI (3-tab drawer + dev panel)
+- [done] AGENT-A7 — 3-tab mental-state drawer (7b13e20)
 - [pending] AGENT-A8 — Agent tests tier 1+2 (unit + StubLLM integration)
 - [pending] SUB-11 — LLM-as-judge stub (Anthropic flag off; structured summarizer)
 - [pending] SUB-12 — Experiment framework + exp CLI
