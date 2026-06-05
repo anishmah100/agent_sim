@@ -42,23 +42,38 @@ export class TileAtlas {
 
   static async load(): Promise<TileAtlas> {
     const atlas = new TileAtlas();
+    console.log("[atlas] fetching manifest", MANIFEST_URL);
     const r = await fetch(MANIFEST_URL);
     if (!r.ok) throw new Error(`tile manifest ${r.status}`);
     const m = (await r.json()) as Manifest;
+    console.log(`[atlas] manifest ok: ${m.tiles.length} tiles, dir=${m.tile_dir}`);
 
-    for (const t of m.tiles) {
-      try {
-        const tex = await Assets.load<Texture>(TILE_URL(m.tile_dir, t.name));
+    // Parallel-load tiles. Sequential await was costing ~50ms per tile
+    // and could hang the whole pipeline if a single load stalled.
+    const results = await Promise.allSettled(
+      m.tiles.map(async (t) => {
+        const url = TILE_URL(m.tile_dir, t.name);
+        const tex = await Assets.load<Texture>(url);
         tex.source.scaleMode = "nearest";
-        atlas.byName.set(t.name, tex);
-      } catch (e) {
-        console.warn(`tile load failed: ${t.name}`, e);
+        return { name: t.name, tex };
+      }),
+    );
+    let okCount = 0;
+    for (const res of results) {
+      if (res.status === "fulfilled") {
+        atlas.byName.set(res.value.name, res.value.tex);
+        okCount++;
+      } else {
+        console.warn("[atlas] tile load failed:", res.reason);
       }
     }
+    console.log(`[atlas] ${okCount}/${m.tiles.length} tile textures loaded`);
+
     for (const [kind, name] of Object.entries(m.kind_defaults)) {
       const tex = atlas.byName.get(name);
       if (tex) atlas.defaultsByKind.set(kind as TileKind, tex);
     }
+    console.log(`[atlas] kind defaults registered: ${atlas.defaultsByKind.size}`);
     return atlas;
   }
 }

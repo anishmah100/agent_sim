@@ -7,9 +7,21 @@
 // upward. The footprint tile is the one that goes into the engine's
 // collision occupant map.
 
-import { Assets, Container, Graphics, Sprite, Texture } from "pixi.js";
+import { Assets, Container, Graphics, Rectangle, Sprite, Texture } from "pixi.js";
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
+
+// Padding (in tiles) around the viewport for decoration culling. Tall
+// decorations (trees, buildings) can poke up several tiles above their
+// footprint, so we keep a generous vertical padding ring to avoid
+// pop-in at the top edge.
+const DECO_PAD_TILES = 24;
+
+// Per-frame creation budget. Each decoration is a Container + Sprite +
+// optional shadow + optional outline filter — heavier than a tile.
+const DECOS_PER_FRAME = 80;
+// Throttle: defers refresh in tight ticker loops.
+const DECO_REFRESH_INTERVAL_MS = 20;
 
 const ENGINE_URL =
   import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
@@ -49,6 +61,19 @@ export class DecorationLayer {
   private cache = new Map<string, Texture>();
   private clickHandlers: Array<(ev: BuildingClickEvent) => void> = [];
 
+  // Viewport culling state. We keep the spec list and a spatial bucket
+  // so refreshVisible() can rapidly find decorations in the viewport.
+  // Bucket size = 64 tiles (covers most large worlds in <1000 buckets).
+  private static readonly BUCKET = 64;
+  private specs: DecorationSpec[] = [];
+  private bucketIndex = new Map<string, number[]>(); // "bx,by" → spec indices
+  // Materialized sprite per spec index, present iff currently in view.
+  private liveSprites = new Map<number, Container>();
+  // Track last viewport rect to skip no-op refreshes.
+  private vx0 = 0; private vy0 = 0; private vx1 = 0; private vy1 = 0;
+  private hasVis = false;
+  private lastRefreshMs = 0;
+
   constructor() {
     this.container = new Container();
     this.container.label = "decorations";
@@ -65,6 +90,21 @@ export class DecorationLayer {
 
   async load(specs: DecorationSpec[]): Promise<void> {
     this.clear();
+    this.specs = specs.slice();
+    this.bucketIndex.clear();
+
+    // Build a spatial bucket so refreshVisible can find specs by region.
+    const BUCKET = DecorationLayer.BUCKET;
+    for (let i = 0; i < this.specs.length; i++) {
+      const s = this.specs[i];
+      const bx = Math.floor(s.x / BUCKET);
+      const by = Math.floor(s.y / BUCKET);
+      const key = `${bx},${by}`;
+      let arr = this.bucketIndex.get(key);
+      if (!arr) { arr = []; this.bucketIndex.set(key, arr); }
+      arr.push(i);
+    }
+
     // Preload unique textures in parallel.
     const uniq = [...new Set(specs.map((s) => s.sprite))];
     await Promise.all(
@@ -84,14 +124,73 @@ export class DecorationLayer {
         }
       }),
     );
-    for (const spec of specs) {
+    // Sprites are materialized on first refreshVisible() call.
+    this.hasVis = false;
+  }
+
+  /** Add/remove decoration sprites so only the ones intersecting the
+   *  given viewport rect (in world pixel coords) are live. */
+  refreshVisible(viewRect: Rectangle): void {
+    if (this.specs.length === 0) return;
+    // Throttle to avoid recomputing the wanted set every frame during
+    // continuous drag.
+    const now = performance.now();
+    if (now - this.lastRefreshMs < DECO_REFRESH_INTERVAL_MS) return;
+    this.lastRefreshMs = now;
+    const pad = DECO_PAD_TILES;
+    const x0 = Math.floor(viewRect.x / TILE_SIZE_PX) - pad;
+    const y0 = Math.floor(viewRect.y / TILE_SIZE_PX) - pad;
+    const x1 = Math.ceil((viewRect.x + viewRect.width) / TILE_SIZE_PX) + pad;
+    const y1 = Math.ceil((viewRect.y + viewRect.height) / TILE_SIZE_PX) + pad;
+    if (this.hasVis && x0 === this.vx0 && y0 === this.vy0 && x1 === this.vx1 && y1 === this.vy1) {
+      return;
+    }
+    this.vx0 = x0; this.vy0 = y0; this.vx1 = x1; this.vy1 = y1;
+    this.hasVis = true;
+
+    // Find candidate spec indices via spatial buckets.
+    const BUCKET = DecorationLayer.BUCKET;
+    const bx0 = Math.floor(x0 / BUCKET);
+    const by0 = Math.floor(y0 / BUCKET);
+    const bx1 = Math.floor((x1 - 1) / BUCKET);
+    const by1 = Math.floor((y1 - 1) / BUCKET);
+    const wanted = new Set<number>();
+    for (let by = by0; by <= by1; by++) {
+      for (let bx = bx0; bx <= bx1; bx++) {
+        const arr = this.bucketIndex.get(`${bx},${by}`);
+        if (!arr) continue;
+        for (const i of arr) {
+          const s = this.specs[i];
+          if (s.x >= x0 && s.x < x1 && s.y >= y0 && s.y < y1) wanted.add(i);
+        }
+      }
+    }
+
+    // Remove sprites no longer wanted.
+    for (const [i, wrap] of this.liveSprites) {
+      if (!wanted.has(i)) {
+        wrap.destroy();
+        this.liveSprites.delete(i);
+      }
+    }
+    // Add new wanted sprites, capped to keep per-frame cost bounded.
+    let budget = DECOS_PER_FRAME;
+    for (const i of wanted) {
+      if (this.liveSprites.has(i)) continue;
+      const spec = this.specs[i];
       const tex = this.cache.get(spec.sprite);
       if (!tex) continue;
-      this.addSprite(spec, tex);
+      const wrap = this.addSprite(spec, tex);
+      if (wrap) this.liveSprites.set(i, wrap);
+      if (--budget <= 0) {
+        // Force a re-pass next frame so the rest get materialised.
+        this.hasVis = false;
+        break;
+      }
     }
   }
 
-  private addSprite(spec: DecorationSpec, tex: Texture): void {
+  private addSprite(spec: DecorationSpec, tex: Texture): Container {
     const wrap = new Container();
     const heightTiles = spec.height_tiles ?? 2.0;
     const footprintW = spec.footprint_w ?? 1;
@@ -102,19 +201,24 @@ export class DecorationLayer {
       ? footprintW * TILE_SIZE_PX
       : tex.width * (targetH / tex.height);
 
-    // Footprint center in local coords. (x, y) is the SW corner of the
-    // footprint, so the centre is half-a-footprint east of x.
+    // Footprint center in local coords.
     const footprintCenterX = (footprintW * TILE_SIZE_PX) / 2;
     const footprintBottom = TILE_SIZE_PX - 1;
 
-    const shadow = new Graphics();
-    shadow.ellipse(
-      footprintCenterX,
-      footprintBottom,
-      Math.max(5, targetW * 0.35),
-      Math.max(2, targetW * 0.10),
-    ).fill({ color: 0x000000, alpha: 0.28 });
-    wrap.addChild(shadow);
+    // Shadows are expensive (per-deco Graphics + ellipse fill). Only
+    // buildings (large footprint, sit "on" the ground) need them; small
+    // vegetation looks fine without and renders ~2× faster.
+    const wantsShadow = (spec.footprint_w ?? 1) >= 2;
+    if (wantsShadow) {
+      const shadow = new Graphics();
+      shadow.ellipse(
+        footprintCenterX,
+        footprintBottom,
+        Math.max(5, targetW * 0.35),
+        Math.max(2, targetW * 0.10),
+      ).fill({ color: 0x000000, alpha: 0.28 });
+      wrap.addChild(shadow);
+    }
 
     const sp = new Sprite(tex);
     sp.anchor.set(0.5, 1.0); // bottom-center
@@ -129,11 +233,21 @@ export class DecorationLayer {
     wrap.zIndex = spec.y;
     this.container.addChild(wrap);
 
-    // Buildings get hover + click. Pokemon-style enter UX: mouse-over
-    // glows an outline; click emits a building-click event that the
-    // top-level UI handles (opens the interior view).
-    const isBuilding = spec.sprite.startsWith("bld:") &&
-                       (spec.footprint_w ?? 1) >= 2;  // small props (well, signpost) excluded
+    // Buildings get hover + click for interior entry. We use an
+    // EXPLICIT allowlist because the legacy bld:NNN range includes
+    // doors, lamps, signs, fences and other non-enterable props that
+    // would otherwise pop up an interior view. Audited by eye against
+    // art/processed/objects/buildings/obj_NNN.png and the v2 named
+    // building PNGs at art/processed/v2_*.png.
+    const enterableSprites: Record<string, true> = {
+      "bld:000": true,        // red-roof cottage
+      "bld:001": true,        // brown-roof cottage
+      "bld:blacksmith": true, // v2 stone smithy
+      "bld:town_hall": true,
+      "bld:granary": true,
+      "bld:watchtower": true,
+    };
+    const isBuilding = enterableSprites[spec.sprite] === true;
     if (isBuilding) {
       sp.eventMode = "static";
       sp.cursor = "pointer";
@@ -158,10 +272,15 @@ export class DecorationLayer {
         for (const h of this.clickHandlers) h(ev);
       });
     }
+    return wrap;
   }
 
   clear(): void {
     for (const child of [...this.container.children]) child.destroy();
+    this.liveSprites.clear();
+    this.specs = [];
+    this.bucketIndex.clear();
+    this.hasVis = false;
   }
 
   destroy(): void {

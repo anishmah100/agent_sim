@@ -24,6 +24,7 @@ export type TileKind =
   | "path"
   | "water"
   | "stone"
+  | "sand"
   | "wall"
   | "floor_wood"
   | "void";
@@ -34,6 +35,7 @@ const TILE_COLORS: Record<TileKind, number> = {
   path:       0xb86f50,
   water:      0x0099db,
   stone:      0x8b9bb4,
+  sand:       0xeec07a,
   wall:       0x3a4466,
   floor_wood: 0xc28569,
   void:       0x181425,

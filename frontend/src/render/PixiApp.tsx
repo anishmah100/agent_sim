@@ -44,6 +44,10 @@ export interface PixiHandle {
   setSelectedEntity(id: string | null): void;
   onClick(handler: (ev: ClickEvent) => void): () => void;
   ingestAudible(events: AudibleEvent[]): void;
+  /** Returns the current viewport rectangle in TILE coords, clipped
+   *  to world bounds. Used by the minimap to draw a "what's visible
+   *  now" indicator. Null if no world has loaded yet. */
+  getViewportTileRect(): { x: number; y: number; w: number; h: number } | null;
   destroy(): void;
 }
 
@@ -98,6 +102,10 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     await interior.show(ev.sprite);
   });
   interior.onExit(() => interior.hide());
+  if (import.meta.env.DEV) {
+    (window as unknown as { __interior?: InteriorLayer }).__interior = interior;
+    (window as unknown as { __viewport?: typeof viewport }).__viewport = viewport;
+  }
 
   // Click handler — installed once. App-level listeners register
   // through the returned onClick().
@@ -115,21 +123,30 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   // visuals stay neutral).
   const dayNight = new DayNight(viewport);
 
-  // HD-2D filter stack — bloom + tilt-shift + saturation boost + slight
-  // chromatic aberration. Composed on top of the day/night ColorMatrix.
-  const hd2d = new HD2DStack(viewport);
-  void hd2d;  // referenced for type-keep
+  // HD-2D filter stack — bloom + saturation boost. Disabled by default
+  // because the bloom pass runs on the entire viewport every frame and
+  // dominates pan/zoom latency on the 1500×1500 Eldoria world. Re-enable
+  // by setting VITE_ENABLE_HD2D=1 in a small map.
+  if (import.meta.env.VITE_ENABLE_HD2D === "1") {
+    const hd2d = new HD2DStack(viewport);
+    void hd2d;
+  }
 
   // Per-frame tick for entity layer effects (selection ring pulse).
+  // Also refreshes viewport-culled tile + decoration sprites when the
+  // camera has moved — refreshVisible() is a no-op when the visible
+  // tile rect hasn't changed since the last call, so this is cheap.
   app.ticker.add((delta) => {
     entities.tick(delta.deltaMS);
-    // Build a quick map for the speech bubble layer to look up
-    // speakers by id. Map-walking per frame across ~50 entities is
-    // cheap; cache invalidation would complicate the simple model.
     const byId = new Map<string, EntityState>();
     for (const e of entities.getAll()) byId.set(e.entity_id, e);
     speechBubbles.tick(byId);
     dayNight.tick();
+    if (currentWorld) {
+      const view = viewport.getVisibleBounds();
+      tilemap.refreshVisible(view);
+      decorations.refreshVisible(view);
+    }
   });
 
   // Kick off the character atlas load in the background.
@@ -149,6 +166,9 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   void TileAtlas.load().then(
     (atlas) => {
       setTileAtlas(atlas);
+      if (import.meta.env.DEV) {
+        (window as unknown as { __tileAtlas?: TileAtlas }).__tileAtlas = atlas;
+      }
       if (currentWorld) tilemap.loadTileMap(currentWorld);
       console.log("tile atlas loaded — real overworld tiles now rendered");
     },
@@ -226,6 +246,18 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
     ingestAudible(events) {
       speechBubbles.ingest(events);
+    },
+
+    getViewportTileRect() {
+      if (!currentWorld) return null;
+      // viewport.left/top/right/bottom are in WORLD (pixel) coords.
+      const wTiles = currentWorld.width_tiles;
+      const hTiles = currentWorld.height_tiles;
+      const x = Math.max(0, viewport.left / TILE_SIZE_PX);
+      const y = Math.max(0, viewport.top / TILE_SIZE_PX);
+      const right = Math.min(wTiles, viewport.right / TILE_SIZE_PX);
+      const bottom = Math.min(hTiles, viewport.bottom / TILE_SIZE_PX);
+      return { x, y, w: Math.max(0, right - x), h: Math.max(0, bottom - y) };
     },
 
     destroy() {

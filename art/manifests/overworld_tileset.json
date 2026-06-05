@@ -585,6 +585,7 @@
     "path": "stone",
     "water": "water",
     "stone": "stone",
+    "sand": "sand",
     "wall": "cliff_face",
     "floor_wood": "dirt",
     "void": "cliff_solid_stone"

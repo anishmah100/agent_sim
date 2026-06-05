@@ -24,6 +24,9 @@ import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
 import { HUD } from "./HUD";
 import { Minimap } from "./Minimap";
+import { StoryFeed } from "./StoryFeed";
+import { JoinAgent } from "./JoinAgent";
+import { Onboarding } from "./Onboarding";
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
@@ -37,6 +40,7 @@ export function App() {
   const [rulebookOpen, setRulebookOpen] = createSignal(false);
   const [leaderboardsOpen, setLeaderboardsOpen] = createSignal(false);
   const [hudOpen, setHudOpen] = createSignal(true);
+  const [joinOpen, setJoinOpen] = createSignal(false);
   const [liveEntities, setLiveEntities] = createSignal<EntityState[]>([]);
   const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
   let canvasContainer!: HTMLDivElement;
@@ -63,7 +67,12 @@ export function App() {
     (globalThis as unknown as { __pixiHandle?: typeof pixiHandle }).__pixiHandle = pixiHandle;
 
     try {
-      const mapData = (await fetchWorldMap("dev_test")) as TileMapData;
+      // Ask the engine which world it has loaded, then fetch that JSON.
+      // The frontend used to hard-code "dev_test" but now adapts to
+      // whatever world start.sh booted.
+      const info = await fetchWorldInfo();
+      const worldName = info?.world ?? "dev_test";
+      const mapData = (await fetchWorldMap(worldName)) as TileMapData;
       pixiHandle.loadWorld(mapData);
       setWorldTiles((mapData as { tiles?: string[] }).tiles);
     } catch (e) {
@@ -223,6 +232,23 @@ export function App() {
           </button>
           <button
             type="button"
+            data-testid="join-agent-button"
+            onClick={() => setJoinOpen(true)}
+            style={{
+              padding: "4px 10px",
+              background: "#fee761",
+              color: "#181425",
+              border: "1px solid #fee761",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+              "font-weight": "600",
+            }}
+          >
+            join as agent
+          </button>
+          <button
+            type="button"
             onClick={() => {
               const tick = liveTick() ?? 0;
               const url = new URL(window.location.href);
@@ -321,26 +347,13 @@ export function App() {
         entities={liveEntities()}
         selfId={selectedId()}
         onTileClick={(x, y) => pixiHandle?.centerOn(x, y)}
+        getViewportTileRect={() => pixiHandle?.getViewportTileRect() ?? null}
       />
 
-      <div
-        style={{
-          position: "absolute",
-          bottom: "16px",
-          right: "16px",
-          width: "280px",
-          height: "240px",
-          background: "rgba(24, 20, 37, 0.85)",
-          border: "1px solid #3a4466",
-          "border-radius": "4px",
-          padding: "8px",
-          color: "#8b9bb4",
-          "font-size": "12px",
-          "z-index": "10",
-        }}
-      >
-        drama feed (Milestone 6)
-      </div>
+      <StoryFeed entityId={selectedId()} />
+
+      <JoinAgent open={joinOpen()} onClose={() => setJoinOpen(false)} />
+      <Onboarding />
     </div>
   );
 }
