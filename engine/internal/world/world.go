@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 type Facing string
@@ -46,6 +47,12 @@ type Entity struct {
 	CurrentAction string `json:"current_action,omitempty"`
 	actionTicks   int    // demo random action timer
 
+	// PlayerControlled — true when an external bot has bound to this
+	// entity. The engine's autonomous wander / demo-action loop SKIPS
+	// these entities so the bot's intent isn't overridden every few
+	// hundred ms by a random direction change. Toggled by SetPlayerControlled.
+	PlayerControlled bool `json:"player_controlled,omitempty"`
+
 	// InsideBuilding — non-empty when the entity is inside a building's
 	// interior. While set, the entity is hidden from the overworld
 	// render. Set to building sprite ID (e.g. "bld:000") + footprint
@@ -61,17 +68,45 @@ type Entity struct {
 	renderPos [2]float64
 }
 
+// publicExtraKeys — extras whitelist exposed to viewers. Anything not in
+// this set stays server-side (inventory, contracts, owner tokens, etc.).
+// Keep render-relevant + leaderboard-relevant keys here; private state
+// must NEVER leak through the viewer snapshot.
+var publicExtraKeys = map[string]bool{
+	"progress":    true, // construction 0..100 — drives stage sprite
+	"steps_done":  true,
+	"steps_total": true,
+	"kind":        true, // blueprint kind, item kind, etc.
+	"hp":          true,
+	"max_hp":      true,
+	"gold":        true,
+	"locked":      true, // building lock state
+}
+
 // MarshalJSON emits the render-friendly fields the frontend expects.
 func (e *Entity) MarshalJSON() ([]byte, error) {
+	var publicExtras map[string]any
+	if len(e.Extras) > 0 {
+		for k, v := range e.Extras {
+			if !publicExtraKeys[k] {
+				continue
+			}
+			if publicExtras == nil {
+				publicExtras = make(map[string]any, 4)
+			}
+			publicExtras[k] = v
+		}
+	}
 	return json.Marshal(struct {
-		EntityID      string     `json:"entity_id"`
-		Archetype     string     `json:"archetype"`
-		DisplayName   string     `json:"display_name,omitempty"`
-		Pos            [2]float64 `json:"pos"`
-		Facing         Facing     `json:"facing"`
-		CurrentAction  string     `json:"current_action,omitempty"`
-		LogicalTile    [2]int     `json:"logical_tile"`
-		InsideBuilding string     `json:"inside_building,omitempty"`
+		EntityID      string         `json:"entity_id"`
+		Archetype     string         `json:"archetype"`
+		DisplayName   string         `json:"display_name,omitempty"`
+		Pos            [2]float64    `json:"pos"`
+		Facing         Facing        `json:"facing"`
+		CurrentAction  string        `json:"current_action,omitempty"`
+		LogicalTile    [2]int        `json:"logical_tile"`
+		InsideBuilding string        `json:"inside_building,omitempty"`
+		Extras         map[string]any `json:"extras,omitempty"`
 	}{
 		EntityID:       e.EntityID,
 		Archetype:      e.Archetype,
@@ -81,6 +116,7 @@ func (e *Entity) MarshalJSON() ([]byte, error) {
 		CurrentAction:  e.CurrentAction,
 		LogicalTile:    e.LogicalTile,
 		InsideBuilding: e.InsideBuilding,
+		Extras:         publicExtras,
 	})
 }
 
@@ -107,6 +143,14 @@ type World struct {
 	tick     uint64
 	entities map[string]*Entity
 	rng      *rand.Rand
+
+	// Async action queue. WS goroutines enqueue without locking; tick
+	// drains at start of each tick under the write lock.
+	actionQueue chan *pendingAction
+
+	// Lock-free snapshot for observation builders. Replaced atomically
+	// at end of each tick.
+	snapshot atomic.Pointer[LiveSnapshot]
 
 	// Static walkability map (terrain only). True = walkable terrain.
 	walkable [][]bool
@@ -142,6 +186,20 @@ type World struct {
 	// consults verbHandlers and Tick() calls onTick.
 	verbHandlers map[string]func(*World, *Entity, *ActionEnvelope) ActionResult
 	onTick       func(*World, uint64)
+}
+
+// SetPlayerControlled toggles the PlayerControlled flag on an entity.
+// Called when an external WS agent binds/unbinds to an entity. Idempotent.
+// Returns false if the entity doesn't exist.
+func (w *World) SetPlayerControlled(entityID string, on bool) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	e := w.entities[entityID]
+	if e == nil {
+		return false
+	}
+	e.PlayerControlled = on
+	return true
 }
 
 // InstallScenario wires verb handlers and per-tick callback into the
@@ -245,6 +303,9 @@ func Load(path string) (*World, error) {
 		rng:           rand.New(rand.NewPCG(1, 2)),
 		occupants:     make(map[Tile]string),
 		buildingDoors: make(map[Tile]buildingRef),
+		// Cap at 16384 → at 1000 agents that's ~16 pending actions/agent.
+		// Excess yields a "queue_full" reject (backpressure signal).
+		actionQueue: make(chan *pendingAction, 16384),
 	}
 	w.visionBlocks = make([][]bool, fw.HeightTiles)
 	w.tileKindGrid = make([][]string, fw.HeightTiles)
@@ -475,11 +536,23 @@ func stepFacing(from, to Tile) Facing {
 	return FacingN
 }
 
-// findPath: BFS — fine for our 32×20 dev_test and adequate up to
-// ~100×100. We swap in heap-backed A* once maps get bigger.
+// findPath: BFS bounded by max manhattan distance. If the goal is too
+// far from start we reject early — agents requesting moves across a
+// 1000×1000 world would otherwise BFS through ~1M tiles per attempt and
+// block the tick.
+//
+// The 64-tile cap (~5× vision radius) is well above any single-step
+// move the engine itself initiates; long-haul paths must be requested as
+// a sequence of intermediate targets by the agent.
+const maxPathDistance = 64
+
 func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 	if start == goal {
 		return []Tile{start}
+	}
+	// Cheap manhattan reject before allocating BFS state.
+	if absInt(goal[0]-start[0])+absInt(goal[1]-start[1]) > maxPathDistance {
+		return nil
 	}
 	type node struct {
 		t      Tile
@@ -489,7 +562,10 @@ func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 	seen := map[Tile]int{start: 0}
 	queue := []int{0}
 	dirs := []Tile{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
-	for len(queue) > 0 {
+	// Visit cap as a second safety net — diagonals + obstacles can blow
+	// past manhattan in pathological maps. 4096 tiles ≈ 64² area covered.
+	const maxNodes = 4096
+	for len(queue) > 0 && len(visited) < maxNodes {
 		idx := queue[0]
 		queue = queue[1:]
 		cur := visited[idx].t
@@ -528,9 +604,20 @@ func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 
 func (w *World) Tick() {
 	w.mu.Lock()
-	defer w.mu.Unlock()
+	defer func() {
+		// Publish a fresh snapshot BEFORE releasing the lock so observation
+		// readers always see a consistent post-tick view.
+		w.publishSnapshot()
+		w.mu.Unlock()
+	}()
 
 	w.tick++
+
+	// Drain queued actions FIRST. This serializes external agent intent
+	// with the tick clock — actions enqueued before tick N execute in
+	// tick N, in FIFO order. Cap at 2048 to keep tick latency bounded.
+	w.drainActionQueue(2048)
+
 	if w.onTick != nil {
 		w.onTick(w, w.tick)
 	}
@@ -545,6 +632,28 @@ func (w *World) Tick() {
 		// them — composable-system OnTick callbacks already ran above
 		// and handle world-object state.
 		if !isAgentArchetype(e.Archetype) {
+			continue
+		}
+		// Skip bot-controlled entities — they receive commands from
+		// external WS agents and must NOT be auto-moved by the engine.
+		// Without this, an LLM's "Move east" gets overridden by the
+		// wander loop on the next tick and the bot can't reach goals.
+		if e.PlayerControlled {
+			// Still advance ongoing walks so move actions can complete.
+			if e.CurrentAction == "move" && e.WalkProgress < 1 {
+				e.WalkProgress += 1.0 / float64(TicksPerStep)
+				if e.WalkProgress >= 1 {
+					e.WalkProgress = 1
+					if len(e.walkPath) > 0 {
+						next := e.walkPath[0]
+						e.walkPath = e.walkPath[1:]
+						w.startMove(e, next)
+					} else {
+						e.CurrentAction = ""
+					}
+				}
+				e.recomputeRenderPos()
+			}
 			continue
 		}
 		// --- Inside a building: tick down, then exit. ---

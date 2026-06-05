@@ -224,26 +224,28 @@ func (w *World) EntityIDsUnlocked() []string {
 	return out
 }
 
-// SubmitAction validates + executes an action attributed to the given
-// entity ID. Returns an ActionResult the caller can ship back to the
-// agent over WS.
+// SubmitAction enqueues an action and waits for it to be applied at the
+// next tick. Latency 0–16ms. Strict per-tick ordering across all agents.
+//
+// Callers that want non-blocking semantics should use World.QueueAction
+// directly and drive the reply channel themselves.
 func (w *World) SubmitAction(entityID string, env *ActionEnvelope) ActionResult {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	e := w.entities[entityID]
-	if e == nil {
-		return ActionResult{
-			ActionID: env.ActionID, Verb: env.Verb,
-			Accepted: false, Reason: "unknown_entity",
-		}
-	}
-	return w.Dispatch(e, env)
+	return <-w.QueueAction(entityID, env)
 }
 
-// BuildObservationFor — public observation builder.
+// BuildObservationFor — LOCK-FREE observation builder. Reads the latest
+// published snapshot; if none yet (cold start before first tick) falls
+// back to the locked path for a one-shot bootstrap obs.
 func (w *World) BuildObservationFor(entityID string, obsID uint64, opts *AgentObservationOpts) *Observation {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+	if snap := w.snapshot.Load(); snap != nil {
+		e := snap.Entities[entityID]
+		if e == nil {
+			return nil
+		}
+		return snap.buildObservationSnap(e, obsID, opts)
+	}
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	e := w.entities[entityID]
 	if e == nil {
 		return nil

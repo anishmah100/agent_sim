@@ -67,8 +67,31 @@ type agentConn struct {
 	cadence  atomic.Int64
 	lastObs  atomic.Uint64
 
+	// Closed exactly once by readPump's defer to signal "stop sending".
+	// All senders (observation loop, ack) must select on this; sending
+	// to a closed `send` channel would otherwise panic.
+	done     chan struct{}
+	closedAt atomic.Bool
+
 	actionsMu  sync.Mutex
 	actionsWin []int64 // ms timestamps of recent actions; trimmed to last 1s
+}
+
+// trySend pushes data onto c.send without blocking and without racing
+// against teardown. Returns true on success, false if the buffer is
+// full or the connection is shutting down.
+func (c *agentConn) trySend(data []byte) bool {
+	if c.closedAt.Load() {
+		return false
+	}
+	select {
+	case <-c.done:
+		return false
+	case c.send <- data:
+		return true
+	default:
+		return false
+	}
 }
 
 func NewAgentHub(ctx context.Context, w *world.World) *AgentHub {
@@ -142,8 +165,17 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if entityID == "" {
-			http.Error(rw, "no free agent-eligible entities", http.StatusServiceUnavailable)
-			return
+			// Auto-spawn a fresh wanderer at a random walkable tile. This
+			// makes the engine elastic — any number of agents can join even
+			// in a sparse world. The spawned entity is removed on agent
+			// disconnect (see readPump cleanup).
+			spawned, err := h.w.SpawnAgentEntity("wanderer", "")
+			if err != nil {
+				http.Error(rw, "spawn failed: "+err.Error(),
+					http.StatusServiceUnavailable)
+				return
+			}
+			entityID = spawned
 		}
 	}
 	target := h.w.EntityByID(entityID)
@@ -214,6 +246,16 @@ func (h *AgentHub) HandleWS(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if prev, hasLive := h.live[rec.AgentID]; hasLive {
+		// Stomp the old connection. Signal teardown via done THEN close
+		// the TCP; the old readPump will exit, but its defer compares
+		// h.live[id] to itself and won't delete OUR new entry.
+		prev.closedAt.Store(true)
+		select {
+		case <-prev.done:
+			// already torn down
+		default:
+			close(prev.done)
+		}
 		_ = prev.conn.Close()
 	}
 	c := &agentConn{
@@ -221,14 +263,22 @@ func (h *AgentHub) HandleWS(rw http.ResponseWriter, r *http.Request) {
 		rec:  rec,
 		conn: conn,
 		send: make(chan []byte, 16),
+		done: make(chan struct{}),
 	}
 	c.cadence.Store(int64(rec.CadenceMs))
 	h.live[rec.AgentID] = c
 	h.mu.Unlock()
 
+	// Mark the entity as player-controlled so the engine's autonomous
+	// wander loop stops overriding the bot's move commands.
+	h.w.SetPlayerControlled(rec.EntityID, true)
+
 	log.Printf("agent connect: %s (entity=%s)", rec.AgentID, rec.EntityID)
 	go c.writePump()
 	c.readPump()
+	// Clear the flag on disconnect so the NPC resumes autonomous
+	// behavior (and so a subsequent bot can re-bind without races).
+	h.w.SetPlayerControlled(rec.EntityID, false)
 }
 
 // observationLoop ticks every 100 ms; for each live agent, if their
@@ -279,12 +329,11 @@ func (h *AgentHub) tickObservations() {
 		if err != nil {
 			continue
 		}
-		select {
-		case c.send <- data:
+		if c.trySend(data) {
 			c.lastObs.Store(uint64(now))
-		default:
-			// Backpressure — drop. Agent will catch up next cadence.
 		}
+		// Backpressure / shutdown — drop silently; the agent recovers
+		// on its next cadence.
 	}
 }
 
@@ -299,9 +348,21 @@ func (c *agentConn) writePump() {
 
 func (c *agentConn) readPump() {
 	defer func() {
+		// Signal "no more sends" BEFORE anything else; subsequent
+		// trySend/ack calls return immediately.
+		if !c.closedAt.Swap(true) {
+			close(c.done)
+		}
+		// Compare-and-delete: only remove h.live[id] if it's still US.
+		// A new register might have stomped over us with a fresh
+		// connection; in that case the new one owns the slot.
 		c.hub.mu.Lock()
-		delete(c.hub.live, c.rec.AgentID)
+		if cur, ok := c.hub.live[c.rec.AgentID]; ok && cur == c {
+			delete(c.hub.live, c.rec.AgentID)
+		}
 		c.hub.mu.Unlock()
+		// Closing c.send AFTER closedAt+done are set lets any in-flight
+		// sender bail out via trySend's c.closedAt check.
 		close(c.send)
 		log.Printf("agent disconnect: %s", c.rec.AgentID)
 	}()
@@ -338,7 +399,7 @@ func (c *agentConn) handleMessage(raw []byte) {
 			c.cadence.Store(int64(p.IntervalMs))
 		}
 	case "ping":
-		c.send <- []byte(`{"type":"pong"}`)
+		c.trySend([]byte(`{"type":"pong"}`))
 	}
 }
 
@@ -351,10 +412,7 @@ func (c *agentConn) ack(res world.ActionResult) {
 		"reason":    res.Reason,
 	}
 	data, _ := json.Marshal(msg)
-	select {
-	case c.send <- data:
-	default:
-	}
+	c.trySend(data)
 }
 
 func (c *agentConn) allowAction() bool {
