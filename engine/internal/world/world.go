@@ -195,6 +195,20 @@ type World struct {
 	// consults verbHandlers and Tick() calls onTick.
 	verbHandlers map[string]func(*World, *Entity, *ActionEnvelope) ActionResult
 	onTick       func(*World, uint64)
+
+	// onActionAccepted fires after a verb returns Accepted=true.
+	// Used by SystemHost to emit an ActionAccepted historian event so
+	// native verbs (move, speak, …) that don't otherwise queue to the
+	// bus still show up in the run log + the scorer.
+	onActionAccepted func(entityID, verb string, raw []byte)
+}
+
+// SetOnActionAccepted installs the historian hook for accepted actions.
+// Call once after scenario install, before Tick() begins.
+func (w *World) SetOnActionAccepted(h func(entityID, verb string, raw []byte)) {
+	w.mu.Lock()
+	w.onActionAccepted = h
+	w.mu.Unlock()
 }
 
 // SetPlayerControlled toggles the PlayerControlled flag on an entity.

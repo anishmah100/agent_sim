@@ -79,6 +79,9 @@ var categoryByKind = map[string]string{
 	// System.
 	"SystemBoot":     CategorySystem,
 	"SystemShutdown": CategorySystem,
+	// Generic accepted-action breadcrumb. Categorized by the bundled
+	// verb in score_a9.py — at this layer we keep it under "world".
+	"ActionAccepted": CategoryWorld,
 }
 
 // classify returns the category for an event Kind. Unknown kinds get

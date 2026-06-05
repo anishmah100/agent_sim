@@ -87,7 +87,14 @@ func (w *World) applyQueuedAction(entityID string, env *ActionEnvelope) ActionRe
 			Reason:   "unknown_entity",
 		}
 	}
-	return w.Dispatch(e, env)
+	res := w.Dispatch(e, env)
+	// Fire historian hook on accepted actions so native engine verbs
+	// (move, speak, …) land in the run log + smoke scorer. SystemHost
+	// wires this to bus.Queue(ActionAccepted{...}); bare engine no-ops.
+	if res.Accepted && w.onActionAccepted != nil {
+		w.onActionAccepted(entityID, env.Verb, env.Raw)
+	}
+	return res
 }
 
 // SpawnAgentEntity creates a fresh agent-archetype entity at a random

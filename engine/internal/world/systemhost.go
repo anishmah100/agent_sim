@@ -22,6 +22,20 @@ import (
 	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
 )
 
+// ActionAccepted is queued onto the bus once for every action whose
+// dispatcher returned Accepted=true. Lets the historian + smoke scorer
+// see native engine verbs (move, speak, shout, …) that don't otherwise
+// generate per-system events.
+type ActionAccepted struct {
+	EntityID string
+	Verb     string
+	Tick     uint64
+}
+
+func (ActionAccepted) Kind() string { return "ActionAccepted" }
+
+var _ eventbus.Event = ActionAccepted{}
+
 // SystemHost owns the bus + spatial index + adapter + registry for a
 // world. Construct one per world; call Install with each composable
 // system before InstallInto.
@@ -105,5 +119,17 @@ func (h *SystemHost) InstallInto() {
 	}
 
 	h.World.InstallScenario(verbs, onTick, onSpawn)
+
+	// Wire the action-accepted hook so native engine verbs (move, speak,
+	// shout, whisper, …) land in the historian. Without this, the
+	// only events on the bus come from systems that explicitly Queue();
+	// movement + speech were silent — the smoke scorer couldn't see them.
+	h.World.SetOnActionAccepted(func(entityID, verb string, raw []byte) {
+		h.Bus.Queue(ActionAccepted{
+			EntityID: entityID,
+			Verb:     verb,
+			Tick:     h.World.CurrentTick(),
+		})
+	})
 }
 

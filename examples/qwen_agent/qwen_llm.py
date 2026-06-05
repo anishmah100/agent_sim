@@ -36,7 +36,7 @@ class QwenLLM:
 
     base_url: str = "http://127.0.0.1:8782/v1"
     model: str = "qwen3.6-27b"
-    timeout_s: float = 60.0
+    timeout_s: float = 180.0
     # Cached grammars.
     _persona_grammar: str = field(default_factory=lambda: _load("persona.gbnf"))
     _reflective_grammar: str = field(default_factory=lambda: _load("reflective.gbnf"))

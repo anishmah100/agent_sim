@@ -100,7 +100,7 @@ async def test_act_batch_round_trip_acks():
     )
 
     async def run():
-        return await agent.act_batch(batch, timeout=2.0)
+        return await agent.act_batch(batch, wait_for_acks=True, timeout=2.0)
 
     task = asyncio.create_task(run())
     # Let act_batch enqueue both actions before we ack them.
@@ -150,6 +150,7 @@ async def test_act_batch_times_out_cleanly():
     with pytest.raises(asyncio.TimeoutError):
         await agent.act_batch(
             ActionBatch(actions=[Move(target=(5, 5))]),
+            wait_for_acks=True,
             timeout=0.05,
         )
     # No leaked futures.
@@ -165,7 +166,7 @@ async def test_act_single_action_compat_shim():
     agent._ws = fake  # type: ignore[assignment]
 
     async def run():
-        return await agent.act(Move(target=(7, 7)))
+        return await agent.act_batch(ActionBatch(actions=[Move(target=(7, 7))]), wait_for_acks=True)
 
     task = asyncio.create_task(run())
     await asyncio.sleep(0)
@@ -177,6 +178,6 @@ async def test_act_single_action_compat_shim():
         "verb": "move",
         "accepted": True,
     })
-    r = await task
-    assert isinstance(r, ActionResult)
-    assert r.accepted is True
+    rs = await task
+    assert isinstance(rs, list)
+    assert rs[0].accepted is True

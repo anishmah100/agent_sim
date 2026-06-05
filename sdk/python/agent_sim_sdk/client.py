@@ -122,43 +122,51 @@ class Agent:
         while True:
             yield await self._inbox.get()
 
-    async def act(self, action: Action) -> ActionResult:
-        """Send ONE action. Returns the engine's ack as ActionResult.
+    async def act(self, action: Action) -> Optional[ActionResult]:
+        """Send ONE action. Returns engine's ack if it arrives within
+        the timeout, None otherwise — the brain stays unblocked.
 
         Preserved for backward compatibility. New brain code should
         use `act_batch` so the engine's per-tick ordering applies
         across the whole receding-horizon plan.
         """
-        return (await self.act_batch(ActionBatch(actions=[action])))[0]
+        results = await self.act_batch(ActionBatch(actions=[action]))
+        return results[0] if results and results[0] is not None else None
 
     async def act_batch(
         self,
         batch: ActionBatch,
         *,
+        wait_for_acks: bool = False,
         timeout: float = 5.0,
-    ) -> list[ActionResult]:
-        """Send a 1–3-action plan + reasoning trace. Awaits one ack
-        per action; returns them in the same order as `batch.actions`.
+    ) -> list[Optional[ActionResult]]:
+        """Send a 1–3-action plan + reasoning trace.
 
-        The engine consumes actions serially under the per-tick lock;
-        if any rejects, the remainder still ACK (they're just rejected
-        without effect). The tactical brain reads the results and
-        re-plans next cycle.
+        By default this is fire-and-forget: the actions are sent over
+        the WS immediately and the call returns once the bytes are out.
+        Returns a list of None matching batch.actions length. The
+        engine's acks still arrive on the WS and are routed into a
+        side dict — pass `wait_for_acks=True` to block on them.
 
-        If `batch.reasoning` is set and the experiment has opted into
-        reasoning capture (see docs/EXPERIMENT_SYSTEM_PLAN.md §8),
-        the engine writes it to the trace log.
+        The fire-and-forget default matters at scale: a slow engine
+        tick (or a busy queue) can delay the ack by hundreds of ms,
+        and we don't want the brain blocked behind those round-trips.
+        The receding-horizon plan re-runs on the next observation
+        anyway, so a missed ack is information the brain naturally
+        recovers from.
         """
         if not self._ws:
             raise RuntimeError("not connected")
         import logging
         loop = asyncio.get_running_loop()
         futures: list[asyncio.Future[ActionResult]] = []
+        sent_action_ids: list[str] = []
         for action in batch.actions:
             action_id = str(uuid.uuid4())
             f: asyncio.Future[ActionResult] = loop.create_future()
             self._pending_acks[action_id] = f
             futures.append(f)
+            sent_action_ids.append(action_id)
             payload = {
                 "type": "action",
                 "action_id": action_id,
@@ -172,22 +180,21 @@ class Agent:
                 logging.getLogger("agent_sim_sdk").warning(
                     "act_batch(%s) send failed: %s", payload.get("verb"), e,
                 )
-                # Resolve all pending futures we just created with a fake
-                # rejection so callers don't hang forever.
-                for fid in [a for a in self._pending_acks if self._pending_acks[a] is f]:
+                for fid in sent_action_ids:
                     self._pending_acks.pop(fid, None)
-                if not f.done():
-                    f.set_exception(e)
                 raise
+        if not wait_for_acks:
+            # Fire-and-forget. Don't keep the futures around — they'd
+            # just leak. The engine's ack will land at _dispatch_ack
+            # but find no future to resolve, and silently drop.
+            for fid in sent_action_ids:
+                self._pending_acks.pop(fid, None)
+            return [None] * len(batch.actions)
         try:
             return await asyncio.wait_for(
                 asyncio.gather(*futures), timeout=timeout,
             )
         except asyncio.TimeoutError:
-            # Sweep abandoned futures so the pending_acks map doesn't
-            # leak. asyncio.wait_for cancels the gather (and inner
-            # futures), so they're already done — but still need
-            # removing from the pending map.
             futures_set = set(map(id, futures))
             for action_id, fut in list(self._pending_acks.items()):
                 if id(fut) in futures_set:
