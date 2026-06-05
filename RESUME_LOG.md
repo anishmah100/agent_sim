@@ -48,7 +48,28 @@ files_touched:
 in_flight_notes: complete; ready to start WORLD-2.
 
 ## WORLD-2 — Starlark rule engine — 2026-06-05
-status: in_progress
+status: done
+finished: ~15:55
+commit: 728ed24
+files_touched:
+  - engine/internal/world/rules/rules.go (new — Starlark loader + RuleSet)
+  - engine/internal/world/rules/rules_test.go (new — 7 tests)
+  - engine/internal/world/bundle.go (RulesFile field; LoadBundle loads .star)
+  - engine/internal/world/bundle_test.go (2 new tests)
+  - engine/internal/world/world.go (Rules *rules.RuleSet field)
+  - worlds/eldoria/rules.star (new — 13 tunings, 7 items, 1 novel verb)
+  - worlds/eldoria/bundle.toml ([rules] section)
+  - worlds/eldoria/npcs.json (removed cwd: '..' artifact)
+  - engine/cmd/genworld_pretty + genworld defaults point at new paths
+  - go.mod + go.sum (added go.starlark.net + transitive deps)
+  - .gitignore (excludes __pycache__/, *.pyc); sdk pycache untracked
+deferred to WORLD-4:
+  - Brand-new genworld tool that emits full bundles (world.json +
+    bundle.toml + rules.star together). Existing tools just write
+    world.json; bundle.toml + rules.star authored by hand for now.
+
+## WORLD-2 — original in-flight plan (historical) — 2026-06-05
+status: superseded by entry above
 plan:
   1. Add go.starlark.net dependency.
   2. New package engine/internal/world/rules with RuleSet type.

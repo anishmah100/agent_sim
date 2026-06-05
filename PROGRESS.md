@@ -78,7 +78,7 @@ Updated after each phase commit. Format:
 
 ### Wave 1
 - [done] WORLD-1 — World bundle data refactor + scenario relocation (c13baf4)
-- [pending] WORLD-2 — Starlark rule engine + new genworld tool
+- [done] WORLD-2 — Starlark rule engine + RuleSet wiring (728ed24)
 
 ### Wave 2
 - [pending] SUB-5 — Layered verb refactor (engine core + common-library + plugin registry)
