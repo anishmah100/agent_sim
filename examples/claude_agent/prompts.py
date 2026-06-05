@@ -58,22 +58,33 @@ OBSERVATION:
 RECENT TACTICAL NOTES:
 {chr(10).join(state.tactical_notes)}
 
-Available verbs (pick whichever fits the goal — not just movement):
-  move:    {{verb:"move",    target:[x,y]}}          step toward absolute tile
-  speak:   {{verb:"speak",   text:"..."}}            broadcast within 3 tiles
-  shout:   {{verb:"shout",   text:"..."}}            broadcast within 15 tiles
-  whisper: {{verb:"whisper", target:"<entity_id>", text:"..."}}  only that entity hears
-  enter:   {{verb:"enter",   target:"<building_id>"}} step inside an adjacent door
-  exit:    {{verb:"exit"}}                            step back outside
-  pickup:  {{verb:"pickup",  target:"<item_id>"}}    grab a nearby item
+Available verbs (use the one that BEST fits the situation, not the
+default "move" or "wait"):
+  move:    {{verb:"move",    target:[x,y]}}          step toward an adjacent walkable tile (≤1 tile from you)
+  speak:   {{verb:"speak",   text:"..."}}            broadcast within 3 tiles, hear anyone, no target
+  shout:   {{verb:"shout",   text:"..."}}            broadcast within 15 tiles — use for help / alerts
+  whisper: {{verb:"whisper", target:"<entity_id>", text:"..."}}  ≤1 tile target, only they hear
+  enter:   {{verb:"enter",   target:"<building_id>"}}  use when you see a door object adjacent — door IDs look like "door:<sprite>:..."
+  exit:    {{verb:"exit"}}                            use immediately after entering if you want to leave
+  pickup:  {{verb:"pickup",  target:"<item_id>"}}    grab any visible item by its ID
   give:    {{verb:"give",    target:"<entity_id>", item:"<item_id>"}}
-  pay:     {{verb:"pay",     target:"<entity_id>", amount:<int>}}
-  look_at: {{verb:"look_at", target:"<entity_id_or_direction>"}}  hint, no state change
-  wait:    {{verb:"wait", ticks:60}}                  hold position
+  pay:     {{verb:"pay",     target:"<entity_id>", amount:<int>}}  use after a "give" or to seal a deal
+  look_at: {{verb:"look_at", target:"<entity_id_or_direction>"}}  free, social signal
+  wait:    {{verb:"wait", ticks:60}}                  ONLY when you genuinely have no better move
 
-Propose 1–3 actions. Prefer DIVERSE verbs over repeated moves — talking
-to nearby NPCs, entering buildings, and reacting to audible cues are all
-valid progress. Keep reasoning short (1-2 sentences).
+PRIORITY: if you can speak to / whisper to / enter / pickup / pay
+something, DO IT instead of wait. Repeating wait or move without a
+specific reason is wasted progress. Strong preference:
+  - see a door nearby? enter it.
+  - see another entity within 1 tile? whisper them; otherwise speak.
+  - hear someone speak nearby? speak back to keep the dialogue going.
+  - see an item? pickup.
+
+Move targets must be at most 1 tile away from your current pos (move
+is one step). If you want to go further, plan a chain of moves in
+this batch.
+
+Propose 1–3 actions. Keep reasoning short (1-2 sentences).
 
 Output JSON with keys: reasoning (1-2 sentences), actions (list of
 {{verb, ...args}}).

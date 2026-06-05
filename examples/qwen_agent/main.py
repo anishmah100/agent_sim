@@ -10,6 +10,7 @@ import argparse
 import asyncio
 import logging
 import os
+import signal
 import time
 
 from agent_sim_sdk import register_agent, Agent, VisionMode
@@ -22,6 +23,13 @@ from .qwen_llm import QwenLLM, env_base_url, is_local_qwen_up
 
 async def main_async(args: argparse.Namespace) -> None:
     logging.basicConfig(level=logging.INFO)
+    # Hard deadline: every layer above this has its own timeout, but the
+    # Qwen reflective/tactical layers are SYNC httpx calls inside the
+    # asyncio loop — so a slow LLM blocks asyncio.sleep too. signal.alarm
+    # is delivered to the main thread regardless of what's blocking it,
+    # so the smoke script's `wait` always returns at runtime + 30s grace.
+    signal.signal(signal.SIGALRM, lambda *_: os._exit(0))
+    signal.alarm(args.runtime_seconds + 30)
     if not is_local_qwen_up(args.qwen_url):
         raise SystemExit(
             f"Qwen server not reachable at {args.qwen_url}. Start llama-server "
@@ -34,12 +42,15 @@ async def main_async(args: argparse.Namespace) -> None:
         archetype=args.archetype,
         bio=args.bio,
     ))
-    # Qwen-tuned cadence: reflect every ~120s instead of Claude's 60s
-    # (local-rig inference is the bottleneck).
+    # Qwen-tuned cadence: each tactical cycle hits the local model for
+    # ~5–6s, so a "reflect every 120 tactical cycles" gate would only
+    # fire after ~12 minutes — longer than the smoke window. 20 keeps
+    # the cadence at roughly one reflection every 1.5–2 min so the
+    # historian + A9 scorer can actually observe the reflective layer.
     harness = Harness(
         state=state, llm=llm,
         coord_style="compass",
-        reflective_every=120,
+        reflective_every=20,
     )
     harness.init_persona()
 

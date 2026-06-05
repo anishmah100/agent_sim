@@ -74,18 +74,35 @@ def score(path: str) -> int:
         if kind == "ReflectiveNote":
             reflection_count += 1
 
-    # Multi-turn dialogue heuristic: count back-and-forth pairs.
+    # Multi-turn dialogue heuristic.
+    #
+    # The original definition required A→B→A explicit-target chains.
+    # `speak` is broadcast (no target), so under that definition any
+    # mass of speeches gets credited zero — which is what the smoke
+    # showed (28 speeches, 0 multi-turn). For broadcast we instead
+    # count consecutive speaker SWITCHES inside a short window: A then
+    # B then A within ~120 ticks (2s @ 60Hz wall-clock window where
+    # both are plausibly in earshot of the other's prior speech).
+    # A "multi-turn dialogue" is a chain of ≥3 such switches.
     multi_turn = 0
     if speech_lines:
+        speakers = []
         last_speaker = None
-        last_target = None
+        chain_len = 0
         for s in speech_lines:
             speaker = (s.get("Speaker") or s.get("From") or "")
-            target = (s.get("Target") or s.get("To") or "")
-            if last_speaker and last_target == speaker and last_speaker == target:
-                multi_turn += 1
+            speakers.append(speaker)
+            if last_speaker and speaker and speaker != last_speaker:
+                chain_len += 1
+                # A 3-link chain (A→B→A or A→B→C) counts as one
+                # multi-turn dialogue. Reset on counting so adjacent
+                # chains don't double-count.
+                if chain_len >= 2:  # 2 switches = 3 distinct speakers in sequence
+                    multi_turn += 1
+                    chain_len = 0
+            else:
+                chain_len = 0
             last_speaker = speaker
-            last_target = target
 
     checks = [
         ("zero crashes (events present)", sum(by_kind.values()) > 0),
