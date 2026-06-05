@@ -41,7 +41,7 @@ func TestSupervisorRunsAndExits(t *testing.T) {
 		{Name: "once", Command: "true", AutoRestart: false},
 	}}
 	logger := log.New(io.Discard, "", 0)
-	sup := New(cfg, logger)
+	sup := New(cfg, logger, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	sup.Start(ctx)
 	// Give it a moment to spawn + exit.
@@ -68,7 +68,7 @@ func TestSupervisorAutoRestarts(t *testing.T) {
 		{Name: "loop", Command: "true", AutoRestart: true},
 	}}
 	logger := log.New(io.Discard, "", 0)
-	sup := New(cfg, logger)
+	sup := New(cfg, logger, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	sup.Start(ctx)
 	// 'true' exits instantly; with auto_restart on, we should see
@@ -93,7 +93,7 @@ func TestSupervisorCountExpands(t *testing.T) {
 		{Name: "tri", Command: "true", Count: 3, AutoRestart: false},
 	}}
 	logger := log.New(io.Discard, "", 0)
-	sup := New(cfg, logger)
+	sup := New(cfg, logger, nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	sup.Start(ctx)
 	time.Sleep(150 * time.Millisecond)

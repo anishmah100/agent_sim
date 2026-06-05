@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -68,6 +69,7 @@ func LoadConfig(path string) (*Config, error) {
 type Supervisor struct {
 	cfg     *Config
 	logger  *log.Logger
+	vars    map[string]string
 	wg      sync.WaitGroup
 	mu      sync.Mutex
 	procs   []*managed
@@ -76,11 +78,16 @@ type Supervisor struct {
 // New constructs a Supervisor. Pass a *log.Logger or nil for the
 // default; the supervisor prefixes child stderr lines with the
 // instance name.
-func New(cfg *Config, logger *log.Logger) *Supervisor {
+//
+// vars supplies ${KEY} placeholders that get substituted in each
+// spec's Args at exec time — used so npcs.json can reference the
+// engine's actual listen addr without hard-coding a port. nil is
+// fine when no substitution is needed.
+func New(cfg *Config, logger *log.Logger, vars map[string]string) *Supervisor {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &Supervisor{cfg: cfg, logger: logger}
+	return &Supervisor{cfg: cfg, logger: logger, vars: vars}
 }
 
 // Start launches every configured spec. Returns immediately; the
@@ -102,6 +109,11 @@ func (s *Supervisor) Start(ctx context.Context) {
 				name:    name,
 				logger:  s.logger,
 			}
+			// Apply ${KEY} substitution against supervisor.vars so npcs.json
+			// can reference the engine's actual listen addr (etc.) without
+			// hard-coding port numbers that drift from the engine's -addr
+			// flag. Substitution is done at spawn time, once per spec.
+			m.spec.Args = substituteArgs(spec.Args, s.vars)
 			s.mu.Lock()
 			s.procs = append(s.procs, m)
 			s.mu.Unlock()
@@ -264,4 +276,23 @@ func indexByte(b []byte, c byte) int {
 		}
 	}
 	return -1
+}
+
+// substituteArgs replaces ${KEY} occurrences in each arg against vars.
+// Unknown keys are left literal so a missing var is visible in the log
+// (the child sees the un-substituted token and fails fast) rather than
+// silently expanding to "" and producing e.g. "http://".
+func substituteArgs(args []string, vars map[string]string) []string {
+	if len(vars) == 0 || len(args) == 0 {
+		return args
+	}
+	out := make([]string, len(args))
+	for i, a := range args {
+		s := a
+		for k, v := range vars {
+			s = strings.ReplaceAll(s, "${"+k+"}", v)
+		}
+		out[i] = s
+	}
+	return out
 }

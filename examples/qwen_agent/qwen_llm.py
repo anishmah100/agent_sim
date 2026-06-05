@@ -50,7 +50,12 @@ class QwenLLM:
     def reflect(self, prompt: str, max_tokens: int = 500) -> dict:
         return self._call(prompt, self._reflective_grammar, max_tokens)
 
-    def tactical(self, prompt: str, max_tokens: int = 200) -> dict:
+    def tactical(self, prompt: str, max_tokens: int = 600) -> dict:
+        # 200 was too tight: a single reasoning sentence eats ~150-180
+        # tokens by itself, leaving the 1-3 action objects + their
+        # nested keys to be truncated mid-stream, and the grammar can't
+        # rescue a cut-off output. 600 gives generous headroom and the
+        # grammar still stops generation early when the JSON closes.
         return self._call(prompt, self._tactical_grammar, max_tokens)
 
     # ---- internals ----

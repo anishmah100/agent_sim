@@ -10,7 +10,7 @@ import argparse
 import asyncio
 import logging
 
-from agent_sim_sdk import register_and_connect, VisionMode
+from agent_sim_sdk import register_agent, Agent, VisionMode
 
 from examples.claude_agent.harness import Harness
 from examples.claude_agent.state import BrainState, Persona
@@ -41,28 +41,47 @@ async def main_async(args: argparse.Namespace) -> None:
     )
     harness.init_persona()
 
-    cycle = [0]
-    async def brain(obs):
-        cycle[0] += 1
-        logging.getLogger("qwen_agent").info("brain cycle %d entered, obs_id=%s",
-                                              cycle[0], getattr(obs, "obs_id", "?"))
-        reflex = harness.reflex(obs)
-        if reflex is not None:
-            return reflex.actions[0]
-        harness.maybe_reflect()
-        batch = harness.tactical(obs)
-        return batch.actions[0]
-
-    agent = await register_and_connect(
+    # Drive the obs→action loop ourselves (instead of register_and_connect's
+    # built-in brain= helper) so we can ship the FULL ActionBatch — including
+    # the reasoning trace and any follow-up actions the tactical layer
+    # planned. The convenience helper only forwards a single Action and
+    # silently drops the reasoning, which kills A9's "≥ 1 reasoning trace"
+    # criterion at the source.
+    creds = await register_agent(
         args.server,
         user_token=args.token,
         persona={"name": args.name, "archetype": args.archetype, "bio": args.bio},
         vision_mode=VisionMode.STRUCTURED,
         share_reasoning=True,
-        brain=brain,
     )
-    await asyncio.sleep(args.runtime_seconds)
-    await agent.close()
+    log = logging.getLogger("qwen_agent")
+    async def driver(agent: Agent) -> None:
+        cycle = 0
+        async for obs in agent.observations():
+            cycle += 1
+            log.info("brain cycle %d entered, obs_id=%s",
+                     cycle, getattr(obs, "obs_id", "?"))
+            try:
+                reflex = harness.reflex(obs)
+                if reflex is not None:
+                    await agent.act_batch(reflex)
+                    continue
+                harness.maybe_reflect()
+                batch = harness.tactical(obs)
+            except Exception as e:
+                log.warning("brain cycle %d failed: %s — skipping", cycle, e)
+                continue
+            try:
+                await agent.act_batch(batch)
+            except Exception as e:
+                log.warning("act_batch(%s) failed: %s",
+                            [a.verb for a in batch.actions], e)
+    async with Agent(creds) as agent:
+        driver_task = asyncio.create_task(driver(agent))
+        try:
+            await asyncio.sleep(args.runtime_seconds)
+        finally:
+            driver_task.cancel()
 
 
 def main() -> None:

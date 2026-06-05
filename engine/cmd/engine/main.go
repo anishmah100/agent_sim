@@ -169,7 +169,14 @@ func main() {
 		if err != nil {
 			log.Fatalf("npc config: %v", err)
 		}
-		npcSup = npc.New(cfg, log.Default())
+		// vars feed ${KEY} substitution in spec.Args — npcs.json refers
+		// to ${ENGINE_ADDR} so it tracks the -addr flag instead of
+		// hard-coding a port that drifts (8080 default vs. 8088 in the
+		// A9 smoke). Add new vars here as needed; the supervisor leaves
+		// unmatched ${KEY} tokens literal.
+		npcSup = npc.New(cfg, log.Default(), map[string]string{
+			"ENGINE_ADDR": *flagAddr,
+		})
 		npcSup.Start(ctx)
 		log.Printf("supervising %d NPC spec(s) from %s", len(cfg.NPCs), npcConfig)
 	}

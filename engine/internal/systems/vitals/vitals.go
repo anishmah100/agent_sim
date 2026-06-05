@@ -89,7 +89,16 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 				w.MutateEntity(id, func(real syscore.Entity) {
 					real.SetExtra("hp", hp-rate)
 				})
-				w.QueueEvent(HungerSpike{EntityID: id, Hunger: next})
+				// Only emit on the CROSSING (prev below → now above). The
+				// previous code fired every tick the entity was above the
+				// threshold — at scale (250 entities in Eldoria) this
+				// drowned every other event in the historian (25,250 of
+				// 25,303 records in the A9 smoke). Crossings are the
+				// signal; sustained starvation is implicit in the hp
+				// trajectory.
+				if curr <= above {
+					w.QueueEvent(HungerSpike{EntityID: id, Hunger: next})
+				}
 			}
 		}
 	}
