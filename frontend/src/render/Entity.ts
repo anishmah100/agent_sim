@@ -9,6 +9,7 @@ import { AnimatedSprite, Assets, Container, Graphics, Sprite, Text, Texture } fr
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import type { CharacterAtlas, CharacterAnim } from "./CharacterAtlas";
+import { artCatalog } from "./ArtCatalog";
 
 // Hover outline filter — applied to the BODY sprite only (not the
 // wrap container). Applying it to the wrap pulls the label texture
@@ -75,39 +76,49 @@ const WORLD_OBJECT_ARCHETYPES = new Set([
   "tree", "rock", "item", "blueprint",
 ]);
 
-// Map a world-object entity to its sprite URL on the engine's
-// /art/processed/ path. The mapping reads entity_id when an archetype
-// has subtypes (tree_oak_1 → tree_oak, rock_iron_1 → boulder_iron_ore).
-function worldObjectSpriteUrl(e: EntityState): string {
+// Map a world-object entity to a sprite id, then resolve via the art
+// catalog. The mapping reads entity_id when an archetype has subtypes
+// (tree_oak_1 → tree_oak, rock_iron_1 → boulder_iron_ore).
+function worldObjectSpriteId(e: EntityState): string {
   const id = e.entity_id;
   switch (e.archetype) {
     case "tree": {
-      // tree_apple_1 → tree_apple, tree_pine_2 → tree_pine, etc.
       const subtype = id.replace(/^tree_/, "").replace(/_\d+$/, "");
       const name = subtype === "" ? "tree_oak" : `tree_${subtype}`;
-      return `${ENGINE_URL}/art/processed/v2_resources_world_master/${name}.png`;
+      return `veg:${name}`;
     }
-    case "rock": {
-      // rock_iron_1 → boulder_iron_ore; otherwise default boulder.
-      const name = id.includes("iron") ? "boulder_iron_ore" : "boulder_medium";
-      return `${ENGINE_URL}/art/processed/v2_resources_world_master/${name}.png`;
-    }
+    case "rock":
+      return id.includes("iron") ? "veg:boulder_iron_ore" : "veg:boulder_medium";
     case "blueprint": {
-      // Per-extras.progress: 0 → ghost, 25 → foundation, 50 → walls
-      // partial, 75 → walls full, 100 → roof partial. The Construction
-      // system writes 'progress' into extras.
       const stage = blueprintStage(e);
       const stageNames = [
         "cottage_stage_0_blueprint", "cottage_stage_1_foundation",
         "cottage_stage_2_walls_partial", "cottage_stage_3_walls_full",
         "cottage_stage_4_roof_partial", "cottage_stage_5_finished",
       ];
-      return `${ENGINE_URL}/art/processed/v2_construction_stages/${stageNames[stage]}.png`;
+      return `stage:${stageNames[stage]}`;
     }
     case "item":
-      // Items use display_name when present (e.g. "wood_log") or
-      // fall back by extras.kind. v0: a sane default.
-      return `${ENGINE_URL}/art/processed/v2_items_master_v2/wood_log.png`;
+      return "item:wood_log";
+  }
+  return "veg:tree_oak";
+}
+
+function worldObjectSpriteUrl(e: EntityState): string {
+  const id = worldObjectSpriteId(e);
+  const cat = artCatalog();
+  const url = cat?.url(id);
+  if (url) return url;
+  // Legacy fallback while migration finishes. Mirrors the old direct
+  // path templates for ids the catalog doesn't yet cover.
+  if (id.startsWith("veg:")) {
+    return `${ENGINE_URL}/art/processed/v2_resources_world_master/${id.slice(4)}.png`;
+  }
+  if (id.startsWith("stage:")) {
+    return `${ENGINE_URL}/art/processed/v2_construction_stages/${id.slice(6)}.png`;
+  }
+  if (id.startsWith("item:")) {
+    return `${ENGINE_URL}/art/processed/v2_items_master_v2/${id.slice(5)}.png`;
   }
   return `${ENGINE_URL}/art/processed/v2_resources_world_master/tree_oak.png`;
 }

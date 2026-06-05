@@ -24,25 +24,32 @@
 import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
+import { artCatalog } from "./ArtCatalog";
 
 const ENGINE_URL =
   import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
 
+// Sprite-id resolvers — every interior asset goes through the catalog
+// first, then falls back to legacy direct paths for assets the catalog
+// doesn't yet cover. The catalog's pack-swap mechanism then handles
+// alternative interior tilesets too.
 const TILE = (name: string) =>
-  `${ENGINE_URL}/art/processed/v2_interior_tiles_master/${name}.png`;
-// Some legacy sheet-derived props (anvil, chandelier, etc.) still live in
-// the old per-tile folder. Anything in SHEET_PROPS resolves via this path.
+  artCatalog()?.url(`int:${name}`)
+  ?? `${ENGINE_URL}/art/processed/v2_interior_tiles_master/${name}.png`;
 const LEGACY_TILE = (name: string) =>
-  `${ENGINE_URL}/art/processed/tiles/interior/${name}.png`;
+  artCatalog()?.url(`prop:${name}`)
+  ?? `${ENGINE_URL}/art/processed/tiles/interior/${name}.png`;
 const PROP = (name: string) =>
-  `${ENGINE_URL}/art/processed/v2_interior_props_master/${name}.png`;
+  artCatalog()?.url(`prop:${name}`)
+  ?? `${ENGINE_URL}/art/processed/v2_interior_props_master/${name}.png`;
 const PROP2W = (name: string) =>
-  `${ENGINE_URL}/art/processed/tiles/interior/props_2w/${name}.png`;
+  artCatalog()?.url(`prop:${name}`)
+  ?? `${ENGINE_URL}/art/processed/tiles/interior/props_2w/${name}.png`;
 
-// Some props were sliced from interior_tileset.png (anvil, forge fire,
-// chandelier, etc.) and live alongside the floor/wall tile slices in
-// /tiles/interior/ rather than in v2_interior_props_master/. Anything
-// listed here gets loaded from that path.
+// SHEET_PROPS stays: it identifies which prop-name strings live in the
+// legacy `tiles/interior/` folder rather than `v2_interior_props_master/`.
+// The catalog routes both to the same `prop:` namespace, but the legacy
+// fallback below needs to know which path to use.
 const SHEET_PROPS = new Set([
   "anvil_sheet", "forge_fire_sheet", "fireplace_stone_sheet",
   "cauldron_sheet", "clock_grandfather", "chandelier_sheet",
