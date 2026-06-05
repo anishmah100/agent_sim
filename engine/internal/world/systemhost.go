@@ -16,6 +16,8 @@ package world
 // and can be deleted in a later sweep.
 
 import (
+	"encoding/json"
+
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
 	"github.com/anishmah100/agent_sim/engine/internal/core/spatial"
@@ -35,6 +37,37 @@ type ActionAccepted struct {
 func (ActionAccepted) Kind() string { return "ActionAccepted" }
 
 var _ eventbus.Event = ActionAccepted{}
+
+// Speech is queued onto the bus when an entity speaks/shouts. The
+// historian persists it under category=social for downstream metrics
+// (multi-turn dialogue detection, scorer counts). emitSpeech only
+// writes the perception/audible ring — separate from the historian
+// stream — so the systemhost hook re-emits a structured Speech event
+// from the action raw payload.
+type Speech struct {
+	Speaker string
+	Text    string
+	Mode    string // "speak" or "shout"
+	Tick    uint64
+}
+
+func (Speech) Kind() string { return "Speech" }
+
+var _ eventbus.Event = Speech{}
+
+// Whisper — same idea, but for the 1-tile directed variant. Splitting
+// from Speech preserves the "speech vs. whisper" semantic at the
+// historian layer instead of folding it into a tag.
+type Whisper struct {
+	Speaker string
+	Target  string
+	Text    string
+	Tick    uint64
+}
+
+func (Whisper) Kind() string { return "Whisper" }
+
+var _ eventbus.Event = Whisper{}
 
 // SystemHost owns the bus + spatial index + adapter + registry for a
 // world. Construct one per world; call Install with each composable
@@ -134,6 +167,36 @@ func (h *SystemHost) InstallInto() {
 			Verb:     verb,
 			Tick:     tick,
 		})
+		// Re-emit structured per-verb events for the verbs the historian
+		// + downstream scorer care about. emitSpeech / emitWhisper only
+		// populate the perception ring, which doesn't feed the historian.
+		switch verb {
+		case "speak", "shout":
+			var p struct {
+				Text string `json:"text"`
+			}
+			if json.Unmarshal(raw, &p) == nil && p.Text != "" {
+				h.Bus.Queue(Speech{
+					Speaker: entityID,
+					Text:    p.Text,
+					Mode:    verb,
+					Tick:    tick,
+				})
+			}
+		case "whisper":
+			var p struct {
+				Target string `json:"target"`
+				Text   string `json:"text"`
+			}
+			if json.Unmarshal(raw, &p) == nil && p.Text != "" {
+				h.Bus.Queue(Whisper{
+					Speaker: entityID,
+					Target:  p.Target,
+					Text:    p.Text,
+					Tick:    tick,
+				})
+			}
+		}
 	})
 }
 
