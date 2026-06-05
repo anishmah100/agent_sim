@@ -206,6 +206,7 @@ func main() {
 		regRateMid(regJWTMid(http.HandlerFunc(agents.HandleRegister))))
 	mux.HandleFunc("/api/v1/leaderboards", wire.LeaderboardsHandler(w))
 	mux.HandleFunc("/api/v1/world/affordances", wire.AffordanceManifestHandler(host))
+	mux.HandleFunc("/api/v1/world/rulebook.json", wire.RulebookHandler(w, bundle, host, tickRate))
 	mux.HandleFunc("/api/v1/world/history", historian.Handler(hist))
 
 	// Prometheus-format /metrics. Stats sourced from the existing

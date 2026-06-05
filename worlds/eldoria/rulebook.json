@@ -1,0 +1,642 @@
+{
+  "schema_version": 1,
+  "world": {
+    "name": "eldoria",
+    "display_name": "Eldoria",
+    "description": "1500x1500 fantasy continent with 6 regions and 6 towns.",
+    "scenario": "fantasy_town"
+  },
+  "time": {
+    "tick_rate_hz": 60
+  },
+  "map": {
+    "width_tiles": 1500,
+    "height_tiles": 1500,
+    "map_id": "eldoria"
+  },
+  "stats": [
+    {
+      "key": "gold",
+      "kind": "int",
+      "min": 0,
+      "max": 1000000,
+      "default": 25,
+      "description": "Currency. Earned via work_for_pay or trade; spent via pay."
+    },
+    {
+      "key": "hp",
+      "kind": "int",
+      "min": 0,
+      "max": 100,
+      "default": 100,
+      "description": "Hit points. 0 = dead. Restored by `heal` verb."
+    },
+    {
+      "key": "hunger",
+      "kind": "float",
+      "min": 0,
+      "max": 1,
+      "default": 0,
+      "description": "0 = sated, 1 = starving. Grows at hunger_per_tick; above hunger_damage_above drains hp."
+    }
+  ],
+  "tunings": [
+    {
+      "name": "attack_damage",
+      "value": 10
+    },
+    {
+      "name": "defend_damage_mul",
+      "value": 0.5
+    },
+    {
+      "name": "heal_amount",
+      "value": 5
+    },
+    {
+      "name": "hunger_damage_above",
+      "value": 0.9
+    },
+    {
+      "name": "hunger_damage_rate",
+      "value": 1
+    },
+    {
+      "name": "hunger_per_tick",
+      "value": 0.0008
+    },
+    {
+      "name": "max_hp",
+      "value": 100
+    },
+    {
+      "name": "pay_max_range_tiles",
+      "value": 1
+    },
+    {
+      "name": "shout_muffle_radius",
+      "value": 20
+    },
+    {
+      "name": "shout_radius",
+      "value": 30
+    },
+    {
+      "name": "speak_radius",
+      "value": 8
+    },
+    {
+      "name": "starting_gold",
+      "value": 25
+    },
+    {
+      "name": "whisper_radius",
+      "value": 2
+    },
+    {
+      "name": "work_payment",
+      "value": 3
+    }
+  ],
+  "items": [
+    {
+      "id": "apple",
+      "kind": "food",
+      "props": {
+        "satiety": 0.25,
+        "weight": 0.2
+      }
+    },
+    {
+      "id": "coin_pouch",
+      "kind": "currency_container",
+      "props": {
+        "gold": 10
+      }
+    },
+    {
+      "id": "iron_sword",
+      "kind": "weapon",
+      "props": {
+        "damage": 15,
+        "two_handed": false,
+        "weight": 3.5
+      }
+    },
+    {
+      "id": "loaf_bread",
+      "kind": "food",
+      "props": {
+        "satiety": 0.5,
+        "weight": 0.3
+      }
+    },
+    {
+      "id": "small_chest",
+      "kind": "container",
+      "props": {
+        "capacity": 10,
+        "lockable": true
+      }
+    },
+    {
+      "id": "village_sign",
+      "kind": "readable",
+      "props": {
+        "text": "Welcome to Eldoria."
+      }
+    },
+    {
+      "id": "wooden_shield",
+      "kind": "armor",
+      "props": {
+        "defense": 5,
+        "weight": 2
+      }
+    }
+  ],
+  "verbs": [
+    {
+      "name": "accept_task",
+      "category": "common",
+      "system": "verbalquests",
+      "description": "Accept a proposed contract addressed to you.",
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_contract",
+        "bad_status",
+        "not_authorized"
+      ],
+      "emits_events": [
+        "TaskAccepted"
+      ]
+    },
+    {
+      "name": "advance_construction",
+      "category": "common",
+      "system": "construction",
+      "description": "Advance an owned adjacent blueprint by one step; consumes one advance_materials batch. Completes the blueprint when progress reaches 100.",
+      "preconditions": [
+        "target within 1 tile",
+        "target is a blueprint owned by self",
+        "self has the advance_materials"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_blueprint",
+        "target_too_far",
+        "not_owner",
+        "broken_blueprint",
+        "missing_materials"
+      ],
+      "emits_events": [
+        "ConstructionAdvanced",
+        "ConstructionCompleted"
+      ]
+    },
+    {
+      "name": "attack",
+      "category": "common",
+      "system": "combat",
+      "description": "Damage an adjacent target.",
+      "preconditions": [
+        "target must be within 1 tile (chebyshev)"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "target_too_far"
+      ],
+      "emits_events": [
+        "DamageDealt",
+        "EntityDied"
+      ]
+    },
+    {
+      "name": "chop",
+      "category": "common",
+      "system": "resources",
+      "description": "Chop an adjacent tree. Yields wood item IDs; depletes after N hits.",
+      "preconditions": [
+        "target is archetype=tree",
+        "target within 1 tile",
+        "target hardness \u003e 0"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_tree",
+        "target_too_far",
+        "no_yield",
+        "depleted"
+      ],
+      "emits_events": [
+        "ResourceHarvested",
+        "ResourceDepleted"
+      ]
+    },
+    {
+      "name": "claim_ownership",
+      "category": "common",
+      "system": "property",
+      "description": "Take ownership of an unowned adjacent building.",
+      "preconditions": [
+        "target within 1 tile",
+        "target has no owner"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_building",
+        "target_too_far",
+        "already_owned"
+      ],
+      "emits_events": [
+        "OwnershipChanged"
+      ]
+    },
+    {
+      "name": "complete_task",
+      "category": "common",
+      "system": "verbalquests",
+      "description": "Mark an accepted contract as complete (from the proposer's PoV — no engine verification).",
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_contract",
+        "bad_status",
+        "not_authorized"
+      ],
+      "emits_events": [
+        "TaskCompleted"
+      ]
+    },
+    {
+      "name": "defend",
+      "category": "common",
+      "system": "combat",
+      "description": "Raise guard; halves the next incoming damage."
+    },
+    {
+      "name": "demolish",
+      "category": "common",
+      "system": "construction",
+      "description": "Remove an owned blueprint OR building.",
+      "preconditions": [
+        "target within 1 tile",
+        "self is the owner"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_structure",
+        "target_too_far",
+        "not_owner"
+      ],
+      "emits_events": [
+        "Demolished"
+      ]
+    },
+    {
+      "name": "drop",
+      "category": "common",
+      "system": "inventory",
+      "description": "Drop an item from inventory.",
+      "rejection_reasons": [
+        "bad_params",
+        "not_in_inventory"
+      ],
+      "emits_events": [
+        "ItemDropped"
+      ]
+    },
+    {
+      "name": "enter",
+      "category": "common",
+      "system": "property",
+      "description": "Step inside an adjacent building.",
+      "preconditions": [
+        "target within 1 tile",
+        "target is archetype=building",
+        "self not already inside a building",
+        "not locked or self has entry right"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_building",
+        "target_too_far",
+        "already_inside",
+        "locked"
+      ],
+      "emits_events": [
+        "EnteredBuilding"
+      ]
+    },
+    {
+      "name": "equip",
+      "category": "common",
+      "system": "inventory",
+      "description": "Wear / wield an inventory item.",
+      "rejection_reasons": [
+        "bad_params",
+        "not_in_inventory"
+      ]
+    },
+    {
+      "name": "exit",
+      "category": "common",
+      "system": "property",
+      "description": "Leave the current building.",
+      "preconditions": [
+        "self is currently inside a building"
+      ],
+      "rejection_reasons": [
+        "not_inside"
+      ],
+      "emits_events": [
+        "ExitedBuilding"
+      ]
+    },
+    {
+      "name": "give",
+      "category": "common",
+      "system": "inventory",
+      "description": "Give an inventory item to an adjacent target.",
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "target_too_far",
+        "not_in_inventory"
+      ],
+      "emits_events": [
+        "ItemTransferred"
+      ]
+    },
+    {
+      "name": "heal",
+      "category": "common",
+      "system": "combat",
+      "description": "Restore HP on self or adjacent target.",
+      "preconditions": [
+        "if target != self, target must be within 1 tile"
+      ],
+      "rejection_reasons": [
+        "unknown_target",
+        "target_too_far"
+      ]
+    },
+    {
+      "name": "lock",
+      "category": "common",
+      "system": "property",
+      "description": "Lock an owned building.",
+      "preconditions": [
+        "self is the owner of target"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_building",
+        "not_owner"
+      ],
+      "emits_events": [
+        "BuildingLocked"
+      ]
+    },
+    {
+      "name": "loot",
+      "category": "common",
+      "system": "loot",
+      "description": "Strip gold and inventory from an adjacent dead entity.",
+      "preconditions": [
+        "target within 1 tile",
+        "target has hp == 0"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "target_too_far",
+        "target_alive"
+      ],
+      "emits_events": [
+        "GoldTransferred"
+      ]
+    },
+    {
+      "name": "mine",
+      "category": "common",
+      "system": "resources",
+      "description": "Mine an adjacent rock. Yields stone item IDs; depletes after N hits.",
+      "preconditions": [
+        "target is archetype=rock",
+        "target within 1 tile",
+        "target hardness \u003e 0"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_rock",
+        "target_too_far",
+        "no_yield",
+        "depleted"
+      ],
+      "emits_events": [
+        "ResourceHarvested",
+        "ResourceDepleted"
+      ]
+    },
+    {
+      "name": "pay",
+      "category": "common",
+      "system": "money",
+      "description": "Transfer gold to an adjacent entity.",
+      "preconditions": [
+        "target within 1 tile",
+        "self has at least `amount` gold"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "target_too_far",
+        "not_enough_gold"
+      ],
+      "emits_events": [
+        "GoldTransferred"
+      ]
+    },
+    {
+      "name": "pickup",
+      "category": "common",
+      "system": "inventory",
+      "description": "Pick up an adjacent item.",
+      "preconditions": [
+        "target is archetype=item",
+        "target within 1 tile",
+        "self has free slot"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "not_an_item",
+        "target_too_far",
+        "inventory_full"
+      ],
+      "emits_events": [
+        "ItemPicked"
+      ]
+    },
+    {
+      "name": "place_blueprint",
+      "category": "common",
+      "system": "construction",
+      "description": "Place a blueprint at an adjacent walkable tile. Pays the initial-materials cost up front.",
+      "preconditions": [
+        "`at` within 1 tile of self",
+        "`at` is walkable",
+        "self has the initial_materials for this kind"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_blueprint",
+        "target_too_far",
+        "unwalkable",
+        "no_inventory_service",
+        "missing_materials",
+        "spawn_failed"
+      ],
+      "emits_events": [
+        "ConstructionStarted"
+      ]
+    },
+    {
+      "name": "propose_task",
+      "category": "common",
+      "system": "verbalquests",
+      "description": "Propose a verbal contract to a known entity. Records the contract on both parties' extras.contracts.",
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "self_target",
+        "empty_terms"
+      ],
+      "emits_events": [
+        "TaskProposed"
+      ]
+    },
+    {
+      "name": "reject_task",
+      "category": "common",
+      "system": "verbalquests",
+      "description": "Reject a proposed contract addressed to you.",
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_contract",
+        "bad_status",
+        "not_authorized"
+      ],
+      "emits_events": [
+        "TaskRejected"
+      ]
+    },
+    {
+      "name": "trade",
+      "category": "common",
+      "system": "trade",
+      "description": "Give an item to an adjacent target in exchange for gold (target pays).",
+      "preconditions": [
+        "target within 1 tile",
+        "self has `item` in inventory",
+        "target has at least `price` gold"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "target_too_far",
+        "not_in_inventory",
+        "target_not_enough_gold"
+      ],
+      "emits_events": [
+        "GoldTransferred",
+        "ItemTransferred"
+      ]
+    },
+    {
+      "name": "transfer_ownership",
+      "category": "common",
+      "system": "property",
+      "description": "Give ownership of an owned building to another entity.",
+      "preconditions": [
+        "self is the current owner",
+        "new_owner is a known entity"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_building",
+        "not_owner",
+        "unknown_new_owner"
+      ],
+      "emits_events": [
+        "OwnershipChanged"
+      ]
+    },
+    {
+      "name": "unlock",
+      "category": "common",
+      "system": "property",
+      "description": "Unlock an owned building.",
+      "preconditions": [
+        "self is the owner of target"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_a_building",
+        "not_owner"
+      ],
+      "emits_events": [
+        "BuildingUnlocked"
+      ]
+    },
+    {
+      "name": "work_for_pay",
+      "category": "common",
+      "system": "money",
+      "description": "Perform labor (stub: just credits gold). Real version will validate a work-site."
+    },
+    {
+      "name": "read",
+      "category": "novel",
+      "system": "rules.star"
+    }
+  ],
+  "npc_archetypes": [
+    {
+      "name": "blueprint",
+      "description": "Construction-in-progress entity. Owned by the builder, becomes a 'building' when progress hits 100."
+    },
+    {
+      "name": "blueprint:cottage",
+      "description": "Small one-room dwelling."
+    },
+    {
+      "name": "blueprint:shed",
+      "description": "Storage hut. Cheap, fast."
+    },
+    {
+      "name": "building",
+      "description": "A first-class structure entity. Owned via claim_ownership; constructed via the construction system; enterable as an interior tile space."
+    },
+    {
+      "name": "rock",
+      "description": "Mineable resource node. Yields stone item entities."
+    },
+    {
+      "name": "tree",
+      "description": "Choppable resource node. Yields wood item entities."
+    }
+  ],
+  "quirks": [
+    "novel verb: read"
+  ]
+}
