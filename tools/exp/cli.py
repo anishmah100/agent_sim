@@ -154,9 +154,11 @@ def cmd_finalize(args: argparse.Namespace) -> int:
 
     # 5. Journal pipeline — append a row to INDEX.md and a section to
     # the per-world WORLD_JOURNAL.md so SUB-14's diagnose step can
-    # find this run later.
+    # find this run later. Derive the experiments-root from the run
+    # dir's grandparent so tests + non-default --exp-root work.
     from tools.journal.update import update_all
-    update_all(run_dir, EXP_ROOT_DEFAULT)
+    exp_root = run_dir.resolve().parent.parent
+    update_all(run_dir, exp_root)
 
     print(f"finalized {run_dir}")
     return 0
