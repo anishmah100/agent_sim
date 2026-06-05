@@ -7,7 +7,8 @@ both) is set per connection.
 
 from .client import Agent, register_and_connect, register_agent, AgentCredentials
 from .models import (
-    Observation, Action, ActionBatch, ActionResult, ReasonCode, Pos, Facing,
+    Observation, SelfState, VisibleEntity, VisibleObject, AudibleEvent, WorldClock,
+    Action, ActionBatch, ActionResult, ReasonCode, Pos, Facing,
     Move, Speak, Whisper, Shout, LookAt, Interact,
     Pickup, Drop, Equip, Give, Attack, Defend, Heal, Wait,
     Pay, WorkForPay, Trade, Loot,
@@ -18,6 +19,10 @@ from .models import (
     VisionMode,
 )
 from .pathfind import Pathfinder, WALKABLE_TILES, BLOCKING_ARCHETYPES
+from .observation_render import (
+    render_layered_observation, render_self, render_nearby,
+    render_audible, render_minimap, rank_nearby, relative_compass,
+)
 
 __all__ = [
     "Agent",
@@ -35,4 +40,6 @@ __all__ = [
     "PlaceBlueprint", "AdvanceConstruction", "Demolish",
     "ProposeTask", "AcceptTask", "RejectTask", "CompleteTask",
     "Pathfinder", "WALKABLE_TILES", "BLOCKING_ARCHETYPES",
+    "render_layered_observation", "render_self", "render_nearby",
+    "render_audible", "render_minimap", "rank_nearby", "relative_compass",
 ]
