@@ -5,7 +5,7 @@ Run after the engine + Qwen are up. From the repo root:
 
     # 1. Start engine (high rate limit so cast can register back-to-back):
     /tmp/engine -addr 127.0.0.1:8090 \\
-        -world worlds/dev_test.json \\
+        -bundle worlds/dev_test \\
         -register-rate 100 -register-burst 100 \\
         -event-log /tmp/agentsim_runlog/events.jsonl \\
         > /tmp/agentsim_runlog/engine.log 2>&1 &

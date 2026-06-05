@@ -106,7 +106,7 @@ goblins lurk in wilderness pockets, wizards in the desert.
 
 ```
 cd ~/projects/agent_sim/engine
-go run ./cmd/genworld_pretty -w 1500 -h 1500 -out ../worlds/eldoria.json
+go run ./cmd/genworld_pretty -w 1500 -h 1500 -out ../worlds/eldoria/world.json
 ```
 
 Optional flags:
@@ -147,6 +147,6 @@ Tier 0:  Stonemoor       (360, 200)   Coldbrook    (130, 320)
 ```
 
 Audit invariant: every settlement coord must sit on a non-water tile,
-verified by the `worlds/_design/audit_eldoria.py` script (or the
+verified by the `worlds/eldoria/design/audit_eldoria.py` script (or the
 in-line Python in the CLAUDE history under
 `docs/CLEANUP_PLAN.md`).

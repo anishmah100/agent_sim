@@ -2,10 +2,9 @@
 # One-command bringup for agent_sim.
 #
 # Starts:
-#   - the Go engine on :8080 (worlds/dev_test.json, scenario=fantasy_town)
+#   - the Go engine on :8080 (worlds/eldoria bundle, scenario=fantasy_town)
 #   - the Vite frontend dev server (default :5173)
-#   - the NPC supervisor (2x heuristic_bot.py) if examples/heuristic_bot.py
-#     resolves and Python is installed
+#   - the NPC supervisor (bundle-declared NPCs) if Python is installed
 #
 # Logs:
 #   .runlog/engine.log
@@ -19,17 +18,17 @@ cd "$(dirname "$0")"
 mkdir -p .runlog
 
 ENGINE_ADDR="${ENGINE_ADDR:-127.0.0.1:8080}"
-# Worlds:
-#   worlds/eldoria.json        — 1500×1500 fantasy continent with 6 regions
-#                                and 6 towns (Frostvale, Pinewood, Greenfield,
-#                                Crossroads, Saltport, Dunehallow). DEFAULT.
-#   worlds/dev_test.json       — 60×40 hand-designed Oak Hollow village.
-#   worlds/dev_wilderness.json — 200×120 wilderness map; exercises viewport
-#                                streaming + minimap; choose with WORLD=...
-WORLD="${WORLD:-worlds/eldoria.json}"
-SCENARIO="${SCENARIO:-fantasy_town}"
+# Worlds — each is a self-contained bundle under worlds/<name>/ holding
+# world.json + bundle.toml + npcs.json + design/.
+#   worlds/eldoria          — 1500×1500 fantasy continent with 6 regions
+#                             and 6 towns. DEFAULT.
+#   worlds/dev_test         — 60×40 hand-designed Oak Hollow village.
+#   worlds/dev_wilderness   — 200×120 wilderness map; viewport streaming.
+#   worlds/soak_1000x1000   — 1000×1000 soak test.
+BUNDLE="${BUNDLE:-worlds/eldoria}"
 EVENT_LOG="${EVENT_LOG:-.runlog/events.jsonl}"
-NPC_CONFIG="${NPC_CONFIG:-scenarios/fantasy_town/npcs.json}"
+# Optional: override the bundle's bundled NPC config.
+NPC_CONFIG="${NPC_CONFIG:-}"
 SNAP_DIR="${SNAP_DIR:-.runlog/snapshots}"
 SNAP_EVERY="${SNAP_EVERY:-60s}"
 # Local dev CORS — allow the Vite dev server origins. Override with
@@ -43,14 +42,18 @@ JWT_SECRET="${JWT_SECRET:-}"
 echo "==> building engine"
 ( cd engine && go build -o ../.runlog/engine ./cmd/engine )
 
-# Decide whether to wire NPCs. If python3 isn't on PATH or the config
-# isn't there, skip and tell the user.
+# NPC config: if NPC_CONFIG is unset, the engine falls back to the bundle's
+# bundle.toml [npcs] config field. If python3 isn't on PATH, force-disable.
 NPC_FLAG=""
-if [[ -f "$NPC_CONFIG" ]] && command -v python3 >/dev/null 2>&1; then
-  NPC_FLAG="-npc-config $NPC_CONFIG"
-  echo "==> NPC supervisor will load $NPC_CONFIG"
+if command -v python3 >/dev/null 2>&1; then
+  if [[ -n "$NPC_CONFIG" ]]; then
+    NPC_FLAG="-npc-config $NPC_CONFIG"
+    echo "==> NPC supervisor will load $NPC_CONFIG (override)"
+  else
+    echo "==> NPC supervisor will use bundle's bundled config (if any)"
+  fi
 else
-  echo "==> NPC supervisor disabled (config missing or python3 not on PATH)"
+  echo "==> NPC supervisor disabled (python3 not on PATH)"
 fi
 
 pids=()
@@ -70,8 +73,7 @@ echo "==> starting engine on $ENGINE_ADDR (logs: .runlog/engine.log)"
 # shellcheck disable=SC2086
 .runlog/engine \
   -addr "$ENGINE_ADDR" \
-  -world "$WORLD" \
-  -scenario "$SCENARIO" \
+  -bundle "$BUNDLE" \
   -event-log "$EVENT_LOG" \
   -snapshot-dir "$SNAP_DIR" \
   -snapshot-every "$SNAP_EVERY" \

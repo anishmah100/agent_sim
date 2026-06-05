@@ -1,0 +1,23 @@
+# dev_test (Oak Hollow) — world bundle manifest (v1)
+
+[bundle]
+schema = "agent_sim/bundle/v1"
+name = "dev_test"
+display_name = "Oak Hollow"
+description = "60x40 hand-designed village. Smallest world, used for engine tests."
+
+[world]
+file = "world.json"
+
+[scenario]
+pkg = "fantasy_town"
+
+[art]
+pack = ""
+
+[npcs]
+# Oak Hollow doesn't ship default NPCs — bots are spawned externally.
+config = ""
+
+[design]
+generator = "design/oak_hollow_gen.py"

@@ -14,7 +14,8 @@ WORKDIR /app
 COPY --from=build /out/agent_sim_engine /usr/local/bin/agent_sim_engine
 
 # Worlds + art baked into the image so the engine boots standalone.
-# Override WORLD env to switch maps.
+# Each world is a self-contained bundle under /worlds/<name>/.
+# Override BUNDLE env to switch maps.
 COPY worlds /worlds
 COPY art/processed /art/processed
 
@@ -22,8 +23,7 @@ EXPOSE 8080
 
 # Defaults — Fly env overrides these in fly.toml.
 ENV ADDR="0.0.0.0:8080"
-ENV WORLD="/worlds/dev_test.json"
-ENV SCENARIO="fantasy_town"
+ENV BUNDLE="/worlds/eldoria"
 ENV SNAP_DIR="/data/snapshots"
 ENV SNAP_EVERY="60s"
 ENV EVENT_LOG="/data/events.jsonl"
@@ -34,8 +34,7 @@ ENV REGISTER_BURST="5"
 
 CMD ["sh", "-c", "mkdir -p /data/snapshots && agent_sim_engine \
   -addr $ADDR \
-  -world $WORLD \
-  -scenario $SCENARIO \
+  -bundle $BUNDLE \
   -snapshot-dir $SNAP_DIR \
   -snapshot-every $SNAP_EVERY \
   -event-log $EVENT_LOG \

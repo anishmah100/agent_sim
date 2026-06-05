@@ -28,6 +28,37 @@ Last updated: 2026-06-05 (wave plan locked, execution not yet started)
 | 10 | A9 pass bar | Zero crashes; all core verbs; ≥2 multi-turn dialogues; ≥1 trade; ≥1 building entry+exit; reflection learning; ToM non-default; p99 ≤ 3 s. PLUS user signs off on reasoning trace sample. |
 | 11 | Check-in cadence | Silent inside a wave. End-of-wave: summary + screenshot batch + wait for redirect. |
 
+## Eldoria "living world" target (added 2026-06-05)
+
+When the user opens the frontend after the push completes, they should see:
+
+1. **Interactable items scattered through Eldoria** — chests, food, tools,
+   weapons, signs to read. Not just NPCs walking on empty tiles. Items
+   are first-class entities the agents (and NPCs) can `look_at`, `pick_up`,
+   `drop`, `give`, and interact with via world-novel verbs.
+2. **Goal-driven NPCs (heuristic, fast)** — at least some NPCs running
+   pursuit goals (head to market, sell wares, return home, etc.) so the
+   world feels purposeful even before LLM agents fully load. These use
+   the new heuristic-bot path (Phase A3) with simple goal stacks, NO
+   LLM calls — they're cheap to run dozens of.
+3. **Live LLM-backed agents (capped)** — a few (3–5) Qwen agents
+   running real-time concurrently via the local rig (port 8782). Capacity
+   sized so each agent's tactical cycle finishes within its target
+   cadence (~1–3 s) without queuing latency cascades.
+
+These land as part of **Wave 6** (Eldoria soak + A9 Qwen depth smoke).
+A new bundle file `worlds/eldoria/agents.toml` will declare the live
+agent roster (heuristic NPC specs + Qwen agent specs) — Phase A9 wires
+this into the smoke run + the default `start.sh` launch.
+
+**Qwen capacity estimate (to be measured in A5):**
+- Qwen3.6-27B Q4_K_M on the 4090: ~30–50 tok/sec single-stream, with
+  continuous batching across ~3–5 concurrent sequences without
+  catastrophic per-stream slowdown.
+- Tactical cycle: ~700–1400 tokens (in + out). Reflective cycle: ~2x.
+- Realistic real-time concurrent LLM agents: **3–5**. Conservative
+  default: 3. Measure first, tune via Phase A5 + A9.
+
 ## Wave plan
 
 | Wave | Phases | Status | Notes |
@@ -46,7 +77,7 @@ Updated after each phase commit. Format:
 `[status] PHASE_ID — title — commit SHA (date)`
 
 ### Wave 1
-- [pending] WORLD-1 — World bundle data refactor + scenario relocation
+- [done] WORLD-1 — World bundle data refactor + scenario relocation (TBD-SHA)
 - [pending] WORLD-2 — Starlark rule engine + new genworld tool
 
 ### Wave 2

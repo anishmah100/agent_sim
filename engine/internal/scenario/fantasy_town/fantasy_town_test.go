@@ -51,6 +51,23 @@ func newScenarioWorld(t *testing.T) *world.World {
 	return w
 }
 
+// submit enqueues an action, drives one Tick to drain the queue, and
+// returns the result. Phase A made SubmitAction blocking on a reply
+// channel, so direct calls would deadlock without a tick goroutine —
+// this helper is the test-side equivalent.
+func submit(t *testing.T, w *world.World, entityID string, env *world.ActionEnvelope) world.ActionResult {
+	t.Helper()
+	ch := w.QueueAction(entityID, env)
+	w.Tick()
+	select {
+	case res := <-ch:
+		return res
+	default:
+		t.Fatalf("submit(%s, %s): Tick did not drain action", entityID, env.Verb)
+		return world.ActionResult{}
+	}
+}
+
 func TestSpawnGivesHPAndGold(t *testing.T) {
 	w := newScenarioWorld(t)
 	hero := w.EntityByID("hero")
@@ -67,7 +84,7 @@ func TestSpawnGivesHPAndGold(t *testing.T) {
 
 func TestAttackDealsDamage(t *testing.T) {
 	w := newScenarioWorld(t)
-	res := w.SubmitAction("hero", &world.ActionEnvelope{
+	res := submit(t, w, "hero", &world.ActionEnvelope{
 		ActionID: "1", Verb: "attack",
 		Raw: []byte(`{"verb":"attack","target":"goblin"}`),
 	})
@@ -86,11 +103,11 @@ func TestAttackDealsDamage(t *testing.T) {
 
 func TestDefendHalvesDamage(t *testing.T) {
 	w := newScenarioWorld(t)
-	w.SubmitAction("goblin", &world.ActionEnvelope{
+	submit(t, w, "goblin", &world.ActionEnvelope{
 		ActionID: "1", Verb: "defend",
 		Raw: []byte(`{"verb":"defend"}`),
 	})
-	w.SubmitAction("hero", &world.ActionEnvelope{
+	submit(t, w, "hero", &world.ActionEnvelope{
 		ActionID: "2", Verb: "attack",
 		Raw: []byte(`{"verb":"attack","target":"goblin"}`),
 	})
@@ -104,11 +121,11 @@ func TestDefendHalvesDamage(t *testing.T) {
 
 func TestHealRestores(t *testing.T) {
 	w := newScenarioWorld(t)
-	w.SubmitAction("hero", &world.ActionEnvelope{
+	submit(t, w, "hero", &world.ActionEnvelope{
 		ActionID: "1", Verb: "attack",
 		Raw: []byte(`{"verb":"attack","target":"goblin"}`),
 	})
-	w.SubmitAction("goblin", &world.ActionEnvelope{
+	submit(t, w, "goblin", &world.ActionEnvelope{
 		ActionID: "2", Verb: "heal",
 		Raw: []byte(`{"verb":"heal"}`),
 	})
@@ -122,7 +139,7 @@ func TestHealRestores(t *testing.T) {
 func TestPayRejectsOutOfRange(t *testing.T) {
 	w := newScenarioWorld(t)
 	// Merchant at (5,2), hero at (2,2) — distance 3. Should reject.
-	res := w.SubmitAction("merchant", &world.ActionEnvelope{
+	res := submit(t, w, "merchant", &world.ActionEnvelope{
 		ActionID: "1", Verb: "pay",
 		Raw: []byte(`{"verb":"pay","target":"hero","amount":5}`),
 	})
@@ -138,7 +155,7 @@ func TestPayRejectsOutOfRange(t *testing.T) {
 
 func TestWorkPaysGold(t *testing.T) {
 	w := newScenarioWorld(t)
-	w.SubmitAction("hero", &world.ActionEnvelope{
+	submit(t, w, "hero", &world.ActionEnvelope{
 		ActionID: "1", Verb: "work_for_pay",
 		Raw: []byte(`{"verb":"work_for_pay"}`),
 	})
@@ -152,7 +169,7 @@ func TestWorkPaysGold(t *testing.T) {
 func TestLootRequiresDead(t *testing.T) {
 	w := newScenarioWorld(t)
 	// Place hero next to goblin (already at 2,2 and 3,2 — adjacent).
-	res := w.SubmitAction("hero", &world.ActionEnvelope{
+	res := submit(t, w, "hero", &world.ActionEnvelope{
 		ActionID: "1", Verb: "loot",
 		Raw: []byte(`{"verb":"loot","target":"goblin"}`),
 	})
@@ -171,7 +188,7 @@ func TestLootTransfersGold(t *testing.T) {
 	w.MutateEntity("goblin", func(real *world.Entity) {
 		real.Extras["hp"] = 0
 	})
-	res := w.SubmitAction("hero", &world.ActionEnvelope{
+	res := submit(t, w, "hero", &world.ActionEnvelope{
 		ActionID: "1", Verb: "loot",
 		Raw: []byte(`{"verb":"loot","target":"goblin"}`),
 	})

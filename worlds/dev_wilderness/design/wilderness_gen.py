@@ -6,9 +6,9 @@ monster spawn tiles, and a dungeon mouth (portal tile that warps to the
 dungeon interior map).
 
 Run:
-  python worlds/_design/wilderness.py
+  python worlds/dev_wilderness/design/wilderness_gen.py
 Writes:
-  worlds/dev_wilderness.json — extended Oak Hollow at 200×120 with the
+  worlds/dev_wilderness/world.json — extended Oak Hollow at 200×120 with the
   wilderness ring.
 """
 

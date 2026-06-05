@@ -1,0 +1,22 @@
+# soak_1000x1000 — world bundle manifest (v1)
+
+[bundle]
+schema = "agent_sim/bundle/v1"
+name = "soak_1000x1000"
+display_name = "Soak 1000x1000"
+description = "1000x1000 soak-test world for bot scale verification."
+
+[world]
+file = "world.json"
+
+[scenario]
+pkg = "fantasy_town"
+
+[art]
+pack = ""
+
+[npcs]
+config = ""
+
+[design]
+generator = ""

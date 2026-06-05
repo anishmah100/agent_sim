@@ -1,0 +1,35 @@
+# Eldoria — world bundle manifest (v1)
+#
+# Loaded by the engine via --bundle worlds/eldoria/. The engine reads
+# this file to learn what world.json to load, which scenario package
+# to install, and any per-world overrides.
+
+[bundle]
+schema = "agent_sim/bundle/v1"
+name = "eldoria"
+display_name = "Eldoria"
+description = "1500x1500 fantasy continent with 6 regions and 6 towns."
+
+[world]
+# Path relative to bundle dir.
+file = "world.json"
+
+[scenario]
+# Phase 1: scenario logic still in Go. The engine looks up the
+# scenario package by this string. Phase 2 replaces this with a
+# Starlark ruleset bundled here (see scenario.star).
+pkg = "fantasy_town"
+
+[art]
+# Optional per-world art-pack overrides. None for now — fall back
+# to the shared catalog at art/manifests/sprites.json.
+pack = ""
+
+[npcs]
+# Path (relative to bundle dir) to the NPC spawn supervisor config.
+config = "npcs.json"
+
+[design]
+# Procedural generator for this world's map. Not loaded at runtime —
+# kept for re-generation.
+generator = ""

@@ -21,8 +21,7 @@ primary_region = "iad"
 
 [env]
   ADDR = "0.0.0.0:8080"
-  WORLD = "/worlds/dev_test.json"
-  SCENARIO = "fantasy_town"
+  BUNDLE = "/worlds/eldoria"
   SNAP_DIR = "/data/snapshots"
   SNAP_EVERY = "60s"
   EVENT_LOG = "/data/events.jsonl"

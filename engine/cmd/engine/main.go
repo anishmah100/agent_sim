@@ -34,12 +34,13 @@ const tickRate = 60
 const tickDuration = time.Second / tickRate
 
 var (
-	flagAddr      = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
-	flagWorld     = flag.String("world", "worlds/dev_test.json", "world JSON file")
-	flagScenario  = flag.String("scenario", "fantasy_town", "scenario pack id")
+	flagAddr     = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
+	flagBundle   = flag.String("bundle", "worlds/eldoria", "world bundle directory (contains bundle.toml + world.json). Preferred over -world/-scenario.")
+	flagWorld    = flag.String("world", "", "[legacy] direct path to a world.json. If set, overrides -bundle's world.")
+	flagScenario = flag.String("scenario", "", "[legacy] scenario package id. If set, overrides bundle's scenario.")
 	flagEventLog  = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
 	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
-	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn (see internal/npc)")
+	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn. If empty, falls back to the bundle's npcs.config (if any).")
 	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
 	flagSnapEvery = flag.Duration("snapshot-every", 60*time.Second, "how often to write a snapshot (0 disables)")
 
@@ -53,13 +54,50 @@ var (
 func main() {
 	flag.Parse()
 
-	w, err := world.Load(*flagWorld)
-	if err != nil {
-		log.Fatalf("load world: %v", err)
+	// Resolve the world bundle + the effective world / scenario / npcs
+	// config paths. Bundle is the source-of-truth; legacy flags override
+	// individual fields for ad-hoc dev.
+	var (
+		w           *world.World
+		bundle      *world.Bundle
+		scenarioPkg = *flagScenario // legacy override (if set)
+		npcConfig   = *flagNPCConfig
+		worldSrc    string
+	)
+	switch {
+	case *flagWorld != "":
+		// Legacy: direct path to world.json, no bundle.
+		var err error
+		w, err = world.Load(*flagWorld)
+		if err != nil {
+			log.Fatalf("load world (legacy -world): %v", err)
+		}
+		worldSrc = *flagWorld
+		if scenarioPkg == "" {
+			scenarioPkg = "fantasy_town"
+		}
+	default:
+		// Preferred path: bundle.
+		var err error
+		w, bundle, err = world.LoadBundle(*flagBundle)
+		if err != nil {
+			log.Fatalf("load bundle %s: %v", *flagBundle, err)
+		}
+		worldSrc = filepath.Join(bundle.Dir, bundle.WorldFile)
+		if scenarioPkg == "" {
+			scenarioPkg = bundle.ScenarioPkg
+		}
+		if npcConfig == "" {
+			npcConfig = bundle.NPCsConfigPath()
+		}
 	}
 	log.Printf("loaded world %s (%dx%d, %d entities) from %s",
 		w.MapID, w.WidthTiles, w.HeightTiles,
-		len(w.Snapshot().Entities), *flagWorld)
+		len(w.Snapshot().Entities), worldSrc)
+	if bundle != nil {
+		log.Printf("bundle: %s — scenario=%s art_pack=%q",
+			bundle.Name, scenarioPkg, bundle.ArtPack)
+	}
 
 	// Restore from the latest snapshot in the snapshot dir, if one
 	// exists. The world JSON gave us the static map; this overlays
@@ -78,9 +116,14 @@ func main() {
 	// composable systems to register; the SystemHost owns the verb
 	// registry, event bus, spatial index, and service table.
 	var host *world.SystemHost
-	if *flagScenario == "fantasy_town" {
+	switch scenarioPkg {
+	case "fantasy_town":
 		host = fantasy_town.Install(w)
 		log.Printf("installed scenario: %s (%d verbs)", fantasy_town.Name, host.Registry.VerbCount())
+	case "":
+		log.Printf("no scenario installed (bundle did not specify one)")
+	default:
+		log.Fatalf("unknown scenario package: %q", scenarioPkg)
 	}
 
 	// Historian listens to every event on the bus. Wired after the
@@ -108,14 +151,14 @@ func main() {
 	// NPC supervisor — start BEFORE the HTTP server so processes that
 	// register on boot find the engine listening.
 	var npcSup *npc.Supervisor
-	if *flagNPCConfig != "" {
-		cfg, err := npc.LoadConfig(*flagNPCConfig)
+	if npcConfig != "" {
+		cfg, err := npc.LoadConfig(npcConfig)
 		if err != nil {
 			log.Fatalf("npc config: %v", err)
 		}
 		npcSup = npc.New(cfg, log.Default())
 		npcSup.Start(ctx)
-		log.Printf("supervising %d NPC spec(s) from %s", len(cfg.NPCs), *flagNPCConfig)
+		log.Printf("supervising %d NPC spec(s) from %s", len(cfg.NPCs), npcConfig)
 	}
 
 	hub := wire.NewViewerHub(ctx, w)

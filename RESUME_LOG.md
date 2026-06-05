@@ -25,3 +25,48 @@ blockers: (if blocked)
 status: done
 note: PROGRESS.md + RESUME_LOG.md initialized. 24-phase autonomous push authorized.
 Locked decisions are in PROGRESS.md. Next phase to execute: WORLD-1.
+
+## WORLD-1 — World bundle data refactor — 2026-06-05
+status: done
+finished: ~15:40
+files_touched:
+  - worlds/<name>/world.json (moved from worlds/<name>.json) — 4 worlds
+  - worlds/eldoria/npcs.json (moved from scenarios/fantasy_town/)
+  - worlds/<name>/design/*_gen.py (moved from worlds/_design/)
+  - worlds/<name>/bundle.toml (new, 4 files)
+  - engine/internal/world/bundle.go (new — LoadBundle / ReadBundle)
+  - engine/internal/world/bundle_test.go (new — 3 tests)
+  - engine/cmd/engine/main.go (new -bundle flag; legacy -world preserved)
+  - engine/Dockerfile + docker-compose.yml + deploy/fly.toml (BUNDLE env)
+  - start.sh + examples/spawn_emergent_cast.py + CLAUDE.md + README.md
+  - go.mod / go.sum (added github.com/BurntSushi/toml v1.4.0)
+  - SIDE FIX: engine/internal/scenario/fantasy_town/fantasy_town_test.go
+    was hanging for 10 min on TestAttackDealsDamage because SubmitAction
+    blocks on a reply channel that only resolves after Tick(). Added a
+    submit() helper that does QueueAction + Tick + receive. All tests
+    pass in 0.003s now.
+in_flight_notes: complete; ready to start WORLD-2.
+
+## WORLD-1 — original in-flight plan (historical) — 2026-06-05
+status: superseded by entry above
+plan:
+  1. Create per-world bundle dirs: worlds/eldoria/, worlds/dev_test/,
+     worlds/dev_wilderness/, worlds/soak_1000x1000/.
+plan:
+  1. Create per-world bundle dirs: worlds/eldoria/, worlds/dev_test/,
+     worlds/dev_wilderness/, worlds/soak_1000x1000/.
+  2. Move worlds/*.json → worlds/<name>/world.json
+  3. Create bundle.toml per world (name, scenario_pkg, art_pack, description).
+  4. Move scenarios/fantasy_town/npcs.json → worlds/eldoria/npcs.json.
+     Other worlds get their own (empty for now).
+  5. Move worlds/_design/*.py → worlds/<name>/design/
+  6. Add world.LoadBundle(dir) loader; --bundle flag in main.go
+     (backward compat: --world flag still accepts a path).
+  7. Update start.sh to use --bundle.
+  8. Update tests + verify smoke + commit.
+in_flight_notes:
+  - Scenario Go-code relocation is DEFERRED to WORLD-2 (it pairs with the
+    Starlark DSL — most scenario logic becomes Starlark, residual Go shrinks).
+  - Go version: 1.22 system + auto-toolchain pulls 1.25 per engine/go.mod.
+  - Default world per start.sh: eldoria. Per main.go: dev_test.json.
+    Inconsistency — keep eldoria as default everywhere.

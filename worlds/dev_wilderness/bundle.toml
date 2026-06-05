@@ -1,0 +1,22 @@
+# dev_wilderness — world bundle manifest (v1)
+
+[bundle]
+schema = "agent_sim/bundle/v1"
+name = "dev_wilderness"
+display_name = "Dev Wilderness"
+description = "200x120 wilderness map. Exercises viewport streaming + dynamic chunk load."
+
+[world]
+file = "world.json"
+
+[scenario]
+pkg = "fantasy_town"
+
+[art]
+pack = ""
+
+[npcs]
+config = ""
+
+[design]
+generator = "design/wilderness_gen.py"
