@@ -47,3 +47,7 @@ worlds/snapshots/*.bin
 # Local run artifacts from ./start.sh
 .runlog/
 engine/genart_manifest
+
+# Build artifacts (binaries from go run/test)
+engine/jsonl2sqlite
+engine/cmd/*/main.test
