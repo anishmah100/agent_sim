@@ -155,3 +155,37 @@ The default `hp / max_hp` ships as `public_at_any_distance: true` (Octopath-styl
 - Adding a Voting system later = a new package + a Manifest() method + registering verb handlers + event subscribers. **No engine refactor**. Users on the SDK that ships Voting see the new verbs in autocomplete the next time they fetch the manifest.
 - The UI World Rulebook automatically lists Voting under "What can I do here?" the moment the system is loaded.
 - A documentation site can be generated mechanically from the live manifest.
+
+## Interior entry (click-to-enter buildings)
+
+Front-end specific — kept here because it complements the affordance model.
+
+The interior layer fires only on an **audited allowlist** of sprite IDs;
+the legacy `bld:NNN` range (000–030) covers cottages, doors, windows,
+lamps, signposts, fences and roof tiles, of which only `bld:000` and
+`bld:001` are actually houses. Anything else triggering an interior
+would be obviously wrong (lamp-pops-into-cottage).
+
+Current allowlist (`frontend/src/render/Decoration.ts`):
+
+| Sprite ID | What it is | Interior template |
+|---|---|---|
+| `bld:000` | Red-roof cottage | `cottage` |
+| `bld:001` | Brown-roof cottage | `cottage` |
+| `bld:blacksmith` | The Forge | `blacksmith` |
+| `bld:town_hall` | Town hall | `town_hall` |
+| `bld:granary` | Granary | (cottage fallback for now) |
+| `bld:watchtower` | Watchtower | (cottage fallback for now) |
+
+Audit process when adding a new building sprite:
+
+1. Open the PNG. Confirm it's an actual building, not a fence/lamp/door.
+2. Add an entry to the allowlist with its interior template.
+3. Run the audit screenshots and click each new building variant in
+   the dev browser — verify the interior opens and the hover-glow
+   filter fires.
+
+When `ArtCatalog` lands (see `docs/CLEANUP_PLAN.md`), this allowlist
+becomes a property on the sprite entry (`enterable: true`,
+`interior_template: "cottage"`) and the hardcoded record in
+`Decoration.ts` is removed.

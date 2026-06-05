@@ -55,7 +55,36 @@ needed for real scale.
 - ⏳ **Spinlock budget**: stress-test the current architecture at 50, then 100 concurrent bots. Confirm tick rate stays at 60 Hz.
 - ⏳ Add a `/debug/pprof` endpoint so we can profile lock contention at the bottleneck.
 
-### Phase 2 — 100 to ~500 concurrent bots
+### Phase 2 — 100 to ~500 concurrent bots — ✅ SHIPPED
+
+**As-shipped design (commit `eb148b2`, June 2026):**
+
+- `World.actionQueue chan *pendingAction` — agent WS goroutines call
+  `World.QueueAction(entityID, env)` which appends + returns a buffered
+  reply channel. Goroutines never touch the world lock.
+- `World.snapshot atomic.Pointer[LiveSnapshot]` — at the end of every
+  `Tick()`, while still under the write-lock, we build an immutable
+  `LiveSnapshot` (entities map + spatial index keyed by tile +
+  audible window + static grids by reference) and atomic-store it.
+- `BuildObservationFor` reads the snapshot pointer **without taking
+  the world lock**, and uses the spatial index to walk only the
+  vision-radius bounding box (O(r²)) instead of iterating all
+  entities.
+- `Tick()` drains the action queue at the start of each tick (FIFO,
+  time-budgeted to 10 ms / tick), so action ordering is "first
+  enqueued wins" within a tick.
+- `findPath` bounded to 64 manhattan + 4096 nodes to keep
+  pathfinding tile-count-independent.
+- `/api/v1/agent/register` auto-spawns a fresh wanderer when no
+  entity is bound, so the soak harness can register N agents on an
+  empty world.
+
+**Soak result:** 5-minute soak with 1000 concurrent agents on a
+1000×1000 procedural world holds **60.0 Hz tick** with 99.994 % action
+ack rate (300 537 / 300 555) and 1.94 obs/s/agent. Zero throttling,
+zero stalls.
+
+**Pre-shipped design** (kept for context):
 
 Move observation generation **out of the write lock**.
 

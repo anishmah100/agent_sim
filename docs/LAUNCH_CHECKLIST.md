@@ -72,7 +72,14 @@ the Fly deploy story in `deploy/`, and the onboarding + agent-join UI in
 - [x] **Engine ignored bot Move commands** — root-caused: the autonomous wander loop ran for ALL agent-archetype entities including bot-controlled ones; bot's `Move east` got overridden by random wander on the next tick. Fixed by `Entity.PlayerControlled` flag + `SetPlayerControlled` toggled on agent connect/disconnect. Wander loop now skips player-controlled entities.
 - [x] **SDK silently dropped the brain task** — `asyncio.create_task(loop())` in `register_and_connect` didn't keep a reference, so the brain loop was GC-able mid-run. Fixed by storing on `agent._brain_task`.
 - [x] **SDK `act()` failures were silent** — added warning log on send error.
-- [ ] **Engine still wedges under sustained 4-bot load** — `/metrics` and viewer-WS stop responding after a few minutes of multi-bot activity even after the agent.go + viewer.go race fixes. Healthz keeps working. Hypothesis: lock contention between observation-loop W-locks, action dispatch W-locks, and tick W-locks at 60 Hz starves the snapshot RLock. The full fix is Phase 2 of `docs/SCALING_TO_1000_BOTS.md` — snapshot slot + async action queue, taking observation generation outside the world write lock. **Soak test required before launch.**
+- [x] **Engine wedge under sustained load — RESOLVED.** Phase A shipped:
+  async action queue (WS goroutines never hold the world write lock),
+  atomic `LiveSnapshot` pointer (observations read lock-free from a
+  per-tick snapshot), spatial-index vision query (O(r²) not O(N)),
+  bounded BFS (manhattan ≤ 64, ≤ 4096 nodes). 5-minute 1000-bot soak on
+  a 1000×1000 procedural world holds **60.0 Hz tick rate** with
+  99.994% action ack rate (300,537 / 300,555). See
+  `docs/SCALING_TO_1000_BOTS.md` for the as-shipped design.
 - [ ] Tree sprites and other v2 art occasionally still show a 1px artifact at the absolute edge; runbook for future cleanups in `art/strip_*` scripts.
 - [ ] Visual regression baseline (Playwright snapshots) — `frontend/tests/ui_smoke.mjs` takes screenshots; no baseline diff yet.
 - [ ] Multi-scenario beyond `fantasy_town` (Manhattan, Founding Fathers, etc.) — content work, not blocking soft launch.

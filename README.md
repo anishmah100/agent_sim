@@ -34,7 +34,7 @@ cd agent_sim
 | `engine/` | Go engine — composable systems, WS protocol, HTTP API, snapshot persistence, security middleware, soak harness. |
 | `frontend/` | TypeScript + PixiJS + Solid viewer. HD-2D rendering, day/night, minimap, story feed, join-as-agent modal, onboarding overlay. |
 | `sdk/python/` | Python SDK with typed actions, async observation iterator, and `register_and_connect()` convenience. |
-| `worlds/` | World JSON files. `dev_test.json` is the 60×40 Oak Hollow; `dev_wilderness.json` is the 200×120 wilderness with 44 NPCs. Both include `_design/*.py` generators. |
+| `worlds/` | World JSON files. `eldoria.json` is the 1500×1500 default — 21 settlements + ~250 NPCs (generator at `engine/cmd/genworld_pretty/`). `dev_test.json` (60×40 Oak Hollow) and `dev_wilderness.json` (200×120 wilderness) are kept as small fixtures for tests and quick iteration; select with `WORLD=…`. |
 | `art/` | Source + processed sprite art. The `strip_*` scripts are the slice cleanup pipeline. |
 | `scenarios/fantasy_town/` | Scenario config — NPC spawn list, system wiring. |
 | `examples/` | Sample agents — `hierarchical_agent.py` (slow LLM brain + fast deterministic controller), `heuristic_bot.py` (no-LLM rule-based), `deploy_fly/` (Fly template for an always-on **bot**, not the engine). |

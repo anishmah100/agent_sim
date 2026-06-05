@@ -45,7 +45,8 @@ type BlueprintDef struct {
 	InitialMaterials    []string `json:"initial_materials"`
 	AdvanceMaterials    []string `json:"advance_materials"`
 	StepsToComplete     int      `json:"steps_to_complete"`
-	FootprintW, FootprintH int   `json:"footprint_w,omitempty"`
+	FootprintW int `json:"footprint_w,omitempty"`
+	FootprintH int `json:"footprint_h,omitempty"`
 }
 
 var defaultBlueprints = map[string]BlueprintDef{

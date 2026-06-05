@@ -60,7 +60,13 @@ Snapshot of what's live:
 - Frontend: HD-2D viewport, four hand-authored interior themes, day/night, story feed, minimap with viewport indicator, join-as-agent modal, first-visit onboarding.
 - SDK: Python register/connect/brain loop with full verb coverage in models.py.
 - Deploy: `deploy/fly.toml` + `engine/Dockerfile` + `deploy/README.md` runbook.
-- Content: 60×40 Oak Hollow + 200×120 wilderness (44 entities — 32 goblins + 12 themed NPCs).
+- Content: **Eldoria** is the default world — 1500×1500 procedurally generated
+  fantasy continent with 21 settlements (1 royal capital + 5 regional kingdoms
+  + 15 satellite villages), road mesh, river system, ~250 NPCs across 13
+  archetypes, ~14k decorations. Generator: `engine/cmd/genworld_pretty/`.
+  Legacy worlds still available via `WORLD=worlds/dev_test.json ./start.sh`
+  (60×40 Oak Hollow) or `worlds/dev_wilderness.json` (200×120 wilderness).
+  See `docs/ELDORIA_WORLD_DESIGN.md`.
 
 Next user-driven gate: `fly deploy` from `deploy/README.md` and a friends-list soft launch.
 
