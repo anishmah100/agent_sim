@@ -37,7 +37,7 @@ type fileDeco struct {
 func main() {
 	w := flag.Int("w", 1000, "world width in tiles")
 	h := flag.Int("h", 1000, "world height in tiles")
-	out := flag.String("out", "soak_world.json", "output JSON path")
+	out := flag.String("out", "../worlds/soak_1000x1000/world.json", "output JSON path")
 	seed := flag.Uint64("seed", 1, "PRNG seed")
 	decoEvery := flag.Int("deco-every", 200, "1-in-N tiles gets a tree/rock (0 disables)")
 	flag.Parse()

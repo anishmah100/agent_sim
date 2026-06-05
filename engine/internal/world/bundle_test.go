@@ -59,6 +59,47 @@ func TestLoadBundle_DevTest(t *testing.T) {
 	}
 }
 
+func TestLoadBundle_EldoriaCarriesRules(t *testing.T) {
+	// Eldoria's bundle declares [rules.file]; LoadBundle should parse it
+	// and attach a RuleSet to the World.
+	dir := filepath.Join("..", "..", "..", "worlds", "eldoria")
+	w, _, err := LoadBundle(dir)
+	if err != nil {
+		t.Fatalf("LoadBundle: %v", err)
+	}
+	if w.Rules == nil {
+		t.Fatal("eldoria bundle declared rules.file but World.Rules is nil")
+	}
+	// Spot-check a tuning that eldoria's rules.star declares.
+	if got := w.Rules.GetInt("attack_damage", -1); got != 10 {
+		t.Fatalf("eldoria attack_damage: want 10, got %d", got)
+	}
+	if got := w.Rules.GetFloat("hunger_per_tick", -1); got != 0.0008 {
+		t.Fatalf("eldoria hunger_per_tick: want 0.0008, got %v", got)
+	}
+	// And an item.
+	if _, ok := w.Rules.Item("apple"); !ok {
+		t.Fatal("eldoria should declare item 'apple'")
+	}
+}
+
+func TestLoadBundle_DevTestHasNoRules(t *testing.T) {
+	// dev_test bundle does NOT declare [rules.file] — World.Rules
+	// should be nil and defaults should apply.
+	dir := filepath.Join("..", "..", "..", "worlds", "dev_test")
+	w, _, err := LoadBundle(dir)
+	if err != nil {
+		t.Fatalf("LoadBundle: %v", err)
+	}
+	if w.Rules != nil {
+		t.Fatalf("dev_test bundle has no [rules]; expected nil RuleSet, got %v", w.Rules)
+	}
+	// nil-safe getter still returns the supplied default.
+	if got := w.Rules.GetInt("attack_damage", 42); got != 42 {
+		t.Fatalf("nil-safe default: want 42, got %d", got)
+	}
+}
+
 func TestReadBundle_SchemaCheck(t *testing.T) {
 	// Read all four bundles — none should fail the schema check.
 	for _, name := range []string{"eldoria", "dev_test", "dev_wilderness", "soak_1000x1000"} {

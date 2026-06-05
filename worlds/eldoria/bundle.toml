@@ -33,3 +33,9 @@ config = "npcs.json"
 # Procedural generator for this world's map. Not loaded at runtime —
 # kept for re-generation.
 generator = ""
+
+[rules]
+# Starlark ruleset declaring tunings, items, and novel verbs.
+# Hermetic + deterministic. Optional — bundles without a [rules.file]
+# get a nil RuleSet and fall back to engine constants.
+file = "rules.star"

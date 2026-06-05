@@ -47,6 +47,29 @@ files_touched:
     pass in 0.003s now.
 in_flight_notes: complete; ready to start WORLD-2.
 
+## WORLD-2 — Starlark rule engine — 2026-06-05
+status: in_progress
+plan:
+  1. Add go.starlark.net dependency.
+  2. New package engine/internal/world/rules with RuleSet type.
+     - Tunings: map[string]float64 (and helpers GetFloat, GetInt, GetBool)
+     - Items: map[string]ItemDef (id, kind, props)
+     - Verbs: map[string]VerbDef (predicate + effect, future use)
+  3. Loader rules.LoadStarlark(path) → *RuleSet.
+  4. worlds/<name>/rules.star (start with minimal eldoria tunings).
+  5. bundle.toml gains [rules] section with file = "rules.star".
+  6. world.Bundle parses + LoadBundle wires it; World stores *RuleSet.
+  7. Public API for systems to read tunings later (Phase 5/SUB-5
+     refactors combat/money/etc to use these).
+  8. Tests + smoke.
+in_flight_notes:
+  - DO NOT refactor existing systems to read from RuleSet yet — that's
+    SUB-5/6 in Wave 2. WORLD-2 just makes the rules available.
+  - Eldoria rules.star starts with hunger_per_tick, attack_damage,
+    starting_gold — a few representative tunings for tests.
+  - Test pattern: load minimal star, assert .GetFloat("hunger_per_tick")
+    matches the literal in the .star file.
+
 ## WORLD-1 — original in-flight plan (historical) — 2026-06-05
 status: superseded by entry above
 plan:

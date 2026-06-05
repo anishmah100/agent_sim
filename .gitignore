@@ -6,6 +6,11 @@ build/
 *.so
 vendor/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
 # IDE
 .vscode/
 .idea/

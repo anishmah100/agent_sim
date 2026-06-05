@@ -9,7 +9,6 @@
         "--token", "dev",
         "--name", "Wanderer"
       ],
-      "cwd": "..",
       "count": 2,
       "auto_restart": true
     }

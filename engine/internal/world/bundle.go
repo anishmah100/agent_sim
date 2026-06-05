@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/anishmah100/agent_sim/engine/internal/world/rules"
 )
 
 // Bundle is the v1 world-bundle manifest parsed from <dir>/bundle.toml.
@@ -23,6 +25,7 @@ type Bundle struct {
 	ArtPack    string // optional override; "" → use shared catalog
 	NPCsFile   string // relative to Dir; "" → no default NPC supervisor
 	Generator  string // relative to Dir; "" → none
+	RulesFile  string // relative to Dir; "" → no Starlark ruleset
 }
 
 // bundleTOML mirrors the on-disk layout. Fields are flat — TOML
@@ -49,6 +52,9 @@ type bundleTOML struct {
 	Design struct {
 		Generator string `toml:"generator"`
 	} `toml:"design"`
+	Rules struct {
+		File string `toml:"file"`
+	} `toml:"rules"`
 }
 
 // ReadBundle parses bundle.toml from the given directory and returns the
@@ -83,13 +89,20 @@ func ReadBundle(dir string) (*Bundle, error) {
 		ArtPack:     t.Art.Pack,
 		NPCsFile:    t.NPCs.Config,
 		Generator:   t.Design.Generator,
+		RulesFile:   t.Rules.File,
 	}, nil
 }
 
-// LoadBundle is the one-call entry point: read bundle.toml + load world.json.
-// Returns the World ready for Tick(), and the parsed Bundle metadata
-// so the caller knows which scenario package to install and where to
-// find the NPC supervisor config.
+// LoadBundle is the one-call entry point: read bundle.toml + load
+// world.json + (if present) the Starlark ruleset. Returns the World
+// ready for Tick(), and the parsed Bundle metadata so the caller knows
+// which scenario package to install and where to find the NPC supervisor
+// config.
+//
+// The RuleSet is attached to the World; engine code can read tunings
+// via w.Rules.GetFloat(...) etc. A bundle without [rules.file] declared
+// leaves w.Rules nil — the rules package treats nil as "use defaults",
+// so old code continues to work.
 func LoadBundle(dir string) (*World, *Bundle, error) {
 	b, err := ReadBundle(dir)
 	if err != nil {
@@ -98,6 +111,13 @@ func LoadBundle(dir string) (*World, *Bundle, error) {
 	w, err := Load(filepath.Join(dir, b.WorldFile))
 	if err != nil {
 		return nil, b, err
+	}
+	if b.RulesFile != "" {
+		rs, err := rules.LoadStarlark(filepath.Join(dir, b.RulesFile))
+		if err != nil {
+			return nil, b, fmt.Errorf("load rules.star: %w", err)
+		}
+		w.Rules = rs
 	}
 	return w, b, nil
 }

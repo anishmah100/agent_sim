@@ -723,7 +723,7 @@ func main() {
 	w := flag.Int("w", 1500, "world width in tiles")
 	h := flag.Int("h", 1500, "world height in tiles")
 	seed := flag.Int64("seed", 42, "PRNG seed")
-	out := flag.String("out", "eldoria.json", "output JSON path")
+	out := flag.String("out", "../worlds/eldoria/world.json", "output JSON path")
 	flag.Parse()
 
 	rng := rand.New(rand.NewPCG(uint64(*seed), uint64(*seed)^0xdeadbeef))

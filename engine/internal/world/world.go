@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/anishmah100/agent_sim/engine/internal/world/rules"
 )
 
 type Facing string
@@ -138,6 +140,13 @@ type World struct {
 	MapID       string
 	WidthTiles  int
 	HeightTiles int
+
+	// Rules is the declarative ruleset for this world, parsed from
+	// worlds/<name>/rules.star at load time. Nil if the bundle did not
+	// declare [rules.file] (or if loaded via the legacy Load path).
+	// Callers should read tunings via Rules.GetFloat(...) etc — those
+	// methods are nil-safe and return the supplied default.
+	Rules *rules.RuleSet
 
 	mu       sync.RWMutex
 	tick     uint64
