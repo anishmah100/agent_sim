@@ -15,7 +15,8 @@
 
 import { onMount, onCleanup, createSignal } from "solid-js";
 import { mountPixiApp, type PixiHandle } from "../render/PixiApp";
-import { fetchWorldInfo, fetchWorldMap, type WorldInfo } from "../net/api";
+import { fetchMentalState, fetchWorldInfo, fetchWorldMap, type MentalStateResponse, type WorldInfo } from "../net/api";
+import type { MentalState } from "./Inspector";
 import { connectViewer, type ViewerClient } from "../net/ws";
 import type { TileMapData } from "../render/Tilemap";
 import type { EntityState } from "../render/Entity";
@@ -47,11 +48,29 @@ export function App() {
   const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
   const [editorOpen, setEditorOpen] = createSignal(false);
   const [tilesLegend, setTilesLegend] = createSignal<Record<string, TileKind> | null>(null);
+  const [mentalState, setMentalState] = createSignal<MentalState | null>(null);
+
+  function fetchAndSetMentalState(entityID: string) {
+    fetchMentalState(entityID).then((m: MentalStateResponse) => {
+      setMentalState({
+        dialogue: m.dialogue.map((d) => ({
+          tick: d.tick,
+          speaker: d.speaker,
+          channel: d.channel as "speech" | "shout" | "whisper" | "sound",
+          text: d.text,
+        })),
+        mind: m.mind,
+        traces: m.traces,
+        capture_reasoning_enabled: m.capture_reasoning_enabled,
+      });
+    }).catch(() => setMentalState(null));
+  }
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
 
   const closeInspector = () => {
+    setMentalState(null);
     setSelectedId(null);
     setSelectedSnapshot(null);
     pixiHandle?.setSelectedEntity(null);
@@ -90,6 +109,7 @@ export function App() {
         setSelectedId(ev.entity.entity_id);
         setSelectedSnapshot(ev.entity);
         pixiHandle?.setSelectedEntity(ev.entity.entity_id);
+        fetchAndSetMentalState(ev.entity.entity_id);
       } else {
         closeInspector();
       }
@@ -308,7 +328,11 @@ export function App() {
         </span>
       </div>
 
-      <Inspector entity={selectedSnapshot()} onClose={closeInspector} />
+      <Inspector
+        entity={selectedSnapshot()}
+        mentalState={mentalState() ?? undefined}
+        onClose={closeInspector}
+      />
 
       {hudOpen() && (
         <HUD

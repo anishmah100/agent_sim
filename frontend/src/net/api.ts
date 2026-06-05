@@ -23,6 +23,25 @@ export async function fetchWorldInfo(): Promise<WorldInfo> {
   return (await r.json()) as WorldInfo;
 }
 
+export interface MentalStateResponse {
+  entity_id: string;
+  capture_reasoning_enabled: boolean;
+  dialogue: Array<{ tick: number; speaker: string; channel: string; text: string }>;
+  mind: {
+    share_planner: boolean;
+    top_goal: string;
+    last_reflection: string;
+    goal_stack_size: number;
+  };
+  traces: Array<{ tick: number; action_id: string; verb: string; reasoning: string }>;
+}
+
+export async function fetchMentalState(entityID: string): Promise<MentalStateResponse> {
+  const r = await fetch(`${ENGINE_URL}/api/v1/agent/${encodeURIComponent(entityID)}/mental_state`);
+  if (!r.ok) throw new Error(`mental_state ${r.status}`);
+  return (await r.json()) as MentalStateResponse;
+}
+
 /** Fetch the world tilemap JSON. The engine serves it from /worlds/<name>.json
  *  alongside the WS endpoint, so we get correct CORS + the same origin
  *  for both. Falls back to a same-origin path if VITE_ENGINE_URL is empty
