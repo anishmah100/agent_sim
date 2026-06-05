@@ -34,17 +34,25 @@ async def register_agent(
     persona: dict,
     vision_mode: VisionMode = VisionMode.STRUCTURED,
     cadence_ms: int = 1000,
+    bind_entity: Optional[str] = None,
 ) -> AgentCredentials:
-    """One-shot HTTP registration. Returns credentials to feed into Agent()."""
+    """One-shot HTTP registration. Returns credentials to feed into Agent().
+
+    Pass `bind_entity` to claim a specific existing entity (e.g.
+    `npc_woodcutter`) instead of letting the engine pick the first
+    available agent-archetype body."""
+    body = {
+        "user_token": user_token,
+        "persona_blob": persona,
+        "vision_mode": vision_mode.value,
+        "cadence_ms": cadence_ms,
+    }
+    if bind_entity:
+        body["bind_entity"] = bind_entity
     async with httpx.AsyncClient() as h:
         r = await h.post(
             f"{server}/api/v1/agent/register",
-            json={
-                "user_token": user_token,
-                "persona_blob": persona,
-                "vision_mode": vision_mode.value,
-                "cadence_ms": cadence_ms,
-            },
+            json=body,
             timeout=10.0,
         )
         r.raise_for_status()
@@ -113,7 +121,16 @@ class Agent:
             "action_id": str(uuid.uuid4()),
             **action.model_dump(),
         }
-        await self._ws.send(json.dumps(payload))
+        try:
+            await self._ws.send(json.dumps(payload))
+        except Exception as e:
+            # Bubble up but log first so silent send failures show in
+            # bot logs (instrumentation added during emergence debugging).
+            import logging
+            logging.getLogger("agent_sim_sdk").warning(
+                "act(%s) send failed: %s", payload.get("verb"), e,
+            )
+            raise
 
     async def set_cadence(self, interval_ms: int) -> None:
         if not self._ws:
@@ -149,6 +166,7 @@ async def register_and_connect(
     persona: dict,
     vision_mode: VisionMode = VisionMode.STRUCTURED,
     cadence_ms: int = 1000,
+    bind_entity: Optional[str] = None,
     brain: Optional[Callable[[Observation], Awaitable[Optional[Action]]]] = None,
 ) -> Agent:
     """Convenience: register + connect + optionally run a brain loop.
@@ -158,14 +176,31 @@ async def register_and_connect(
     creds = await register_agent(
         server, user_token=user_token, persona=persona,
         vision_mode=vision_mode, cadence_ms=cadence_ms,
+        bind_entity=bind_entity,
     )
     agent = Agent(creds)
     await agent.connect()
     if brain:
         async def loop() -> None:
             async for obs in agent.observations():
-                act = await brain(obs)
+                try:
+                    act = await brain(obs)
+                except Exception as e:
+                    import logging
+                    logging.getLogger("agent_sim_sdk").warning(
+                        "brain raised %s — skipping this obs", e,
+                    )
+                    continue
                 if act is not None:
-                    await agent.act(act)
-        asyncio.create_task(loop())
+                    try:
+                        await agent.act(act)
+                    except Exception as e:
+                        import logging
+                        logging.getLogger("agent_sim_sdk").warning(
+                            "act(%s) failed: %s", type(act).__name__, e,
+                        )
+        # CRITICAL: keep the task reference on the Agent so it isn't
+        # silently garbage-collected mid-run. Without this, the brain
+        # appears to stop responding after a few ticks.
+        agent._brain_task = asyncio.create_task(loop())  # type: ignore[attr-defined]
     return agent

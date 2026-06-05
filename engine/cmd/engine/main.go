@@ -23,7 +23,9 @@ import (
 	"github.com/anishmah100/agent_sim/engine/internal/historian"
 	"github.com/anishmah100/agent_sim/engine/internal/metrics"
 	"github.com/anishmah100/agent_sim/engine/internal/npc"
+	"github.com/anishmah100/agent_sim/engine/internal/persist"
 	"github.com/anishmah100/agent_sim/engine/internal/scenario/fantasy_town"
+	"github.com/anishmah100/agent_sim/engine/internal/security"
 	"github.com/anishmah100/agent_sim/engine/internal/wire"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
@@ -38,6 +40,14 @@ var (
 	flagEventLog  = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
 	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
 	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn (see internal/npc)")
+	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
+	flagSnapEvery = flag.Duration("snapshot-every", 60*time.Second, "how often to write a snapshot (0 disables)")
+
+	// Security
+	flagCORS    = flag.String("cors-allow", "", "comma-separated CORS allowlist (origins). Empty disables CORS.")
+	flagJWTSecret = flag.String("jwt-secret", "", "HMAC secret for verifying agent registration JWTs. Empty disables JWT (dev only).")
+	flagRegRate = flag.Float64("register-rate", 1, "registrations per second per IP (token bucket refill)")
+	flagRegBurst = flag.Int("register-burst", 5, "registrations burst per IP")
 )
 
 func main() {
@@ -50,6 +60,19 @@ func main() {
 	log.Printf("loaded world %s (%dx%d, %d entities) from %s",
 		w.MapID, w.WidthTiles, w.HeightTiles,
 		len(w.Snapshot().Entities), *flagWorld)
+
+	// Restore from the latest snapshot in the snapshot dir, if one
+	// exists. The world JSON gave us the static map; this overlays
+	// dynamic state (HP, gold, inventory, contracts, inside_building).
+	if *flagSnapDir != "" {
+		if p := persist.LatestPath(*flagSnapDir); p != "" {
+			if err := persist.Restore(w, p); err != nil {
+				log.Printf("snapshot restore from %s failed: %v", p, err)
+			} else {
+				log.Printf("restored snapshot from %s", p)
+			}
+		}
+	}
 
 	// Install the chosen scenario. Each scenario package declares which
 	// composable systems to register; the SystemHost owns the verb
@@ -98,10 +121,26 @@ func main() {
 	hub := wire.NewViewerHub(ctx, w)
 	agents := wire.NewAgentHub(ctx, w)
 
+	// Security middleware — CORS allowlist + per-IP rate limit on
+	// /register + JWT verification on /register. Each is opt-in via flag.
+	var corsAllowlist []string
+	if *flagCORS != "" {
+		for _, o := range splitComma(*flagCORS) {
+			corsAllowlist = append(corsAllowlist, o)
+		}
+	}
+	corsMid := security.CORS(corsAllowlist)
+	regRateMid := security.RateLimit(*flagRegRate, *flagRegBurst)
+	var regJWTMid func(http.Handler) http.Handler
+	if *flagJWTSecret != "" {
+		regJWTMid = security.RequireJWT([]byte(*flagJWTSecret))
+	} else {
+		regJWTMid = func(h http.Handler) http.Handler { return h }
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/world/info", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
-		rw.Header().Set("Access-Control-Allow-Origin", "*")
 		_ = json.NewEncoder(rw).Encode(map[string]any{
 			"name":      "agent_sim engine",
 			"version":   "0.0.2",
@@ -119,7 +158,9 @@ func main() {
 	})
 	mux.HandleFunc("/ws/viewer", hub.Handle)
 	mux.HandleFunc("/ws/agent", agents.HandleWS)
-	mux.HandleFunc("/api/v1/agent/register", agents.HandleRegister)
+	// /register: rate-limit per IP → JWT verify → handler
+	mux.Handle("/api/v1/agent/register",
+		regRateMid(regJWTMid(http.HandlerFunc(agents.HandleRegister))))
 	mux.HandleFunc("/api/v1/leaderboards", wire.LeaderboardsHandler(w))
 	mux.HandleFunc("/api/v1/world/affordances", wire.AffordanceManifestHandler(host))
 	mux.HandleFunc("/api/v1/world/history", historian.Handler(hist))
@@ -164,7 +205,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              *flagAddr,
-		Handler:           mux,
+		Handler:           corsMid(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -179,6 +220,16 @@ func main() {
 	tickTimer := time.NewTicker(tickDuration)
 	defer tickTimer.Stop()
 
+	// Snapshot timer — writes world state periodically when -snapshot-dir
+	// is set. A final write fires at shutdown so the next boot picks up
+	// the latest live state.
+	var snapTimer *time.Ticker
+	if *flagSnapDir != "" && *flagSnapEvery > 0 {
+		snapTimer = time.NewTicker(*flagSnapEvery)
+		defer snapTimer.Stop()
+		log.Printf("snapshot every %v → %s", *flagSnapEvery, *flagSnapDir)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -189,23 +240,60 @@ func main() {
 			if npcSup != nil {
 				npcSup.Stop()
 			}
+			// Final snapshot before exit so the next boot resumes
+			// from the live tick.
+			if *flagSnapDir != "" {
+				if p, err := persist.Write(w, *flagSnapDir); err != nil {
+					log.Printf("final snapshot failed: %v", err)
+				} else {
+					log.Printf("final snapshot → %s", p)
+				}
+			}
 			log.Println("clean exit")
 			return
 
 		case <-tickTimer.C:
 			w.Tick()
 			tick.Add(1)
+
+		case <-tickerOrNop(snapTimer):
+			if p, err := persist.Write(w, *flagSnapDir); err != nil {
+				log.Printf("snapshot failed: %v", err)
+			} else {
+				log.Printf("snapshot → %s", p)
+			}
 		}
 	}
 }
 
-// corsHandler adds Access-Control-Allow-Origin: * to the response.
-// v0-only convenience; real CORS lockdown lands with the deploy story.
-func corsHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		rw.Header().Set("Access-Control-Allow-Origin", "*")
-		h.ServeHTTP(rw, r)
-	})
+// tickerOrNop returns the ticker's channel, or a nil channel if the
+// ticker is nil. A receive on a nil channel blocks forever, which is
+// exactly what we want for the optional snapshot timer in the main
+// select loop.
+func tickerOrNop(t *time.Ticker) <-chan time.Time {
+	if t == nil {
+		return nil
+	}
+	return t.C
+}
+
+// corsHandler — passthrough now that the real allowlist-based CORS
+// middleware wraps the mux at the top level.
+func corsHandler(h http.Handler) http.Handler { return h }
+
+func splitComma(s string) []string {
+	parts := []string{}
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == ',' {
+			parts = append(parts, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		parts = append(parts, s[start:])
+	}
+	return parts
 }
 
 // metricsSource implements metrics.Source by reading from the live

@@ -52,9 +52,17 @@ Original Session 1 docs (still valid where Session 2 doesn't supersede):
 
 ## Current state
 
-**Status: pre-code.** This commit and the `docs/` files represent the design lock. No engine / frontend / agent code has been written yet.
+**Status: launch-ready (pending user `fly deploy`).** Engine + frontend + SDK + deploy story are all in place. See `docs/LAUNCH_CHECKLIST.md` for the full punch list and remaining gates.
 
-Next milestone: **Milestone 0 — Style anchor + repo scaffolding.** See `docs/ROADMAP.md`.
+Snapshot of what's live:
+
+- Engine: composable systems, snapshot persistence, soak harness, security middleware (CORS allowlist + HS256 JWT + per-IP rate limit), all green Go tests.
+- Frontend: HD-2D viewport, four hand-authored interior themes, day/night, story feed, minimap with viewport indicator, join-as-agent modal, first-visit onboarding.
+- SDK: Python register/connect/brain loop with full verb coverage in models.py.
+- Deploy: `deploy/fly.toml` + `engine/Dockerfile` + `deploy/README.md` runbook.
+- Content: 60×40 Oak Hollow + 200×120 wilderness (44 entities — 32 goblins + 12 themed NPCs).
+
+Next user-driven gate: `fly deploy` from `deploy/README.md` and a friends-list soft launch.
 
 ## How to start a fresh Claude Code session
 

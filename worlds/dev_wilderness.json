@@ -307,6 +307,276 @@
       ],
       "facing": "S",
       "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_20",
+      "archetype": "goblin",
+      "pos": [
+        22,
+        83
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_21",
+      "archetype": "goblin",
+      "pos": [
+        37,
+        37
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_22",
+      "archetype": "goblin",
+      "pos": [
+        103,
+        67
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_23",
+      "archetype": "goblin",
+      "pos": [
+        161,
+        105
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_24",
+      "archetype": "goblin",
+      "pos": [
+        19,
+        18
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_25",
+      "archetype": "goblin",
+      "pos": [
+        99,
+        26
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_26",
+      "archetype": "goblin",
+      "pos": [
+        70,
+        50
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_27",
+      "archetype": "goblin",
+      "pos": [
+        74,
+        95
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_29",
+      "archetype": "goblin",
+      "pos": [
+        154,
+        45
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_30",
+      "archetype": "goblin",
+      "pos": [
+        18,
+        97
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_31",
+      "archetype": "goblin",
+      "pos": [
+        18,
+        28
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_32",
+      "archetype": "goblin",
+      "pos": [
+        43,
+        117
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_33",
+      "archetype": "goblin",
+      "pos": [
+        148,
+        22
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_34",
+      "archetype": "goblin",
+      "pos": [
+        159,
+        3
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "goblin_35",
+      "archetype": "goblin",
+      "pos": [
+        187,
+        73
+      ],
+      "facing": "S",
+      "display_name": "Wandering goblin"
+    },
+    {
+      "entity_id": "npc_woodcutter_0",
+      "archetype": "woodcutter",
+      "pos": [
+        129,
+        33
+      ],
+      "facing": "S",
+      "display_name": "Old Hannes"
+    },
+    {
+      "entity_id": "npc_woodcutter_1",
+      "archetype": "woodcutter",
+      "pos": [
+        78,
+        9
+      ],
+      "facing": "S",
+      "display_name": "Young Pia"
+    },
+    {
+      "entity_id": "npc_drifter_2",
+      "archetype": "drifter",
+      "pos": [
+        91,
+        14
+      ],
+      "facing": "S",
+      "display_name": "The drifter"
+    },
+    {
+      "entity_id": "npc_cloaked_wanderer_3",
+      "archetype": "cloaked_wanderer",
+      "pos": [
+        95,
+        14
+      ],
+      "facing": "S",
+      "display_name": "The cloaked one"
+    },
+    {
+      "entity_id": "npc_trainer_red_4",
+      "archetype": "trainer_red",
+      "pos": [
+        160,
+        24
+      ],
+      "facing": "S",
+      "display_name": "Red Trainer"
+    },
+    {
+      "entity_id": "npc_trainer_lyra_blue_5",
+      "archetype": "trainer_lyra_blue",
+      "pos": [
+        192,
+        37
+      ],
+      "facing": "S",
+      "display_name": "Lyra"
+    },
+    {
+      "entity_id": "npc_baker_6",
+      "archetype": "baker",
+      "pos": [
+        31,
+        34
+      ],
+      "facing": "S",
+      "display_name": "The road baker"
+    },
+    {
+      "entity_id": "npc_iron_guard_7",
+      "archetype": "iron_guard",
+      "pos": [
+        57,
+        96
+      ],
+      "facing": "S",
+      "display_name": "Border guard"
+    },
+    {
+      "entity_id": "npc_iron_guard_8",
+      "archetype": "iron_guard",
+      "pos": [
+        192,
+        33
+      ],
+      "facing": "S",
+      "display_name": "Watch lieutenant"
+    },
+    {
+      "entity_id": "npc_mason_9",
+      "archetype": "mason",
+      "pos": [
+        10,
+        86
+      ],
+      "facing": "S",
+      "display_name": "Stonecutter"
+    },
+    {
+      "entity_id": "npc_wizard_10",
+      "archetype": "wizard",
+      "pos": [
+        95,
+        91
+      ],
+      "facing": "S",
+      "display_name": "The hermit"
+    },
+    {
+      "entity_id": "npc_child_11",
+      "archetype": "child",
+      "pos": [
+        176,
+        106
+      ],
+      "facing": "S",
+      "display_name": "Lost child"
     }
   ],
   "decorations": [

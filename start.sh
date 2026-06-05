@@ -19,10 +19,25 @@ cd "$(dirname "$0")"
 mkdir -p .runlog
 
 ENGINE_ADDR="${ENGINE_ADDR:-127.0.0.1:8080}"
-WORLD="${WORLD:-worlds/dev_test.json}"
+# Worlds:
+#   worlds/eldoria.json        — 1500×1500 fantasy continent with 6 regions
+#                                and 6 towns (Frostvale, Pinewood, Greenfield,
+#                                Crossroads, Saltport, Dunehallow). DEFAULT.
+#   worlds/dev_test.json       — 60×40 hand-designed Oak Hollow village.
+#   worlds/dev_wilderness.json — 200×120 wilderness map; exercises viewport
+#                                streaming + minimap; choose with WORLD=...
+WORLD="${WORLD:-worlds/eldoria.json}"
 SCENARIO="${SCENARIO:-fantasy_town}"
 EVENT_LOG="${EVENT_LOG:-.runlog/events.jsonl}"
 NPC_CONFIG="${NPC_CONFIG:-scenarios/fantasy_town/npcs.json}"
+SNAP_DIR="${SNAP_DIR:-.runlog/snapshots}"
+SNAP_EVERY="${SNAP_EVERY:-60s}"
+# Local dev CORS — allow the Vite dev server origins. Override with
+# CORS_ALLOW="https://your-prod-domain" in production.
+CORS_ALLOW="${CORS_ALLOW:-http://127.0.0.1:5173,http://localhost:5173}"
+# Local dev = no auth. Set JWT_SECRET to a real value in prod (see
+# tools/issue_jwt.py to mint tokens).
+JWT_SECRET="${JWT_SECRET:-}"
 
 # Build the engine binary in-place; the same process will run it.
 echo "==> building engine"
@@ -58,6 +73,10 @@ echo "==> starting engine on $ENGINE_ADDR (logs: .runlog/engine.log)"
   -world "$WORLD" \
   -scenario "$SCENARIO" \
   -event-log "$EVENT_LOG" \
+  -snapshot-dir "$SNAP_DIR" \
+  -snapshot-every "$SNAP_EVERY" \
+  -cors-allow "$CORS_ALLOW" \
+  -jwt-secret "$JWT_SECRET" \
   $NPC_FLAG \
   > .runlog/engine.log 2>&1 &
 pids+=($!)

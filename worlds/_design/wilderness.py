@@ -120,9 +120,9 @@ def place_decorations(g):
             "height_tiles": 1.1, "walkable": True,
         })
 
-    # Monsters as entities (returned separately).
+    # Monsters as entities — denser pack so the world feels inhabited.
     monsters = []
-    for i in range(20):
+    for i in range(36):
         x = rng.randint(2, W - 3)
         y = rng.randint(2, H - 3)
         if g[y][x] != GRASS:
@@ -134,7 +134,49 @@ def place_decorations(g):
             "facing": "S",
             "display_name": "Wandering goblin",
         })
-    return decs, monsters
+
+    # Wilderness inhabitants — non-monster NPCs distributed across the
+    # ring outside the central town. Each one is a real agent body the
+    # engine spawns with HP / inventory / contracts.
+    NPC_KINDS = [
+        ("woodcutter", "woodcutter", "Old Hannes"),
+        ("woodcutter", "woodcutter", "Young Pia"),
+        ("drifter", "drifter", "The drifter"),
+        ("cloaked_wanderer", "cloaked_wanderer", "The cloaked one"),
+        ("trainer_red", "trainer_red", "Red Trainer"),
+        ("trainer_lyra_blue", "trainer_lyra_blue", "Lyra"),
+        ("baker", "baker", "The road baker"),
+        ("iron_guard", "iron_guard", "Border guard"),
+        ("iron_guard", "iron_guard", "Watch lieutenant"),
+        ("mason", "mason", "Stonecutter"),
+        ("wizard", "wizard", "The hermit"),
+        ("child", "child", "Lost child"),
+    ]
+    npcs = []
+    placed = 0
+    attempts = 0
+    while placed < len(NPC_KINDS) and attempts < 2000:
+        attempts += 1
+        x = rng.randint(4, W - 5)
+        y = rng.randint(4, H - 5)
+        if g[y][x] != GRASS:
+            continue
+        # Keep them out of the central town footprint (the user can
+        # switch to dev_test.json for that; wilderness should feel
+        # like the outer ring).
+        if abs(x - TOWN_CX) < TOWN_W // 2 + 5 and abs(y - TOWN_CY) < TOWN_H // 2 + 5:
+            continue
+        arch, sprite, name = NPC_KINDS[placed]
+        npcs.append({
+            "entity_id": f"npc_{arch}_{placed}",
+            "archetype": arch,
+            "pos": [x, y],
+            "facing": "S",
+            "display_name": name,
+        })
+        placed += 1
+
+    return decs, monsters + npcs
 
 
 def main():

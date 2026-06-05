@@ -1,0 +1,59 @@
+# Fly.io deploy for the agent_sim engine.
+# From the repo root:
+#   fly launch --copy-config --no-deploy --dockerfile engine/Dockerfile
+#   fly volumes create agentsim_data --size 1 --region iad
+#   fly secrets set JWT_SECRET=$(openssl rand -hex 32)
+#   fly secrets set CORS_ALLOW=https://your-frontend.example
+#   fly deploy
+
+app = "agent-sim-engine"
+primary_region = "iad"
+
+[build]
+  dockerfile = "engine/Dockerfile"
+
+# Persistent volume for snapshots + event log. Survives redeploy and
+# machine swap; mount path matches SNAP_DIR / EVENT_LOG defaults in
+# the Dockerfile.
+[[mounts]]
+  source = "agentsim_data"
+  destination = "/data"
+
+[env]
+  ADDR = "0.0.0.0:8080"
+  WORLD = "/worlds/dev_test.json"
+  SCENARIO = "fantasy_town"
+  SNAP_DIR = "/data/snapshots"
+  SNAP_EVERY = "60s"
+  EVENT_LOG = "/data/events.jsonl"
+  # CORS_ALLOW + JWT_SECRET come in via `fly secrets set ...`
+  REGISTER_RATE = "1"
+  REGISTER_BURST = "5"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"      # the engine must stay up to keep the world ticking
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 200
+    soft_limit = 150
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[restart]]
+  policy = "on-failure"
+  max_retries = 3
+
+[[vm]]
+  size = "shared-cpu-2x"          # 2 vCPU, 512MB. Bump if soak shows sustained CPU > 70%.
+  memory = "512mb"

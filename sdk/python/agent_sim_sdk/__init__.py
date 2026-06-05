@@ -5,7 +5,7 @@ observations, sends typed actions. Vision mode (structured / image /
 both) is set per connection.
 """
 
-from .client import Agent, register_and_connect
+from .client import Agent, register_and_connect, register_agent, AgentCredentials
 from .models import (
     Observation, Action, Pos, Facing,
     Move, Speak, Whisper, Shout, LookAt, Interact,
@@ -17,10 +17,11 @@ from .models import (
     ProposeTask, AcceptTask, RejectTask, CompleteTask,
     VisionMode,
 )
+from .pathfind import Pathfinder, WALKABLE_TILES, BLOCKING_ARCHETYPES
 
 __all__ = [
     "Agent",
-    "register_and_connect",
+    "register_and_connect", "register_agent", "AgentCredentials",
     "Observation",
     "Action",
     "Pos",
@@ -33,4 +34,5 @@ __all__ = [
     "Enter", "Exit", "Lock", "Unlock", "ClaimOwnership", "TransferOwnership",
     "PlaceBlueprint", "AdvanceConstruction", "Demolish",
     "ProposeTask", "AcceptTask", "RejectTask", "CompleteTask",
+    "Pathfinder", "WALKABLE_TILES", "BLOCKING_ARCHETYPES",
 ]

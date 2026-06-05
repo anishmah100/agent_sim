@@ -10,10 +10,9 @@ import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import type { CharacterAtlas, CharacterAnim } from "./CharacterAtlas";
 
-// Shared hover outline filter for entities — same look as decorations'
-// building hover (Decoration.ts). One instance is fine because Pixi
-// re-evaluates the filter each frame against whichever container's
-// .filters array currently points to it.
+// Hover outline filter — applied to the BODY sprite only (not the
+// wrap container). Applying it to the wrap pulls the label texture
+// bounds into the filter, which produced large floating rectangles.
 const HOVER_OUTLINE = new OutlineFilter({
   thickness: 1.5,
   color: 0xfff2a8,
@@ -32,6 +31,28 @@ export interface EntityState {
    *  NOT render on the overworld. The value is the building sprite ID
    *  the entity is currently inside. */
   inside_building?: string;
+  /** Public extras the engine elects to expose (progress, kind, hp,
+   *  gold, etc.). See engine/internal/world/world.go publicExtraKeys
+   *  for the whitelist. Private extras (inventory, contracts) never
+   *  arrive here. */
+  extras?: Record<string, unknown>;
+}
+
+// Map a blueprint's 0..100 progress to the discrete stage index used
+// by worldObjectSpriteUrl(). Exported as a free function so update()
+// can detect cross-stage transitions cheaply.
+function blueprintStage(e: EntityState): number {
+  if (e.archetype !== "blueprint") return -1;
+  const progress = Number(e.extras?.["progress"] ?? 0);
+  // Cottage = 4 build steps → 0/25/50/75/100. Map onto the 6 stage
+  // sprites so a freshly placed blueprint shows the ghost outline and
+  // advance_construction visibly steps through walls → roof.
+  return progress >= 100 ? 5
+    : progress >= 75 ? 4
+    : progress >= 50 ? 3
+    : progress >= 25 ? 2
+    : progress > 0   ? 1
+    : 0;
 }
 
 // Footprint = 16x16 (one tile). Sprite container is anchored at top-left
@@ -75,13 +96,7 @@ function worldObjectSpriteUrl(e: EntityState): string {
       // Per-extras.progress: 0 → ghost, 25 → foundation, 50 → walls
       // partial, 75 → walls full, 100 → roof partial. The Construction
       // system writes 'progress' into extras.
-      const extras = ((e as unknown as { extras?: Record<string, unknown> }).extras) ?? {};
-      const progress = Number(extras["progress"] ?? 0);
-      const stage = progress >= 100 ? 5
-        : progress >= 75 ? 4
-        : progress >= 50 ? 3
-        : progress >= 25 ? 2
-        : 1;
+      const stage = blueprintStage(e);
       const stageNames = [
         "cottage_stage_0_blueprint", "cottage_stage_1_foundation",
         "cottage_stage_2_walls_partial", "cottage_stage_3_walls_full",
@@ -321,18 +336,17 @@ export class EntityLayer {
     this.applyPos(wrap, e.pos);
     this.container.addChild(wrap);
 
-    // Hover affordance — match the building hover in Decoration.ts so
-    // users learn one interaction model: pointer-over outlines the
-    // clickable thing, click selects/enters. Items + decorations stay
-    // un-hoverable to keep the visual signal meaningful.
+    // Hover outline on the BODY sprite only. Clicks still flow through
+    // input.ts's viewport-level hit-test; the eventMode on `wrap` is
+    // just so pointerover/pointerout fire reliably for the affordance.
     if (e.archetype !== "item" && e.archetype !== "decoration") {
       wrap.eventMode = "static";
       wrap.cursor = "pointer";
       wrap.on("pointerover", () => {
-        wrap.filters = [HOVER_OUTLINE];
+        body.filters = [HOVER_OUTLINE];
       });
       wrap.on("pointerout", () => {
-        wrap.filters = [];
+        body.filters = [];
       });
     }
 
@@ -412,6 +426,32 @@ export class EntityLayer {
   }
 
   private update(re: RenderedEntity, next: EntityState): void {
+    // World objects: their archetype is stable, but blueprint sprites
+    // need to advance through construction stages as extras.progress
+    // climbs. Detect the stage change and tear down + recreate so the
+    // new texture loads. Same for archetype flips (blueprint → building
+    // is engine-emitted as a remove+spawn, but defensive-style).
+    if (WORLD_OBJECT_ARCHETYPES.has(re.state.archetype)) {
+      const stageChanged =
+        re.state.archetype === "blueprint" &&
+        next.archetype === "blueprint" &&
+        blueprintStage(re.state) !== blueprintStage(next);
+      const archChanged = re.state.archetype !== next.archetype;
+      if (stageChanged || archChanged) {
+        const id = next.entity_id;
+        re.container.destroy({ children: true });
+        const recreated = this.create(next);
+        this.items.set(id, recreated);
+        return;
+      }
+      // Still need to track pos changes (rare — most world objects
+      // don't move, but items dropped at character feet do).
+      const moved = re.state.pos[0] !== next.pos[0] || re.state.pos[1] !== next.pos[1];
+      if (moved) this.applyPos(re.container, next.pos);
+      re.state = { ...next };
+      return;
+    }
+
     const moved = re.state.pos[0] !== next.pos[0] || re.state.pos[1] !== next.pos[1];
     const turned = re.state.facing !== next.facing;
     const renamed = re.state.display_name !== next.display_name;

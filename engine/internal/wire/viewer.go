@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -45,6 +46,27 @@ type viewerConn struct {
 	send  chan []byte
 	hub   *ViewerHub
 	addr  string
+	// done is closed by the read pump's defer once teardown begins, so
+	// the broadcast loop's non-blocking sends can bail instead of racing
+	// against an in-progress channel close.
+	done     chan struct{}
+	closedAt atomic.Bool
+}
+
+// trySend pushes a frame into c.send without blocking and without
+// racing against teardown. Returns true on success.
+func (c *viewerConn) trySend(data []byte) bool {
+	if c.closedAt.Load() {
+		return false
+	}
+	select {
+	case <-c.done:
+		return false
+	case c.send <- data:
+		return true
+	default:
+		return false
+	}
 }
 
 // NewViewerHub starts the broadcast goroutine and returns a hub ready
@@ -71,17 +93,16 @@ func (h *ViewerHub) Handle(w http.ResponseWriter, r *http.Request) {
 		send: make(chan []byte, 8),
 		hub:  h,
 		addr: r.RemoteAddr,
+		done: make(chan struct{}),
 	}
 	h.register(c)
 	log.Printf("viewer connect: %s (total=%d)", c.addr, h.count())
 
 	// Send an immediate full snapshot so the page doesn't render empty
-	// while it waits for the next broadcast tick.
+	// while it waits for the next broadcast tick. Uses trySend so a
+	// hostile client that ignores frames can't wedge us at connect.
 	if msg, err := h.encodeSnapshot(); err == nil {
-		select {
-		case c.send <- msg:
-		default:
-		}
+		c.trySend(msg)
 	}
 
 	// Two goroutines per connection: the writer drains the send chan
@@ -99,12 +120,17 @@ func (h *ViewerHub) register(c *viewerConn) {
 }
 
 func (h *ViewerHub) unregister(c *viewerConn) {
+	// Mark closed FIRST so any in-flight broadcast can bail out via
+	// trySend's atomic check before we close the channel.
+	if !c.closedAt.Swap(true) {
+		close(c.done)
+	}
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	if _, ok := h.clients[c]; ok {
 		delete(h.clients, c)
 		close(c.send)
 	}
+	h.mu.Unlock()
 }
 
 func (h *ViewerHub) count() int {
@@ -139,16 +165,20 @@ func (h *ViewerHub) broadcastLoop(ctx context.Context) {
 				log.Printf("encode snapshot: %v", err)
 				continue
 			}
+			// Snapshot the client set under the lock, then fan out the
+			// non-blocking sends OUTSIDE the lock. That keeps the
+			// register/unregister fast path responsive even when the
+			// fan-out has many viewers — critical at 1k+ concurrent
+			// connections.
 			h.mu.Lock()
+			conns := make([]*viewerConn, 0, len(h.clients))
 			for c := range h.clients {
-				// Non-blocking send. If the client is slow, drop the
-				// frame rather than back-pressuring the broadcast.
-				select {
-				case c.send <- msg:
-				default:
-				}
+				conns = append(conns, c)
 			}
 			h.mu.Unlock()
+			for _, c := range conns {
+				c.trySend(msg)
+			}
 		}
 	}
 }
