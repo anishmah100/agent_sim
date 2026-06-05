@@ -108,7 +108,7 @@ Updated after each phase commit. Format:
 
 ### Wave 6
 - [pending] AGENT-A9 — Qwen depth smoke (10 agents × 30 min on Eldoria)
-- [pending] SUB-14 — Iteration loop orchestrator (AlphaEvolve-style batches)
+- [done] SUB-14 — Iteration orchestrator (e691180)
 - [pending] WORLD-4 — Docs + soak verification on regenerated Eldoria
 
 ### Wave 7
