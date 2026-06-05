@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -39,6 +40,7 @@ var (
 	flagWorld    = flag.String("world", "", "[legacy] direct path to a world.json. If set, overrides -bundle's world.")
 	flagScenario = flag.String("scenario", "", "[legacy] scenario package id. If set, overrides bundle's scenario.")
 	flagEventLog  = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
+	flagEventMute = flag.String("event-mute", "", "comma-separated list of event categories to drop (system, movement, combat, economy, social, agent_reasoning, world)")
 	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
 	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn. If empty, falls back to the bundle's npcs.config (if any).")
 	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
@@ -128,7 +130,14 @@ func main() {
 
 	// Historian listens to every event on the bus. Wired after the
 	// scenario installs systems so it sees subscriber-issued events too.
-	hist, err := historian.New(*flagRingSize, *flagEventLog)
+	mute := map[string]bool{}
+	for _, cat := range strings.Split(*flagEventMute, ",") {
+		cat = strings.TrimSpace(cat)
+		if cat != "" {
+			mute[cat] = true
+		}
+	}
+	hist, err := historian.NewWithFilter(*flagRingSize, *flagEventLog, historian.CategoryFilter{Disabled: mute})
 	if err != nil {
 		log.Fatalf("historian init: %v", err)
 	}
@@ -137,6 +146,9 @@ func main() {
 		hist.Attach(host.Bus)
 		if *flagEventLog != "" {
 			log.Printf("historian appending events to %s", *flagEventLog)
+		}
+		if len(mute) > 0 {
+			log.Printf("historian muting categories: %v", mute)
 		}
 	}
 

@@ -22,24 +22,84 @@ import (
 
 const DefaultRingCapacity = 4096
 
-// Record is a single archived event. Kind + Tick let consumers filter
-// without parsing Payload; Payload is the JSON-marshaled event struct.
+// Record is a single archived event. Kind + Tick + Category let
+// consumers filter without parsing Payload; Payload is the JSON-marshaled
+// event struct.
 type Record struct {
-	Tick    uint64          `json:"tick"`
-	Seq     uint64          `json:"seq"`
-	Kind    string          `json:"kind"`
-	Payload json.RawMessage `json:"payload"`
+	Tick     uint64          `json:"tick"`
+	Seq      uint64          `json:"seq"`
+	Kind     string          `json:"kind"`
+	Category string          `json:"category,omitempty"`
+	Payload  json.RawMessage `json:"payload"`
+}
+
+// Category is the coarse-grained tag used to gate logging. See
+// docs/EXPERIMENT_SYSTEM_PLAN.md §7 — long-running experiments often
+// want to drop noisy categories (movement, system) without losing the
+// signal categories (combat, economy, social).
+const (
+	CategorySystem    = "system"
+	CategoryMovement  = "movement"
+	CategoryCombat    = "combat"
+	CategoryEconomy   = "economy"
+	CategorySocial    = "social"
+	CategoryReasoning = "agent_reasoning"
+	CategoryWorld     = "world" // catch-all
+)
+
+// CategoryFilter controls which categories are written. A category in
+// Disabled is dropped from BOTH the in-memory ring and the JSONL log.
+// Empty filter (all-on) is the default — engines run with full
+// observability unless an experiment configures otherwise.
+type CategoryFilter struct {
+	Disabled map[string]bool
+}
+
+// classify maps a known event Kind onto a Category. Unknown kinds get
+// CategoryWorld so they're never silently dropped. Update this map
+// when a new system emits a new event Kind.
+var categoryByKind = map[string]string{
+	// Combat (combat package).
+	"DamageDealt":  CategoryCombat,
+	"EntityDied":   CategoryCombat,
+	// Economy (money, trade, loot).
+	"GoldTransferred": CategoryEconomy,
+	"TradeCompleted":  CategoryEconomy,
+	"ItemLooted":      CategoryEconomy,
+	// Social (audibility).
+	"Speech":  CategorySocial,
+	"Whisper": CategorySocial,
+	"Shout":   CategorySocial,
+	"Sound":   CategorySocial,
+	// Movement.
+	"EntityMoved":   CategoryMovement,
+	"FacingChanged": CategoryMovement,
+	// Vitality (vitals package).
+	"HungerSpike": CategoryWorld,
+	// System.
+	"SystemBoot":     CategorySystem,
+	"SystemShutdown": CategorySystem,
+}
+
+// classify returns the category for an event Kind. Unknown kinds get
+// CategoryWorld.
+func classify(kind string) string {
+	if c, ok := categoryByKind[kind]; ok {
+		return c
+	}
+	return CategoryWorld
 }
 
 // Historian collects every event flowing through the bus.
 type Historian struct {
-	mu       sync.RWMutex
-	cap      int
-	ring     []Record
-	head     int  // next write index
-	full     bool // ring has wrapped at least once
-	seq      uint64
-	logFile  *os.File
+	mu      sync.RWMutex
+	cap     int
+	ring    []Record
+	head    int  // next write index
+	full    bool // ring has wrapped at least once
+	seq     uint64
+	logFile *os.File
+	filter  CategoryFilter
 }
 
 // New returns a Historian with the given ring capacity (events held in
@@ -47,12 +107,20 @@ type Historian struct {
 // every event is written there too. The caller closes the Historian to
 // flush the file.
 func New(capacity int, diskPath string) (*Historian, error) {
+	return NewWithFilter(capacity, diskPath, CategoryFilter{})
+}
+
+// NewWithFilter is the rich constructor: same as New, plus a category
+// filter that drops events whose Category is in filter.Disabled. Used
+// by experiments that want to silence noisy categories.
+func NewWithFilter(capacity int, diskPath string, filter CategoryFilter) (*Historian, error) {
 	if capacity <= 0 {
 		capacity = DefaultRingCapacity
 	}
 	h := &Historian{
-		cap:  capacity,
-		ring: make([]Record, capacity),
+		cap:    capacity,
+		ring:   make([]Record, capacity),
+		filter: filter,
 	}
 	if diskPath != "" {
 		if err := os.MkdirAll(filepath.Dir(diskPath), 0o755); err != nil {
@@ -75,6 +143,12 @@ func (h *Historian) Attach(bus *eventbus.Bus) {
 }
 
 func (h *Historian) observe(world eventbus.WorldCtx, ev eventbus.Event) {
+	kind := ev.Kind()
+	category := classify(kind)
+	// Category gate: if disabled, drop entirely (ring + disk).
+	if h.filter.Disabled != nil && h.filter.Disabled[category] {
+		return
+	}
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		// Don't crash the tick over a marshal failure; record the kind
@@ -83,10 +157,11 @@ func (h *Historian) observe(world eventbus.WorldCtx, ev eventbus.Event) {
 	}
 	h.mu.Lock()
 	rec := Record{
-		Tick:    world.Tick(),
-		Seq:     h.seq,
-		Kind:    ev.Kind(),
-		Payload: json.RawMessage(payload),
+		Tick:     world.Tick(),
+		Seq:      h.seq,
+		Kind:     kind,
+		Category: category,
+		Payload:  json.RawMessage(payload),
 	}
 	h.seq++
 	h.ring[h.head] = rec

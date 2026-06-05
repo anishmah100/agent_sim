@@ -86,7 +86,7 @@ Updated after each phase commit. Format:
 - [done] AGENT-A1 — ActionBatch + ActionResult + ack futures (39763a4)
 
 ### Wave 3
-- [pending] AGENT-A6 — Rulebook YAML→MD+JSON source-of-truth pipeline
+- [done] AGENT-A6 — Rulebook MD+JSON pipeline (3d5d51c)
 - [pending] SUB-7 — Structured event-bus logging (JSONL + category gates)
 - [pending] SUB-8 — Reasoning trace SDK + layered opt-in
 - [pending] AGENT-A2 — Layered observation renderer

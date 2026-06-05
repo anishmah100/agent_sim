@@ -121,3 +121,73 @@ func TestDiskLog(t *testing.T) {
 		t.Fatalf("expected 2 lines, got %d", lines)
 	}
 }
+
+func TestCategoryClassification(t *testing.T) {
+	// Spot-check the classifier covers the known event kinds.
+	cases := map[string]string{
+		"DamageDealt":     CategoryCombat,
+		"GoldTransferred": CategoryEconomy,
+		"Whisper":         CategorySocial,
+		"EntityMoved":     CategoryMovement,
+		"SystemBoot":      CategorySystem,
+		"HungerSpike":     CategoryWorld,
+		"NeverHeardOf":    CategoryWorld, // default
+	}
+	for kind, want := range cases {
+		if got := classify(kind); got != want {
+			t.Errorf("classify(%q): want %q, got %q", kind, want, got)
+		}
+	}
+}
+
+func TestCategoryGate_DropsDisabled(t *testing.T) {
+	// Create a historian that mutes Movement; emit one Combat + one
+	// Movement event; only Combat should land in the ring + disk.
+	bus := eventbus.New()
+	tmp := t.TempDir()
+	logPath := filepath.Join(tmp, "events.jsonl")
+	h, err := NewWithFilter(8, logPath, CategoryFilter{
+		Disabled: map[string]bool{CategoryMovement: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Attach(bus)
+	w := &stubWorld{t: 1}
+	bus.Queue(stubEvent{K: "DamageDealt", Note: "hit"})
+	bus.Queue(stubEvent{K: "EntityMoved", Note: "step"})
+	bus.Drain(w)
+	if err := h.Close(); err != nil {
+		t.Fatal(err)
+	}
+	recs := h.Recent(0, 0)
+	if len(recs) != 1 {
+		t.Fatalf("ring should hold 1 record (movement gated); got %d", len(recs))
+	}
+	if recs[0].Category != CategoryCombat {
+		t.Fatalf("kept record category: want combat, got %q", recs[0].Category)
+	}
+	// Disk file also has just one line.
+	data, _ := os.ReadFile(logPath)
+	lines := bytes.Count(data, []byte("\n"))
+	if lines != 1 {
+		t.Fatalf("disk: want 1 line, got %d", lines)
+	}
+}
+
+func TestCategoryGate_NoFilterKeepsAll(t *testing.T) {
+	bus := eventbus.New()
+	h, err := New(8, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.Attach(bus)
+	w := &stubWorld{t: 1}
+	bus.Queue(stubEvent{K: "EntityMoved"})
+	bus.Queue(stubEvent{K: "DamageDealt"})
+	bus.Queue(stubEvent{K: "Whisper"})
+	bus.Drain(w)
+	if got := len(h.Recent(0, 0)); got != 3 {
+		t.Fatalf("default historian keeps all; got %d", got)
+	}
+}
