@@ -41,3 +41,4 @@ worlds/snapshots/*.bin
 
 # Local run artifacts from ./start.sh
 .runlog/
+engine/genart_manifest
