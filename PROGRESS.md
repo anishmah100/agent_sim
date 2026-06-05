@@ -96,7 +96,7 @@ Updated after each phase commit. Format:
 - [done] AGENT-A4 — Claude harness skeleton (stubbed) (0385bdc)
 - [done] AGENT-A5 — Qwen harness + GBNF grammars (09793e4)
 - [done] SUB-9 — jsonl2sqlite derived view + indexes (909bce5)
-- [pending] SUB-10 — Mechanical metrics catalog
+- [done] SUB-10 — Mechanical metrics catalog (9a0c970)
 - [pending] WORLD-3 — Visual world editor (dev-mode panel)
 
 ### Wave 5

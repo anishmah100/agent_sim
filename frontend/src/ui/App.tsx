@@ -23,6 +23,8 @@ import { Inspector } from "./Inspector";
 import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
 import { HUD } from "./HUD";
+import { Editor } from "./Editor";
+import type { TileKind } from "../render/tiles";
 import { Minimap } from "./Minimap";
 import { StoryFeed } from "./StoryFeed";
 import { JoinAgent } from "./JoinAgent";
@@ -43,6 +45,8 @@ export function App() {
   const [joinOpen, setJoinOpen] = createSignal(false);
   const [liveEntities, setLiveEntities] = createSignal<EntityState[]>([]);
   const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
+  const [editorOpen, setEditorOpen] = createSignal(false);
+  const [tilesLegend, setTilesLegend] = createSignal<Record<string, TileKind> | null>(null);
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
@@ -75,6 +79,7 @@ export function App() {
       const mapData = (await fetchWorldMap(worldName)) as TileMapData;
       pixiHandle.loadWorld(mapData);
       setWorldTiles((mapData as { tiles?: string[] }).tiles);
+      if (mapData.tiles_legend) setTilesLegend(mapData.tiles_legend);
     } catch (e) {
       setWorldLoadError((e as Error).message);
     }
@@ -232,6 +237,23 @@ export function App() {
           </button>
           <button
             type="button"
+            data-testid="editor-toggle-button"
+            onClick={() => setEditorOpen(!editorOpen())}
+            title="Toggle world editor (Cmd+E)"
+            style={{
+              padding: "4px 10px",
+              background: editorOpen() ? "#feae34" : "#3a4466",
+              color: editorOpen() ? "#1f2238" : "#ead4aa",
+              border: editorOpen() ? "1px solid #feae34" : "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            editor
+          </button>
+          <button
+            type="button"
             data-testid="join-agent-button"
             onClick={() => setJoinOpen(true)}
             style={{
@@ -299,6 +321,16 @@ export function App() {
       )}
 
       {rulebookOpen() && <WorldRulebook onClose={() => setRulebookOpen(false)} />}
+
+      <Editor
+        open={editorOpen()}
+        onToggle={setEditorOpen}
+        tilesLegend={tilesLegend()}
+        onSave={() => {
+          // eslint-disable-next-line no-console
+          console.warn("Editor save: persistence lands in Phase WORLD-4");
+        }}
+      />
 
       {leaderboardsOpen() && (
         <div
