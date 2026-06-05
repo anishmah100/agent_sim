@@ -64,8 +64,8 @@ this into the smoke run + the default `start.sh` launch.
 | Wave | Phases | Status | Notes |
 |---|---|---|---|
 | 1 | World 1–2 | done | Bundle refactor + Starlark DSL (c13baf4, 728ed24) |
-| 2 | Substrate 5–6 + Agent A1 | in_progress | |
-| 3 | Agent A6, Substrate 7–8, Agent A2–A3 | pending | |
+| 2 | Substrate 5–6 + Agent A1 | done | 5cf3f05, 5df8609, 39763a4 |
+| 3 | Agent A6, Substrate 7–8, Agent A2–A3 | in_progress | |
 | 4 | Agent A4–A5 + Substrate 9–10 + World 3 | pending | |
 | 5 | Agent A7–A8 + Substrate 11–13 | pending | |
 | 6 | Agent A9 + Substrate 14 + World 4 | pending | Climactic Qwen depth smoke |
@@ -83,7 +83,7 @@ Updated after each phase commit. Format:
 ### Wave 2
 - [done] SUB-5 — Layered verb refactor + per-world tuning access (5cf3f05)
 - [done] SUB-6 — Stats schema + vitals/hunger system (5df8609)
-- [pending] AGENT-A1 — SDK & wire alignment for new Observation/Action shapes
+- [done] AGENT-A1 — ActionBatch + ActionResult + ack futures (39763a4)
 
 ### Wave 3
 - [pending] AGENT-A6 — Rulebook YAML→MD+JSON source-of-truth pipeline
