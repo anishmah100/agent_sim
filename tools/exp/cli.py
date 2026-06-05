@@ -151,6 +151,13 @@ def cmd_finalize(args: argparse.Namespace) -> int:
 
     # 4. REPORT.md — punchy 1-page synthesis
     report.write_text(_render_report(meta, m, rep), encoding="utf-8")
+
+    # 5. Journal pipeline — append a row to INDEX.md and a section to
+    # the per-world WORLD_JOURNAL.md so SUB-14's diagnose step can
+    # find this run later.
+    from tools.journal.update import update_all
+    update_all(run_dir, EXP_ROOT_DEFAULT)
+
     print(f"finalized {run_dir}")
     return 0
 

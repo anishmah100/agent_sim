@@ -103,7 +103,7 @@ Updated after each phase commit. Format:
 - [done] AGENT-A7 — 3-tab mental-state drawer (7b13e20)
 - [done] AGENT-A8 — Tier-2 integration scenarios (14e124d)
 - [done] SUB-11 — LLM-as-judge scaffold (ed11360)
-- [pending] SUB-12 — Experiment framework + exp CLI
+- [done] SUB-12 — exp new/finalize CLI (de3b5d8)
 - [pending] SUB-13 — JOURNAL.md + INDEX.md maintenance pipeline
 
 ### Wave 6
