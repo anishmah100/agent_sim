@@ -93,7 +93,7 @@ Updated after each phase commit. Format:
 - [done] AGENT-A3 — Goal-stack heuristic bot (4572455)
 
 ### Wave 4
-- [pending] AGENT-A4 — Claude harness + 4 brain layers (FEATURE-FLAGGED, no API calls)
+- [done] AGENT-A4 — Claude harness skeleton (stubbed) (0385bdc)
 - [pending] AGENT-A5 — Qwen harness + GBNF grammars
 - [pending] SUB-9 — SQLite derived view + indexes
 - [pending] SUB-10 — Mechanical metrics catalog

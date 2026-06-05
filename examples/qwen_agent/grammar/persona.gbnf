@@ -1,0 +1,9 @@
+root ::= "{" ws "\"long_term_values\":" ws string-list "," ws "\"initial_goals\":" ws goal-list ws "}"
+
+string-list ::= "[" ws string ws ("," ws string ws)* "]"
+goal-list ::= "[" ws goal ws ("," ws goal ws)* "]"
+goal ::= "{" ws "\"goal\":" ws string "," ws "\"why\":" ws string ws "}"
+
+string ::= "\"" [a-zA-Z0-9 .,!?'\\-]* "\""
+
+ws ::= [ \t\n]*

@@ -1,0 +1,12 @@
+root ::= "{" ws "\"reflective_note\":" ws string "," ws "\"goal_updates\":" ws goal-list "," ws "\"theory_of_mind_updates\":" ws tom-map ws "}"
+
+goal-list ::= "[]" | "[" ws goal ws ("," ws goal ws)* "]"
+goal ::= "{" ws "\"action\":" ws goal-action "," ws "\"goal\":" ws string ("," ws "\"why\":" ws string)? ws "}"
+goal-action ::= "\"push\"" | "\"complete\"" | "\"abandon\""
+
+tom-map ::= "{}" | "{" ws tom-entry ws ("," ws tom-entry ws)* "}"
+tom-entry ::= string ws ":" ws string
+
+string ::= "\"" [a-zA-Z0-9 .,!?'\\-]* "\""
+
+ws ::= [ \t\n]*
