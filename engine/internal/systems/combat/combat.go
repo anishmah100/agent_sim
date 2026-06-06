@@ -142,6 +142,7 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 	svc := w.GetService("combat").(CombatService)
 	svc.DealDamage(w, other.ID(), dmg, "attack", e.ID())
 	w.EmitSound(e.Pos(), "sword_clang")
+	w.BumpSocial(e.ID(), other.ID(), "attack")
 	res.Accepted = true
 	return res
 }

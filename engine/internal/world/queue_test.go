@@ -3,6 +3,8 @@ package world
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/anishmah100/agent_sim/engine/internal/world/rules"
 )
 
 // Tests for the Phase A async action queue + auto-spawn paths.
@@ -154,6 +156,37 @@ func TestSpawnAgentEntity_DefaultArchetype(t *testing.T) {
 	}
 	if e.Archetype != "wanderer" {
 		t.Fatalf("default archetype should be wanderer, got %q", e.Archetype)
+	}
+}
+
+// D5 — when the rule set declares a spawn hub + radius, fresh agents
+// land within the disc, not anywhere on the map. Verifies the
+// clustered-spawn precondition for Nowak's direct-reciprocity rule.
+func TestD5_SpawnAgentEntity_HonorsClusterRadius(t *testing.T) {
+	w := loadTestWorld(t)
+	// 10x6 grid, all walkable except y=2 cols 2-5. Hub at (5,4) with
+	// radius 2 → disc of <13 candidate tiles, all walkable.
+	rs, err := rules.LoadStarlarkString("d5_test", `
+register_tuning("spawn_hub_x", 5)
+register_tuning("spawn_hub_y", 4)
+register_tuning("spawn_radius", 2)
+`)
+	if err != nil {
+		t.Fatalf("load rules: %v", err)
+	}
+	w.Rules = rs
+
+	for i := 0; i < 8; i++ {
+		id, err := w.SpawnAgentEntity("wanderer", "")
+		if err != nil {
+			t.Fatalf("spawn %d: %v", i, err)
+		}
+		e := w.EntityByID(id)
+		dx := e.LogicalTile[0] - 5
+		dy := e.LogicalTile[1] - 4
+		if dx*dx+dy*dy > 2*2 {
+			t.Fatalf("spawn %d at %v outside disc radius=2 of (5,4)", i, e.LogicalTile)
+		}
 	}
 }
 

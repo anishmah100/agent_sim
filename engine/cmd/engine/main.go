@@ -34,6 +34,12 @@ import (
 const tickRate = 60
 const tickDuration = time.Second / tickRate
 
+// D11 — time multiplier (configurable via -time-mult flag). Engine
+// always advances 1 in-game tick per scheduler tick; the SCHEDULER
+// fires faster when mult>1, so a 4x run packs 4 in-game min into
+// 1 real min. All in-game-tick-denominated durations (hunger_per_tick,
+// respawn_interval, etc.) remain invariant to multiplier.
+
 var (
 	flagAddr     = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
 	flagBundle   = flag.String("bundle", "worlds/eldoria", "world bundle directory (contains bundle.toml + world.json). Preferred over -world/-scenario.")
@@ -46,6 +52,7 @@ var (
 	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn. If empty, falls back to the bundle's npcs.config (if any).")
 	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
 	flagSnapEvery = flag.Duration("snapshot-every", 60*time.Second, "how often to write a snapshot (0 disables)")
+	flagTimeMult  = flag.Float64("time-mult", 1.0, "in-game time multiplier (D11). 1.0 = real-time; 4.0 = 4x speed (dev iteration); higher values pack more in-game minutes into each real minute. The engine scheduler tick rate is multiplied by this value.")
 
 	// Security
 	flagCORS    = flag.String("cors-allow", "", "comma-separated CORS allowlist (origins). Empty disables CORS.")
@@ -260,7 +267,7 @@ func main() {
 	mux.HandleFunc("/api/v1/agents", wire.AgentsListHandler(agents, w))
 	// AGENT-A7 inspector → mental_state endpoint. Path includes the
 	// entity id; the handler parses it out.
-	mux.HandleFunc("/api/v1/agent/", wire.MentalStateHandler(hist, *flagCaptureReasoning))
+	mux.HandleFunc("/api/v1/agent/", wire.MentalStateHandler(hist, *flagCaptureReasoning, w))
 
 	// Prometheus-format /metrics. Stats sourced from the existing
 	// counters (no client_golang dep).
@@ -348,7 +355,22 @@ func main() {
 		}
 	}()
 
-	tickTimer := time.NewTicker(tickDuration)
+	// D11 — scale the tick interval by the time multiplier so the
+	// engine ticks faster (more in-game time per real second) without
+	// changing in-game-tick-denominated durations elsewhere.
+	mult := *flagTimeMult
+	if mult <= 0 {
+		mult = 1.0
+	}
+	scaledTick := time.Duration(float64(tickDuration) / mult)
+	if scaledTick < time.Millisecond {
+		scaledTick = time.Millisecond
+	}
+	if mult != 1.0 {
+		log.Printf("D11 time multiplier: %.2fx (scheduler tick = %v vs nominal %v)",
+			mult, scaledTick, tickDuration)
+	}
+	tickTimer := time.NewTicker(scaledTick)
 	defer tickTimer.Stop()
 
 	// Snapshot timer — writes world state periodically when -snapshot-dir

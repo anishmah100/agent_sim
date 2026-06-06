@@ -90,6 +90,7 @@ func (s *System) handlePay(w syscore.World, e syscore.Entity, env *syscore.Actio
 		res.Reason = reason
 		return res
 	}
+	w.BumpSocial(e.ID(), target.ID(), "pay")
 	res.Accepted = true
 	return res
 }

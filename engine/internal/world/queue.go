@@ -104,19 +104,50 @@ func (w *World) applyQueuedAction(entityID string, env *ActionEnvelope) ActionRe
 // walkable tile. Used by the register handler when no bind_entity is
 // given and the world has no free agent-eligible body. Returns the new
 // entity ID. Thread-safe (takes the write lock).
+//
+// D5 clustered spawn: if the rule set declares `spawn_hub_x`,
+// `spawn_hub_y`, and `spawn_radius` (> 0), the random tile is drawn
+// from within that disc. This forces every joining agent into mutual
+// vision range during the first few in-game minutes so direct
+// reciprocity (Nowak's `w > c/b`) can take hold. Falls back to the
+// full-world random search when no hub is declared OR no walkable
+// tile is found within the disc after the per-call budget.
 func (w *World) SpawnAgentEntity(archetype, displayName string) (string, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if archetype == "" {
 		archetype = "wanderer"
 	}
+
+	hubX := w.Rules.GetInt("spawn_hub_x", -1)
+	hubY := w.Rules.GetInt("spawn_hub_y", -1)
+	radius := w.Rules.GetInt("spawn_radius", 0)
+	clustered := hubX >= 0 && hubY >= 0 && radius > 0
+
 	// Find a random walkable, unoccupied tile. Try up to 64 times before
 	// scanning the whole grid.
 	var pos Tile
 	found := false
 	for i := 0; i < 64; i++ {
-		x := w.rng.IntN(w.WidthTiles)
-		y := w.rng.IntN(w.HeightTiles)
+		var x, y int
+		if clustered {
+			// Uniform square within the disc bounding box, then
+			// reject-sample to the disc. Square is `2*radius + 1`
+			// wide / tall — for radius 15 that's 31 candidate tiles
+			// per axis, plenty to find a free one.
+			x = hubX + w.rng.IntN(2*radius+1) - radius
+			y = hubY + w.rng.IntN(2*radius+1) - radius
+			dx, dy := x-hubX, y-hubY
+			if dx*dx+dy*dy > radius*radius {
+				continue
+			}
+		} else {
+			x = w.rng.IntN(w.WidthTiles)
+			y = w.rng.IntN(w.HeightTiles)
+		}
+		if x < 0 || y < 0 || x >= w.WidthTiles || y >= w.HeightTiles {
+			continue
+		}
 		t := Tile{x, y}
 		if w.walkable[y][x] && w.occupants[t] == "" {
 			pos = t
@@ -125,6 +156,8 @@ func (w *World) SpawnAgentEntity(archetype, displayName string) (string, error) 
 		}
 	}
 	if !found {
+		// Disc was full / blocked / off-map; fall back to full-grid
+		// scan so we never wedge registrations.
 		for y := 0; y < w.HeightTiles && !found; y++ {
 			for x := 0; x < w.WidthTiles; x++ {
 				t := Tile{x, y}

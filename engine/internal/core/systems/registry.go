@@ -37,6 +37,12 @@ type World interface {
 	// means non-combat death (no witness event). Muffled=true for
 	// kills inside buildings (narrows scream radius).
 	EmitDeathScream(at [2]int, victimID, killerID string, muffled bool)
+	// BumpSocial — D19. Increment the per-pair interaction counter for
+	// (a, b). Kind is one of "trade", "whisper", "pay", "attack",
+	// "contract" (other values are silently ignored). Bidirectional:
+	// the counter is incremented in both (a→b) AND (b→a). Safe to
+	// call under the world write lock.
+	BumpSocial(a, b string, kind string)
 	QueueEvent(eventbus.Event)
 	GetService(name string) any
 	RegisterService(name string, svc any)

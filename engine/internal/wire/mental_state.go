@@ -6,7 +6,15 @@ import (
 	"strings"
 
 	"github.com/anishmah100/agent_sim/engine/internal/historian"
+	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
+
+// SocialPeersReader — D19. Just the subset of *world.World the mental
+// state handler needs to surface per-pair social counts. Kept as an
+// interface so tests can supply a fixture instead of a full world.
+type SocialPeersReader interface {
+	SocialPeersOf(entityID string) map[string]world.SocialCounts
+}
 
 // MentalStateHandler serves /api/v1/agent/<id>/mental_state — the
 // Phase AGENT-A7 inspector reads this when the user clicks an entity.
@@ -28,7 +36,7 @@ import (
 // Traces come from the historian's reasoning_traces ring buffer,
 // filtered to this entity. capture_reasoning_enabled mirrors the
 // engine-level flag so the frontend can show the right gating hint.
-func MentalStateHandler(hist *historian.Historian, captureReasoning bool) http.HandlerFunc {
+func MentalStateHandler(hist *historian.Historian, captureReasoning bool, social SocialPeersReader) http.HandlerFunc {
 	return func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
 		rw.Header().Set("Access-Control-Allow-Origin", "*")
@@ -58,6 +66,12 @@ func MentalStateHandler(hist *historian.Historian, captureReasoning bool) http.H
 			Dialogue:                []dialogueLine{},
 			Mind:                    mindSnapshot{ShareReasoning: false},
 			Traces:                  []traceLine{},
+			Peers:                   map[string]world.SocialCounts{},
+		}
+		if social != nil {
+			if peers := social.SocialPeersOf(entityID); len(peers) > 0 {
+				body.Peers = peers
+			}
 		}
 		if hist != nil {
 			body.Traces = collectTraces(hist, entityID, 20)
@@ -86,11 +100,15 @@ func MentalStateHandler(hist *historian.Historian, captureReasoning bool) http.H
 }
 
 type mentalStateResponse struct {
-	EntityID                string         `json:"entity_id"`
-	CaptureReasoningEnabled bool           `json:"capture_reasoning_enabled"`
-	Dialogue                []dialogueLine `json:"dialogue"`
-	Mind                    mindSnapshot   `json:"mind"`
-	Traces                  []traceLine    `json:"traces"`
+	EntityID                string                        `json:"entity_id"`
+	CaptureReasoningEnabled bool                          `json:"capture_reasoning_enabled"`
+	Dialogue                []dialogueLine                `json:"dialogue"`
+	Mind                    mindSnapshot                  `json:"mind"`
+	Traces                  []traceLine                   `json:"traces"`
+	// D19 — per-pair social counters for this entity. Empty map when
+	// no interactions have been logged yet. Surfaced to the inspector's
+	// Relationships tab.
+	Peers map[string]world.SocialCounts `json:"peers"`
 }
 
 type dialogueLine struct {

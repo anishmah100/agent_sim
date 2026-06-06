@@ -665,3 +665,49 @@ func TestD1_Pay_RejectsDisplayName(t *testing.T) {
 		t.Fatal("pay to display_name 'B' must be rejected (D1)")
 	}
 }
+
+// D19 — accepted whisper/pay/attack/propose_task each bump the social
+// ledger (a→b and b→a). Verified by reading w.SocialCountsFor after
+// the verb commits.
+
+func TestD19_SocialLedger_BumpedByVerbs(t *testing.T) {
+	vc := newVCTest(t)
+	// Adjacent so range checks pass.
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	// Seed payer balance + an item to trade so pay/trade succeed.
+	vc.world.entities["a"].Extras = map[string]any{
+		"gold":      100,
+		"inventory": []any{"item:apple#1"},
+	}
+	if vc.world.entities["b"].Extras == nil {
+		vc.world.entities["b"].Extras = map[string]any{}
+	}
+	vc.world.entities["b"].Extras["gold"] = 100
+
+	if r := vc.submit("a", "whisper", `{"target":"b","text":"psst"}`); !r.Accepted {
+		t.Fatalf("whisper should accept; reason=%q", r.Reason)
+	}
+	if r := vc.submit("a", "pay", `{"target":"b","amount":5}`); !r.Accepted {
+		t.Fatalf("pay should accept; reason=%q", r.Reason)
+	}
+	if r := vc.submit("a", "attack", `{"target":"b"}`); !r.Accepted {
+		t.Fatalf("attack should accept; reason=%q", r.Reason)
+	}
+	if r := vc.submit("a", "trade",
+		`{"target":"b","item":"item:apple#1","price":3}`); !r.Accepted {
+		t.Fatalf("trade should accept; reason=%q", r.Reason)
+	}
+
+	ab := vc.world.SocialCountsFor("a", "b")
+	if ab.Whisper < 1 || ab.Pay < 1 || ab.Attack < 1 || ab.Trade < 1 {
+		t.Fatalf("(a,b) want all >=1, got %+v", ab)
+	}
+	ba := vc.world.SocialCountsFor("b", "a")
+	if ba != ab {
+		t.Fatalf("ledger must be bidirectional; (a,b)=%+v (b,a)=%+v", ab, ba)
+	}
+	peers := vc.world.SocialPeersOf("a")
+	if _, ok := peers["b"]; !ok {
+		t.Fatalf("PeersOf(a) must include b; got %v", peers)
+	}
+}

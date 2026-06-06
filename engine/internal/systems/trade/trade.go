@@ -92,6 +92,7 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 		real.SetExtra("inventory", cur)
 	})
 	w.QueueEvent(inventory.ItemTransferred{From: e.ID(), To: p.Target, Item: p.Item})
+	w.BumpSocial(e.ID(), p.Target, "trade")
 	res.Accepted = true
 	return res
 }

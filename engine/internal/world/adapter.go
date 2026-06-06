@@ -182,6 +182,30 @@ func (a *WorldAdapter) EmitDeathScream(at [2]int, victimID, killerID string, muf
 	}
 }
 
+// BumpSocial — D19. Forward to the world's socialLedger. Kind is a
+// free-form string, mapped to the internal SocialKind enum here.
+func (a *WorldAdapter) BumpSocial(a1, b, kind string) {
+	if a.W.social == nil {
+		return
+	}
+	var k SocialKind
+	switch kind {
+	case "trade":
+		k = SocialTrade
+	case "whisper":
+		k = SocialWhisper
+	case "pay":
+		k = SocialPay
+	case "attack":
+		k = SocialAttack
+	case "contract":
+		k = SocialContract
+	default:
+		return
+	}
+	a.W.social.Bump(a1, b, k)
+}
+
 func (a *WorldAdapter) QueueEvent(ev eventbus.Event) { a.Bus.Queue(ev) }
 
 func (a *WorldAdapter) GetService(name string) any   { return a.services[name] }

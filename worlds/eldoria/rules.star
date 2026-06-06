@@ -56,6 +56,20 @@ register_tuning("respawn_radius",         200)
 register_tuning("respawn_hub_x",          772)
 register_tuning("respawn_hub_y",          894)
 
+# D5 — clustered spawn for emergence experiments. When set, new
+# agents drop into the disc of `spawn_radius` tiles around
+# (spawn_hub_x, spawn_hub_y) instead of a random world tile. This
+# satisfies Nowak's analytic precondition w > c/b for direct
+# reciprocity: every agent encounters every other within the first
+# few in-game minutes. Default hub = Crossroads market (same tile
+# as the respawn hub) so food + agents cluster together. Radius
+# 18 ≈ everyone in mutual vision (vision_radius=12) from frame 1.
+# Setting spawn_radius to 0 disables clustering (falls back to
+# random world tile, the demo behaviour).
+register_tuning("spawn_hub_x",   772)
+register_tuning("spawn_hub_y",   894)
+register_tuning("spawn_radius",  18)
+
 # ---- Stats ----
 # Per-entity stats this world tracks. The engine creates the extras
 # slots at spawn (defaulting to `default`) and clamps to [min, max] on

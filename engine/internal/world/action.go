@@ -126,6 +126,10 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			return res
 		}
 		w.emitWhisper(e, target, p.Text)
+		// D19 — social ledger.
+		if w.social != nil {
+			w.social.Bump(e.EntityID, target.EntityID, SocialWhisper)
+		}
 		res.Accepted = true
 	case "look_at":
 		// look_at is a hint, not a state change. We just record it for

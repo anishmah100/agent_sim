@@ -241,6 +241,12 @@ type World struct {
 	// land structured events in the historian.
 	onBuildingEntered func(entityID, building string, tick uint64)
 	onBuildingExited  func(entityID, building string, tick uint64)
+
+	// D19 — per-pair social interaction ledger. Lives on the world so
+	// every verb handler (and the inspector endpoint) can reach it
+	// without plumbing a separate service. Has its own lock; safe to
+	// call under the world lock.
+	social *socialLedger
 }
 
 // LockWrite / UnlockWrite expose the world's write lock to callers
@@ -250,6 +256,24 @@ type World struct {
 // same lock — a paint operation is serialized with ticks.
 func (w *World) LockWrite()   { w.mu.Lock() }
 func (w *World) UnlockWrite() { w.mu.Unlock() }
+
+// SocialPeersOf — D19. Per-pair interaction counts keyed by peer id.
+// Empty map if no interactions yet. Safe for concurrent callers.
+func (w *World) SocialPeersOf(entityID string) map[string]SocialCounts {
+	if w.social == nil {
+		return map[string]SocialCounts{}
+	}
+	return w.social.PeersOf(entityID)
+}
+
+// SocialCountsFor — D19. Per-pair counts between (a, b). Zero value
+// if no interactions yet.
+func (w *World) SocialCountsFor(a, b string) SocialCounts {
+	if w.social == nil {
+		return SocialCounts{}
+	}
+	return w.social.CountsFor(a, b)
+}
 
 // SetOnActionAccepted installs the historian hook for accepted actions.
 // Call once after scenario install, before Tick() begins.
@@ -397,6 +421,7 @@ func Load(path string) (*World, error) {
 		// Cap at 16384 → at 1000 agents that's ~16 pending actions/agent.
 		// Excess yields a "queue_full" reject (backpressure signal).
 		actionQueue: make(chan *pendingAction, 16384),
+		social:      newSocialLedger(),
 	}
 	w.visionBlocks = make([][]bool, fw.HeightTiles)
 	w.tileKindGrid = make([][]string, fw.HeightTiles)

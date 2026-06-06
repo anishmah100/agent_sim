@@ -33,6 +33,7 @@ func (s *stubWorld) SpawnEntityFromSpec(EntitySpec) (Entity, error) { return nil
 func (s *stubWorld) RemoveEntity(string) error         { return nil }
 func (s *stubWorld) EmitSound([2]int, string)          {}
 func (s *stubWorld) EmitDeathScream([2]int, string, string, bool) {}
+func (s *stubWorld) BumpSocial(string, string, string)             {}
 func (s *stubWorld) QueueEvent(eventbus.Event)         {}
 func (s *stubWorld) GetService(string) any             { return nil }
 func (s *stubWorld) RegisterService(string, any)       {}
