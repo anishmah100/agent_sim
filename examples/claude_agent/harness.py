@@ -18,8 +18,10 @@ from dataclasses import dataclass
 from typing import Optional, Protocol
 
 from agent_sim_sdk import (
-    ActionBatch, Move, Speak, Shout, Whisper, LookAt, Pickup, Give, Pay,
-    Enter, Exit, Wait,
+    ActionBatch, Move, Speak, Shout, Whisper, LookAt, Interact, Pickup,
+    Drop, Equip, Give, Pay, WorkForPay, Trade, Loot, Chop, Mine,
+    Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
+    Attack, Defend, Heal, Wait,
     Observation, render_layered_observation,
 )
 
@@ -159,16 +161,21 @@ class Harness:
 
 def _action_from_dict(d: dict):
     """Turn a {verb, ...} dict (as produced by the LLM under tactical
-    grammar) into a typed SDK Action. Returns Wait on any verb we
-    don't know — that's a brain bug worth fixing, not a runtime
-    crash.
+    grammar) into a typed SDK Action. Covers every verb the engine's
+    composable-system registry exposes; unknown verbs fall back to
+    Wait so a typo in the LLM's output doesn't crash the loop.
 
-    Earlier version only handled move/speak/wait, so every shout /
+    Earlier versions only handled move/speak/wait, so every shout /
     whisper / enter / pickup / pay the LLM emitted was silently
-    converted to Wait — agents looked stuck on three verbs even when
-    the grammar gave them more options. The A9 smoke surfaced this
-    only because no Speech / EnteredBuilding events ever fired."""
+    converted to Wait — agents looked anchored on three verbs even
+    when the grammar gave them more options. The A9 smoke surfaced
+    this only because no Speech / EnteredBuilding events ever fired.
+    The table below is the engine's full verb surface as of this
+    commit; the no-op tail mirrors that surface so no verb is
+    silently dropped."""
     verb = d.get("verb", "wait")
+
+    # Movement + social.
     if verb == "move":
         return Move(target=tuple(d.get("target", (0, 0))))
     if verb == "speak":
@@ -179,14 +186,59 @@ def _action_from_dict(d: dict):
         return Whisper(target=d.get("target", ""), text=d.get("text", ""))
     if verb == "look_at":
         return LookAt(target=d.get("target", ""))
+
+    # Interact + inventory.
+    if verb == "interact":
+        return Interact(target=d.get("target", ""),
+                        affordance=d.get("affordance", ""))
     if verb == "pickup":
         return Pickup(target=d.get("target", ""))
+    if verb == "drop":
+        return Drop(item=d.get("item", ""))
+    if verb == "equip":
+        return Equip(item=d.get("item", ""), slot=d.get("slot"))
     if verb == "give":
         return Give(target=d.get("target", ""), item=d.get("item", ""))
+
+    # Economy.
     if verb == "pay":
         return Pay(target=d.get("target", ""), amount=int(d.get("amount", 0)))
+    if verb == "work_for_pay":
+        return WorkForPay()
+    if verb == "trade":
+        return Trade(target=d.get("target", ""),
+                     item=d.get("item", ""),
+                     price=int(d.get("price", 0)))
+    if verb == "loot":
+        return Loot(target=d.get("target", ""))
+
+    # Resources.
+    if verb == "chop":
+        return Chop(target=d.get("target", ""))
+    if verb == "mine":
+        return Mine(target=d.get("target", ""))
+
+    # Property.
     if verb == "enter":
         return Enter(target=d.get("target", ""))
     if verb == "exit":
         return Exit()
+    if verb == "lock":
+        return Lock(target=d.get("target", ""))
+    if verb == "unlock":
+        return Unlock(target=d.get("target", ""))
+    if verb == "claim_ownership":
+        return ClaimOwnership(target=d.get("target", ""))
+    if verb == "transfer_ownership":
+        return TransferOwnership(target=d.get("target", ""),
+                                 new_owner=d.get("new_owner", ""))
+
+    # Combat.
+    if verb == "attack":
+        return Attack(target=d.get("target", ""))
+    if verb == "defend":
+        return Defend()
+    if verb == "heal":
+        return Heal(target=d.get("target"))
+
     return Wait(ticks=d.get("ticks", 60))

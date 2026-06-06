@@ -63,9 +63,14 @@ var categoryByKind = map[string]string{
 	"DamageDealt":  CategoryCombat,
 	"EntityDied":   CategoryCombat,
 	// Economy (money, trade, loot).
-	"GoldTransferred": CategoryEconomy,
-	"TradeCompleted":  CategoryEconomy,
-	"ItemLooted":      CategoryEconomy,
+	"GoldTransferred":  CategoryEconomy,
+	"TradeCompleted":   CategoryEconomy,
+	"ItemLooted":       CategoryEconomy,
+	"ItemPicked":       CategoryEconomy,
+	"ItemDropped":      CategoryEconomy,
+	"ItemTransferred":  CategoryEconomy,
+	"ResourceHarvested": CategoryEconomy,
+	"ResourceDepleted":  CategoryEconomy,
 	// Social (audibility).
 	"Speech":  CategorySocial,
 	"Whisper": CategorySocial,
@@ -76,6 +81,21 @@ var categoryByKind = map[string]string{
 	"FacingChanged": CategoryMovement,
 	// Vitality (vitals package).
 	"HungerSpike": CategoryWorld,
+	// Property — building enter/exit, lock/unlock, ownership.
+	// Without explicit category these were silently routed to
+	// CategoryWorld, which still wrote them to disk but made them
+	// invisible to category-scoped consumers (and easier to lose
+	// in noisy world-event streams).
+	"EnteredBuilding":  CategoryWorld,
+	"ExitedBuilding":   CategoryWorld,
+	"BuildingLocked":   CategoryWorld,
+	"BuildingUnlocked": CategoryWorld,
+	"OwnershipChanged": CategoryWorld,
+	// Construction.
+	"ConstructionStarted":   CategoryWorld,
+	"ConstructionAdvanced":  CategoryWorld,
+	"ConstructionCompleted": CategoryWorld,
+	"Demolished":            CategoryWorld,
 	// System.
 	"SystemBoot":     CategorySystem,
 	"SystemShutdown": CategorySystem,

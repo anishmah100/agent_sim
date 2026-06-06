@@ -46,8 +46,24 @@ type ActionResult struct {
 func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 	res := ActionResult{ActionID: env.ActionID, Verb: env.Verb}
 	if e.InsideBuilding != "" {
-		res.Reason = "inside_building"
-		return res
+		// While inside a building, most "outside" verbs are nonsense
+		// (move into a wall, attack someone you can't see). But there
+		// are verbs an inside entity MUST be able to perform — most
+		// critically `exit`, `interact{affordance=exit}`, and the
+		// idle/social set so agents aren't bricks the moment they
+		// step through a door. Without this allowlist the original
+		// "always-reject-while-inside" rule trapped every agent that
+		// successfully entered: their next action would be rejected
+		// as "inside_building" forever, including exit.
+		switch env.Verb {
+		case "exit", "interact", "wait", "look_at", "speak",
+			"shout", "whisper", "ponder", "drop", "equip":
+			// fall through to normal dispatch — the verb's own
+			// handler will decide whether the parameters make sense.
+		default:
+			res.Reason = "inside_building"
+			return res
+		}
 	}
 	// Scenario handlers take precedence — a scenario can override base
 	// verb semantics (e.g. attack with HP rules) or implement entirely
