@@ -41,6 +41,14 @@ func (w *World) publishSnapshot() {
 	atTile := make(map[Tile][]string, len(w.entities))
 	for id, e := range w.entities {
 		cp := *e
+		// CRITICAL: cp := *e is a shallow copy; cp.Extras still points
+		// to the same map the live Tick may write to. Without this
+		// deep-copy the observation builder (running in the snapshot
+		// path WITHOUT the world lock) would iterate that map while
+		// Tick mutated it → fatal "concurrent map iteration and write".
+		// Detected first time SelfState.Extras was populated, which
+		// added a map iteration to the obs build.
+		cp.Extras = copyExtras(e.Extras)
 		ents[id] = &cp
 		// Index by LogicalTile (the canonical "where they are now" cell).
 		// Mid-walk entities still index by LogicalTile — vision and
