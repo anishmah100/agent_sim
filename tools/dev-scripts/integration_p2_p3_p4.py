@@ -133,6 +133,30 @@ async def main() -> int:
                 fail("PRIVATE mental_note leaked into attacker's observation; D14 contract violated")
         ok("mental_note is private: attacker does NOT see gatherer's goal text")
 
+        # ── D5 — clustered spawn. Both agents should be within
+        # spawn_radius (18) of spawn_hub (772, 894). ───────────────
+        hub = (772, 894)
+        for who, pos in (("gatherer", obs_a.self.pos), ("attacker", obs_b.self.pos)):
+            dx, dy = pos[0] - hub[0], pos[1] - hub[1]
+            d2 = dx * dx + dy * dy
+            if d2 > 18 * 18:
+                fail(f"{who} spawned at {pos}, sqrt({d2}) tiles from hub — outside D5 disc")
+        ok(f"D5 clustered spawn: both agents within radius 18 of {hub}")
+
+        # ── D19 — social ledger surface check. The unit-level test
+        # (TestD19_SocialLedger_BumpedByVerbs) already verifies that
+        # bumps land via the verb pipeline. The end-to-end concern
+        # here is just that the mental_state endpoint exposes the
+        # new `peers` field — without it the inspector's
+        # Relationships tab has nothing to render. Routing two
+        # SDK-driven bots into adjacency on a randomly-clustered
+        # spawn is flaky (pathfind across walls / water), so the
+        # interaction-count assertion lives in the Go test instead. ─
+        ms = http_json(f"/api/v1/agent/{obs_a.self.entity_id}/mental_state")
+        if "peers" not in ms:
+            fail("D19 mental_state response is missing the `peers` field; inspector cannot render Relationships tab")
+        ok(f"D19 mental_state shape: peers field present (type={type(ms['peers']).__name__})")
+
     # Close cleanly.
     return 0
 
