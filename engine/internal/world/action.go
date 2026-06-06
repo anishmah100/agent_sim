@@ -140,9 +140,29 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			if strings.HasPrefix(p.Target, "bld:") {
 				e.InsideBuilding = p.Target
 				e.insideTicks = 240 + w.rng.IntN(360)
+				// Fire EnteredBuilding so the historian sees it. The
+				// property system emits this for entity-backed
+				// buildings; this path covers decoration-backed
+				// buildings (the `bld:` family that snapshot exposes
+				// as visible doors) which never had an entity.
+				if w.onBuildingEntered != nil {
+					w.onBuildingEntered(e.EntityID, p.Target, w.tick)
+				}
 				res.Accepted = true
 				return res
 			}
+		}
+		// Also accept affordance="exit" from inside as a courtesy so
+		// agents can be consistent: interact(target=<building>, affordance="exit").
+		if p.Affordance == "exit" && e.InsideBuilding != "" {
+			prev := e.InsideBuilding
+			e.InsideBuilding = ""
+			e.insideTicks = 0
+			if w.onBuildingExited != nil {
+				w.onBuildingExited(e.EntityID, prev, w.tick)
+			}
+			res.Accepted = true
+			return res
 		}
 		res.Reason = "no_affordance_handler"
 	case "pickup", "drop", "equip", "give":

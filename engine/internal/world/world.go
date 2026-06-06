@@ -208,6 +208,15 @@ type World struct {
 	// the tick value through so the hook can build a stamped event
 	// without needing to read it back via a getter.
 	onActionAccepted func(entityID, verb string, tick uint64, raw []byte)
+
+	// onBuildingEntered / onBuildingExited fire when an entity uses the
+	// native interact(affordance=enter|exit) path to step into or out
+	// of a decoration-backed building. The property system already
+	// emits these for entity-backed buildings; these hooks cover the
+	// "bld:" decoration family (the kind Eldoria uses) so both paths
+	// land structured events in the historian.
+	onBuildingEntered func(entityID, building string, tick uint64)
+	onBuildingExited  func(entityID, building string, tick uint64)
 }
 
 // SetOnActionAccepted installs the historian hook for accepted actions.
@@ -215,6 +224,22 @@ type World struct {
 func (w *World) SetOnActionAccepted(h func(entityID, verb string, tick uint64, raw []byte)) {
 	w.mu.Lock()
 	w.onActionAccepted = h
+	w.mu.Unlock()
+}
+
+// SetOnBuildingEntered installs the historian hook for decoration-
+// backed building entry. Called from SystemHost so the bus sees
+// EnteredBuilding regardless of whether the building was an entity
+// (property system path) or a decoration (this path).
+func (w *World) SetOnBuildingEntered(h func(entityID, building string, tick uint64)) {
+	w.mu.Lock()
+	w.onBuildingEntered = h
+	w.mu.Unlock()
+}
+
+func (w *World) SetOnBuildingExited(h func(entityID, building string, tick uint64)) {
+	w.mu.Lock()
+	w.onBuildingExited = h
 	w.mu.Unlock()
 }
 

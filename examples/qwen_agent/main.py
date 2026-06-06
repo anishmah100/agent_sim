@@ -15,7 +15,7 @@ import time
 
 from agent_sim_sdk import (
     register_agent, Agent, VisionMode,
-    ActionBatch, Move, Enter, Exit, Pay,
+    ActionBatch, Move, Interact, Pay,
 )
 
 from examples.claude_agent.harness import Harness
@@ -68,15 +68,24 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
                 nearest_d, nearest = d, obj
         if nearest is not None:
             if nearest_d <= 1:
-                # Adjacent: enter + queue an exit so the SAME batch
-                # registers both EnteredBuilding and ExitedBuilding
-                # for the historian. Qwen's plan is discarded here —
-                # the door opportunity is the more valuable observation.
+                # Adjacent: emit Interact(enter)+Interact(exit) so the
+                # SAME batch registers BOTH EnteredBuilding AND
+                # ExitedBuilding for the historian. Qwen's plan is
+                # discarded — the door opportunity is the more
+                # valuable observation. The target must be the bld:
+                # building id (stripped of the "door:" prefix) because
+                # the native interact handler matches that prefix.
+                bld_target = nearest.object_id
+                if bld_target.startswith("door:"):
+                    bld_target = bld_target[len("door:"):]
                 _nudge_log.info(
-                    "nudge OVERRIDE enter+exit door=%s pos=%s door_pos=%s",
-                    nearest.object_id, pos, nearest.pos)
+                    "nudge OVERRIDE enter+exit door=%s bld=%s pos=%s door_pos=%s",
+                    nearest.object_id, bld_target, pos, nearest.pos)
                 return ActionBatch(
-                    actions=[Enter(target=nearest.object_id), Exit()],
+                    actions=[
+                        Interact(target=bld_target, affordance="enter"),
+                        Interact(target=bld_target, affordance="exit"),
+                    ],
                     reasoning=(batch.reasoning or "") + " [nudge: enter+exit door]",
                 )
             elif nearest_d <= 2:

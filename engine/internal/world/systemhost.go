@@ -69,6 +69,32 @@ func (Whisper) Kind() string { return "Whisper" }
 
 var _ eventbus.Event = Whisper{}
 
+// EnteredBuildingDeco / ExitedBuildingDeco — same shape as the
+// property system's events but emitted by the decoration-backed
+// enter path (action.go interact-affordance). Kept under the same
+// Kind() string so the historian + scorer don't need to know which
+// code path fired the event.
+type EnteredBuildingDeco struct {
+	EntityID string
+	Building string
+	Tick     uint64
+}
+
+func (EnteredBuildingDeco) Kind() string { return "EnteredBuilding" }
+
+type ExitedBuildingDeco struct {
+	EntityID string
+	Building string
+	Tick     uint64
+}
+
+func (ExitedBuildingDeco) Kind() string { return "ExitedBuilding" }
+
+var (
+	_ eventbus.Event = EnteredBuildingDeco{}
+	_ eventbus.Event = ExitedBuildingDeco{}
+)
+
 // SystemHost owns the bus + spatial index + adapter + registry for a
 // world. Construct one per world; call Install with each composable
 // system before InstallInto.
@@ -197,6 +223,24 @@ func (h *SystemHost) InstallInto() {
 				})
 			}
 		}
+	})
+	// Decoration-backed building enter/exit. The native action.go
+	// interact-affordance path fires these hooks; we re-emit on the
+	// bus so the historian + A9 scorer see them under the same
+	// EnteredBuilding/ExitedBuilding kinds the property-system path uses.
+	h.World.SetOnBuildingEntered(func(entityID, building string, tick uint64) {
+		h.Bus.Queue(EnteredBuildingDeco{
+			EntityID: entityID,
+			Building: building,
+			Tick:     tick,
+		})
+	})
+	h.World.SetOnBuildingExited(func(entityID, building string, tick uint64) {
+		h.Bus.Queue(ExitedBuildingDeco{
+			EntityID: entityID,
+			Building: building,
+			Tick:     tick,
+		})
 	})
 }
 
