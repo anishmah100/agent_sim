@@ -221,9 +221,68 @@ func (s *System) handleDrop(w syscore.World, e syscore.Entity, env *syscore.Acti
 		cur := extrasStrSlice(real, "inventory")
 		real.SetExtra("inventory", removeAt(cur, idx))
 	})
+	// D8/D10 prereq: spawn an actual item entity at the dropper's tile
+	// so the dropped item is observable + pickup-able by other agents.
+	// The pre-D8 implementation only emitted an event; the item
+	// disappeared from the world. Sprite is derived from the item id
+	// using the standard "item:<kind>#<seq>" → "item:<kind>" mapping
+	// (so "item:apple#42" → sprite "item:apple"). Spawn-failure is
+	// non-fatal — the drop still completes from the holder's PoV.
+	_, _ = w.SpawnEntityFromSpec(syscore.EntitySpec{
+		Archetype:   "item",
+		Pos:         e.Pos(),
+		DisplayName: itemKindFromID(p.Item),
+		Extras: map[string]any{
+			"sprite": spriteFromItemID(p.Item),
+			"source": "drop",
+		},
+	})
 	w.QueueEvent(ItemDropped{Dropper: e.ID(), Item: p.Item, At: e.Pos()})
 	res.Accepted = true
 	return res
+}
+
+// spriteFromItemID — mirror of the same convention used by D9's
+// extras_summary builder. "item:apple#42" → "item:apple". Bare ids
+// get the "item:" prefix. Used by drop to label the spawned item
+// entity for downstream visibility (D8 visible_items + frontend).
+func spriteFromItemID(id string) string {
+	if id == "" {
+		return ""
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' {
+			id = id[:i]
+			break
+		}
+	}
+	hasColon := false
+	for i := 0; i < len(id); i++ {
+		if id[i] == ':' {
+			hasColon = true
+			break
+		}
+	}
+	if !hasColon {
+		return "item:" + id
+	}
+	return id
+}
+
+// itemKindFromID strips "item:" prefix and "#suffix" from an id to
+// recover the bare kind. "item:apple#42" → "apple". Used as the
+// DisplayName of the spawned item entity.
+func itemKindFromID(id string) string {
+	if len(id) > 5 && id[:5] == "item:" {
+		id = id[5:]
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' {
+			id = id[:i]
+			break
+		}
+	}
+	return id
 }
 
 func (s *System) handleEquip(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {

@@ -407,6 +407,43 @@ func TestUnknownVerb_Rejected(t *testing.T) {
 	}
 }
 
+// === D8 prereq — drop spawns a pickup-able item entity ===
+
+func TestDrop_SpawnsItemEntity(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["a"].Extras["inventory"] = []string{"item:apple#5"}
+	res := vc.submit("a", "drop", `{"item":"item:apple#5"}`)
+	if !res.Accepted {
+		t.Fatalf("drop should be accepted; got reason=%q", res.Reason)
+	}
+	// An item entity must now exist at A's position.
+	found := false
+	for _, id := range vc.world.EntityIDs() {
+		other := vc.world.entities[id]
+		if other == nil || other.Archetype != "item" {
+			continue
+		}
+		if other.LogicalTile == vc.world.entities["a"].LogicalTile {
+			found = true
+			sprite, _ := other.Extras["sprite"].(string)
+			if sprite != "item:apple" {
+				t.Errorf("spawned item should have sprite item:apple, got %q", sprite)
+			}
+			if other.DisplayName != "apple" {
+				t.Errorf("spawned item should have DisplayName apple, got %q", other.DisplayName)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("drop should spawn an item entity at the dropper's tile; none found")
+	}
+	// And A's inventory should no longer contain the apple.
+	inv := vc.world.entities["a"].Extras["inventory"].([]string)
+	if len(inv) != 0 {
+		t.Errorf("inventory should be empty after drop; got %v", inv)
+	}
+}
+
 // === D22 + D20 — eat verb + inventory cap ===
 
 func TestVerb_Eat_RoutesToInventory_FoodReducesHunger(t *testing.T) {
