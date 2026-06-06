@@ -19,6 +19,34 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D9 — Inventory opaque, equipped + body damage visible, hunger private
+
+Visible to other agents about you:
+- Position, facing, archetype (existing)
+- **Equipped weapon slot** (e.g., "wielding axe", "unarmed")
+- **HP indicator** (sprite tint or simple bucket: full/wounded/dying)
+
+NOT visible:
+- Inventory contents (opaque — wealth inferred from behavior)
+- Gold balance
+- Hunger level (the most private — you can't tell who's desperate)
+
+**Why:** combat-relevant state is public so tactical decisions
+have signal ("don't pick a fight with the armed one"); resource
+state is private so negotiation has stakes ("I'll sell you bread
+for 10 gold — wait, are you actually hungry or are you bluffing?").
+Splits the emergent dynamics: tactical = visible, social/economic
+= inferred from dialogue + observed behavior.
+
+**How to apply:**
+- `visible_entities[i].extras_summary` populated with:
+  `{equipped_slot: "weapon", equipped_sprite: "item:sword_short",
+    hp_bucket: "wounded"}`. No other fields.
+- UI: hovering an agent shows their equipped weapon + HP bucket;
+  inventory + gold sections stay blank with "(opaque)" label.
+- Sprite rendering: visible damage tint at hp_bucket=="wounded" or
+  "dying" so the UI conveys it at a glance.
+
 ### D8 — Items observable within vision radius (full info)
 
 Items on the ground appear in the observation as a new
