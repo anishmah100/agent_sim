@@ -19,6 +19,52 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D7 — Wealth: scattered seed + agent-driven circulation
+
+Gold enters the world stochastically (scattered piles, gems,
+chalices in the environment at world init / experiment seed) and
+then circulates exclusively through agents. The world is the
+ULTIMATE source; agents are the ONLY pump.
+
+**Three circulation pathways:**
+- **Production**: chop / mine / fish / forage → sell raw or crafted
+  items to vendor NPCs for gold. Steady but slow.
+- **Predation**: combat-kill another agent, loot their dropped
+  inventory + gold. Risky but immediate.
+- **Service**: another agent pays you (via `pay` verb or completed
+  `propose_task`) for labor / protection / errands. Social.
+
+**Plus scattered wealth as the seed**: at world init, gold piles,
+gems, chalices are placed in the environment at semi-random
+walkable tiles. Agents discover them by exploration; first to find
+them gets them. This creates territorial dynamics (gold-rich
+regions = valuable to control) and an emergent "treasure hunting"
+incentive even before any social trade.
+
+**Why this model:**
+- Finite-supply economy → wealth gini becomes a meaningful metric
+  (it's bounded, you can measure inequality emerge).
+- World-seeded wealth answers "where did the FIRST coin come from"
+  without making any agent's earnings unbounded.
+- Three circulation pathways give a spectrum of strategy:
+  worker / merchant / mercenary / bandit / explorer.
+- Vendor NPCs are sinks AND sources (buy raw, sell cooked) — money
+  flows through them but isn't created by them.
+
+**How to apply:**
+- World init places `K` gold piles (Gini-tunable: cluster = low
+  initial inequality, spread = high). The 184 items already
+  scattered include coins / gem variants — re-use that scatter
+  with more deliberate quantities.
+- `work_for_pay` is REMOVED. Earning gold requires either:
+  (a) selling an item via `trade` to a vendor NPC,
+  (b) being paid via `pay` by another agent,
+  (c) looting a dead agent.
+- Vendors buy raw goods at fixed prices set by the bundle's
+  rulebook. Tunable.
+- Combat death drops the dead agent's full inventory at their tile
+  (already wired via inventory `drop`-on-death).
+
 ### D6 — Mixed food economy (forage + craft + vendor)
 
 Three food pathways coexist:
