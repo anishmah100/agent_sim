@@ -13,7 +13,7 @@
 //   │  └─────────┘                          └────────────────────┘ │
 //   └──────────────────────────────────────────────────────────────┘
 
-import { onMount, onCleanup, createSignal } from "solid-js";
+import { onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { mountPixiApp, type PixiHandle } from "../render/PixiApp";
 import { fetchMentalState, fetchWorldInfo, fetchWorldMap, type MentalStateResponse, type WorldInfo } from "../net/api";
 import type { MentalState } from "./Inspector";
@@ -308,6 +308,13 @@ export function App() {
     };
     window.addEventListener("keydown", onKey);
     onCleanup(() => window.removeEventListener("keydown", onKey));
+
+    // Tell PixiApp whether the editor panel is open. While it is,
+    // building click → interior entry is suppressed so the click
+    // belongs entirely to the editor (place / remove).
+    createEffect(() => {
+      pixiHandle?.setEditorActive(editorOpen());
+    });
 
     // Live viewer stream. Snapshots overwrite the entity layer; tile
     // layer is static and was already loaded from the JSON above.

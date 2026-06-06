@@ -62,6 +62,10 @@ export interface PixiHandle {
    *  (tileX, tileY) from the local view. Returns true if something
    *  was removed. The caller persists via POST. */
   removeDecorationAt(tileX: number, tileY: number): boolean;
+  /** While the editor panel is open, building clicks should NOT auto-
+   *  enter the interior — the click belongs to the editor (place /
+   *  remove). Solid layer flips this whenever the editor toggles. */
+  setEditorActive(active: boolean): void;
   ingestAudible(events: AudibleEvent[]): void;
   /** Editor — repaint one tile to a new glyph. Returns previous glyph
    *  for optimistic-update revert, or undefined if out of bounds. */
@@ -124,9 +128,16 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   // Click on an enterable building → enter the interior directly. The
   // hover-driven InfoPanel preview tells the user what they're about
   // to enter; no Enter button required.
+  //
+  // While the editor panel is open, the click belongs to the editor
+  // (place / remove). editorActive guards the entry path so a user
+  // clicking Remove on a cottage gets the cottage removed instead of
+  // bounced into its interior view.
+  let editorActive = false;
   const interior = new InteriorLayer(app);
   app.stage.addChild(interior.container);
   decorations.onBuildingClick(async (ev) => {
+    if (editorActive) return;
     await interior.show(ev.sprite);
   });
   interior.onExit(() => interior.hide());
@@ -304,6 +315,9 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
     removeDecorationAt(tileX, tileY) {
       return decorations.removeAt(tileX, tileY);
+    },
+    setEditorActive(active) {
+      editorActive = active;
     },
 
     setTileGlyph(tileX, tileY, glyph) {
