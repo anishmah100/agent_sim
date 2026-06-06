@@ -13,9 +13,13 @@ import (
 	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
 )
 
-const DefaultMaxSlots = 20
+// DefaultMaxSlots — D20. Hard cap at 10 slots. Each item (including
+// coin piles + equipped weapon slots NOT counted; equipped is in a
+// separate Extras["equipped"] map) takes one slot. pickup rejects
+// with reason="inventory_full" once 10 items are carried.
+const DefaultMaxSlots = 10
 
-// ItemPicked / ItemDropped / ItemTransferred events.
+// ItemPicked / ItemDropped / ItemTransferred / AteFood events.
 type ItemPicked struct{ Picker, Item string }
 
 func (ItemPicked) Kind() string { return "ItemPicked" }
@@ -28,11 +32,56 @@ type ItemTransferred struct{ From, To, Item string }
 
 func (ItemTransferred) Kind() string { return "ItemTransferred" }
 
+// AteFood — D22. Emitted when an entity eats a food item via the
+// `eat` verb. Hunger is the entity's NEW hunger value after eating.
+type AteFood struct {
+	Eater   string
+	Item    string  // inventory item id consumed
+	Satiety float64 // satiety subtracted from hunger
+	Hunger  float64 // post-eat hunger value, clamped [0, 1]
+}
+
+func (AteFood) Kind() string { return "AteFood" }
+
 var (
 	_ eventbus.Event = ItemPicked{}
 	_ eventbus.Event = ItemDropped{}
 	_ eventbus.Event = ItemTransferred{}
+	_ eventbus.Event = AteFood{}
 )
+
+// foodSatiety — D22 starting calibration. Maps food kind (the
+// "<kind>" part of an item id "item:<kind>#<seq>") to the hunger
+// reduction on eat. v1 hardcoded; should migrate to rulebook lookup
+// when ItemKindProp accessor lands. Satiety values match the
+// rulebook items + ARCHETYPE_FSMS expectations.
+var foodSatiety = map[string]float64{
+	"apple":        0.25,
+	"bread_loaf":   0.5,
+	"cheese_wheel": 0.7,
+	"fish_cooked":  0.55,
+	"fish_raw":     0.2,
+}
+
+// satietyForItem looks up the satiety for an inventory item id.
+// Returns (value, true) if the item is recognized food, else (0,
+// false). Strips the "item:" prefix + "#suffix" — accepts both
+// "item:apple", "item:apple#42", and bare "apple" formats.
+func satietyForItem(id string) (float64, bool) {
+	// Strip "item:" prefix.
+	if len(id) > 5 && id[:5] == "item:" {
+		id = id[5:]
+	}
+	// Strip "#suffix".
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' {
+			id = id[:i]
+			break
+		}
+	}
+	v, ok := foodSatiety[id]
+	return v, ok
+}
 
 type InventoryService interface {
 	Has(world syscore.World, entityID, itemID string) bool
@@ -52,9 +101,59 @@ func (s *System) RegisterWith(r syscore.Registry) {
 	r.Verb("drop", s.handleDrop)
 	r.Verb("equip", s.handleEquip)
 	r.Verb("give", s.handleGive)
+	r.Verb("eat", s.handleEat) // D22
 	r.OnEntitySpawn(s.seedSpawn)
 	r.Service("inventory", InventoryService(&service{}))
 	r.Manifest(s.manifest())
+}
+
+// handleEat — D22. Consume a food item from inventory; subtract its
+// satiety from hunger (clamped at 0). Instant; no action cooldown.
+// Emits AteFood for the historian. Reasons:
+//   - bad_params: malformed payload
+//   - not_in_inventory: item id not in the eater's inventory
+//   - not_food: item kind has no satiety value (not a food)
+func (s *System) handleEat(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
+	res := syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	var p struct {
+		Item string `json:"item"`
+	}
+	if err := json.Unmarshal(env.Raw, &p); err != nil {
+		res.Reason = "bad_params"
+		return res
+	}
+	inv := extrasStrSlice(e, "inventory")
+	idx := indexOf(inv, p.Item)
+	if idx < 0 {
+		res.Reason = "not_in_inventory"
+		return res
+	}
+	sat, isFood := satietyForItem(p.Item)
+	if !isFood {
+		res.Reason = "not_food"
+		return res
+	}
+	// Subtract satiety from hunger, clamp at 0. Hunger may be missing
+	// if the world has no vitals system; default to 0 (no-op effect).
+	hungerRaw, _ := e.GetExtra("hunger")
+	hunger, _ := hungerRaw.(float64)
+	next := hunger - sat
+	if next < 0 {
+		next = 0
+	}
+	w.MutateEntity(e.ID(), func(real syscore.Entity) {
+		real.SetExtra("hunger", next)
+		cur := extrasStrSlice(real, "inventory")
+		real.SetExtra("inventory", removeAt(cur, idx))
+	})
+	w.QueueEvent(AteFood{
+		Eater:   e.ID(),
+		Item:    p.Item,
+		Satiety: sat,
+		Hunger:  next,
+	})
+	res.Accepted = true
+	return res
 }
 
 func (s *System) seedSpawn(w syscore.World, e syscore.Entity) {

@@ -187,6 +187,15 @@ class Drop(_Action):
     item: str
 
 
+class Eat(_Action):
+    """D22 — consume a food item from inventory. Subtracts the food's
+    satiety from hunger (clamped at 0). Instant; no cooldown. Reasons
+    you might see in last_action_result: ``not_in_inventory``,
+    ``not_food`` (item has no satiety value)."""
+    verb: Literal["eat"] = "eat"
+    item: str
+
+
 class Equip(_Action):
     verb: Literal["equip"] = "equip"
     item: str
@@ -348,7 +357,7 @@ Action = Annotated[
     Union[
         # Base verbs.
         Move, Speak, Whisper, Shout, LookAt, Interact,
-        Pickup, Drop, Equip, Give, Attack, Defend, Heal, Wait,
+        Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
         # Composable-system verbs (session 2).
         Pay, WorkForPay, Trade, Loot,
         Chop, Mine,

@@ -407,6 +407,53 @@ func TestUnknownVerb_Rejected(t *testing.T) {
 	}
 }
 
+// === D22 + D20 — eat verb + inventory cap ===
+
+func TestVerb_Eat_RoutesToInventory_FoodReducesHunger(t *testing.T) {
+	vc := newVCTest(t)
+	// Seed A with an apple in inventory and high hunger.
+	vc.world.entities["a"].Extras["inventory"] = []string{"item:apple#1"}
+	vc.world.entities["a"].Extras["hunger"] = 0.5
+	res := vc.submit("a", "eat", `{"item":"item:apple#1"}`)
+	if !res.Accepted {
+		t.Fatalf("eat should be accepted; got reason=%q", res.Reason)
+	}
+	// Hunger should drop by apple's satiety = 0.25 → 0.25.
+	got := vc.world.entities["a"].Extras["hunger"].(float64)
+	if got < 0.24 || got > 0.26 {
+		t.Errorf("hunger after eating apple: want ~0.25, got %v", got)
+	}
+	// Inventory should no longer contain the apple.
+	inv := vc.world.entities["a"].Extras["inventory"].([]string)
+	if len(inv) != 0 {
+		t.Errorf("inventory should be empty after eat; got %v", inv)
+	}
+}
+
+func TestVerb_Eat_NotInInventory_Rejected(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["a"].Extras["inventory"] = []string{}
+	res := vc.submit("a", "eat", `{"item":"item:apple#99"}`)
+	if res.Accepted {
+		t.Fatal("eat of non-owned item should reject")
+	}
+	if res.Reason != "not_in_inventory" {
+		t.Errorf("expected reason=not_in_inventory, got %q", res.Reason)
+	}
+}
+
+func TestVerb_Eat_NonFoodRejected(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["a"].Extras["inventory"] = []string{"item:sword_short#5"}
+	res := vc.submit("a", "eat", `{"item":"item:sword_short#5"}`)
+	if res.Accepted {
+		t.Fatal("eat of a weapon should reject (not food)")
+	}
+	if res.Reason != "not_food" {
+		t.Errorf("expected reason=not_food, got %q", res.Reason)
+	}
+}
+
 // === D1 — verb targets are entity_id, never display name ===
 // Audit conclusion: the engine already resolves targets exclusively
 // via direct entity_id map lookup. No display-name fallback exists in
