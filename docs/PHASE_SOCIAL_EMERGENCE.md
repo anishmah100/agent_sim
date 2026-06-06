@@ -19,6 +19,32 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D23 — Reproducibility: deferred. Event log only for v1
+
+For v1: keep the existing JSONL event log; no bit-identical replay
+guarantee. Engine + agent nondeterminism left as-is.
+
+**Why:** the research surfaced reproducibility as critical for a
+*published* benchmark, but premature optimization for a substrate
+that may not produce interesting emergence in the first place.
+Build, iterate, prove emergence happens; if the substrate
+delivers, then invest in stronger determinism before publication.
+
+**Acknowledged risk:** if we later want bit-identical replay, the
+retrofit will be hard (Go map iteration, math/rand seeding,
+distributed agent scheduling, LLM response caching all need to
+change at once). For now, accept this debt.
+
+**How to apply for v1:**
+- Engine continues to write events to historian's JSONL +
+  SQLite (already does).
+- Experiment manifests record world seed + agent commit SHAs (so
+  same config CAN be re-run, even if results may differ at the
+  margins).
+- Defer: response caching, deterministic dispatch order, replay
+  tool. Track as `BENCHMARK-READY: REPRODUCIBILITY` in the
+  open-questions section for future.
+
 ### D22 — Hunger gradient + instant eat (starting calibration)
 
 **Hunger gradient model (tunable):**
