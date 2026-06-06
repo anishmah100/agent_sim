@@ -63,10 +63,17 @@ func (a *WorldAdapter) SpawnEntity(e syscore.Entity) error {
 
 // SpawnEntityFromSpec builds a real *Entity from the spec, adds it to
 // the world + spatial index, and returns an Entity handle bound to the
-// fresh underlying.
+// fresh underlying. If spec.ID is empty, a unique id is allocated
+// using the engine's event-seq counter (so multiple spawns from one
+// call site don't collide on the empty id).
 func (a *WorldAdapter) SpawnEntityFromSpec(spec syscore.EntitySpec) (syscore.Entity, error) {
+	id := spec.ID
+	if id == "" {
+		id = "spawn_" + formatUint64(a.W.eventSeq)
+		a.W.eventSeq++
+	}
 	e := &Entity{
-		EntityID:    spec.ID,
+		EntityID:    id,
 		Archetype:   spec.Archetype,
 		LogicalTile: spec.Pos,
 		DisplayName: spec.DisplayName,
@@ -76,7 +83,7 @@ func (a *WorldAdapter) SpawnEntityFromSpec(spec syscore.EntitySpec) (syscore.Ent
 		e.Extras = map[string]any{}
 	}
 	a.W.SpawnEntity(e)
-	a.Spatial.Add(spec.ID, spec.Pos)
+	a.Spatial.Add(id, spec.Pos)
 	return &EntityAdapter{E: e, W: a.W}, nil
 }
 

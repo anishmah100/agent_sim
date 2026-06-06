@@ -407,6 +407,87 @@ func TestUnknownVerb_Rejected(t *testing.T) {
 	}
 }
 
+// === D10 — death drops inventory + emits scream + witness events ===
+
+func TestD10_DeathDropsInventoryAndEquipped(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	vc.world.entities["b"].Extras = map[string]interface{}{
+		"hp": 5, "max_hp": 100,
+		"inventory": []string{"item:apple#1", "item:bread_loaf#2"},
+		"equipped":  map[string]any{"weapon": "item:dagger#5"},
+	}
+	// A wields axe (18 dmg, kills B at hp=5).
+	vc.world.entities["a"].Extras = map[string]interface{}{
+		"equipped": map[string]any{"weapon": "item:axe#9"},
+	}
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("attack should accept; got %q", res.Reason)
+	}
+	if vc.world.entities["b"].Extras["hp"].(int) > 0 {
+		t.Fatal("B should be dead")
+	}
+	// Inventory + equipped should drop as item entities at B's tile.
+	dropped := 0
+	for _, id := range vc.world.EntityIDs() {
+		other := vc.world.entities[id]
+		if other == nil || other.Archetype != "item" {
+			continue
+		}
+		if other.LogicalTile == (Tile{2, 1}) {
+			dropped++
+		}
+	}
+	if dropped < 3 {
+		t.Errorf("expected at least 3 item entities at corpse tile (apple+bread+dagger), got %d", dropped)
+	}
+	// Inventory should be cleared on the dead entity.
+	inv := vc.world.entities["b"].Extras["inventory"].([]string)
+	if len(inv) != 0 {
+		t.Errorf("dead agent's inventory should be empty, got %v", inv)
+	}
+}
+
+func TestD10_DeathEmitsScreamAndWitnessAudibles(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	vc.world.entities["b"].Extras = map[string]interface{}{"hp": 5, "max_hp": 100}
+	vc.world.entities["a"].Extras = map[string]interface{}{
+		"equipped": map[string]any{"weapon": "item:axe#1"},
+	}
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("attack: %q", res.Reason)
+	}
+	// A should now hear:
+	//  - one 'kill_witnessed' (A has LOS to B's tile, A is the killer — wait,
+	//    actually killer is excluded from witness events in EmitDeathScream).
+	// So A should NOT get a kill_witnessed. But A SHOULD hear the anonymous
+	// death_scream.
+	audA := vc.world.VisibleAudible(vc.world.entities["a"], 0)
+	sawScream, sawWitness := false, false
+	for _, ev := range audA {
+		if ev.SoundKind == "death_scream" {
+			sawScream = true
+			// The from_pos should be rounded to a 5-tile cell, so not
+			// exactly B's pos (2,1) but something nearby.
+			if ev.FromEntity != "" {
+				t.Errorf("death_scream should be anonymous, got from_entity=%q", ev.FromEntity)
+			}
+		}
+		if ev.SoundKind == "kill_witnessed" {
+			sawWitness = true
+		}
+	}
+	if !sawScream {
+		t.Error("killer A should hear the anonymous death_scream")
+	}
+	if sawWitness {
+		t.Error("killer A should NOT receive a kill_witnessed event (already knows)")
+	}
+}
+
 // === D21 — weapons damage + reach ===
 
 func TestD21_Attack_UnarmedDealsBaseDamage(t *testing.T) {

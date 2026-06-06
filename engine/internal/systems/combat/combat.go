@@ -329,9 +329,24 @@ func (s *service) DealDamage(w syscore.World, targetID string, amount int, cause
 		w.QueueEvent(EntityDied{EntityID: targetID, Killer: killer, Cause: cause})
 		// D10 — drop full inventory + gold + equipped at corpse tile so
 		// loot is recoverable. Iterate inventory + spawn an entity per
-		// item (mirrors what handleDrop does for a single item).
+		// item (mirrors what handleDrop does for a single item). The
+		// inventory slice may come back as []string (set in code) OR
+		// []any (set via JSON deserialization); handle both.
 		inv, _ := target.GetExtra("inventory")
-		if items, ok := inv.([]string); ok {
+		var items []string
+		switch x := inv.(type) {
+		case []string:
+			items = x
+		case []any:
+			// []any == []interface{}; one case covers both JSON-decoded
+			// and code-set slices that happen to be untyped.
+			for _, v := range x {
+				if s, ok := v.(string); ok {
+					items = append(items, s)
+				}
+			}
+		}
+		if len(items) > 0 {
 			for _, iid := range items {
 				_, _ = w.SpawnEntityFromSpec(syscore.EntitySpec{
 					Archetype:   "item",
