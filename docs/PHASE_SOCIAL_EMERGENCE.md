@@ -19,6 +19,47 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D13 — Soft contracts only. No engine-enforced collateral
+
+`propose_task` / `accept_task` / `complete_task` continue as
+substrate records but the engine never transfers anything based on
+contract state. Breaking a contract has ZERO engine-side cost.
+
+Enforcement is purely emergent:
+- **Gossip** (D10): broken-promise events propagate through speech,
+  agents form opinions of unreliable counterparties.
+- **Retaliation**: combat is always an option; aggrieved agents
+  can attack.
+- **Refusal**: agents can decline future trade/help with someone
+  they consider untrustworthy.
+- **Reputation in dialogue**: trust signals carried in speech, not
+  in engine state.
+
+**Why:** the benchmark's research value comes from studying HOW
+LLM agents invent enforcement, not from measuring how well they
+use given primitives. Engine-enforced contracts make the
+"backstabbing" emergence trivial (you can't backstab a contract
+the engine guarantees). Pure soft contracts force the rich
+dynamic. Maps directly onto CRSEC's substrate/author boundary
+(literature rec 5): substrate exposes Spreading channels; agents
+own Evaluation + Compliance.
+
+**Risk acknowledged:** early experiments may have contracts that
+go nowhere because agents don't figure out enforcement. We expect
+this in v1 — it's the substrate-validation we WANT to surface.
+
+**How to apply:**
+- propose_task signature stays: `{target, terms, reward}` (all
+  free-form strings). Engine records but doesn't validate
+  semantics.
+- accept_task/reject_task records the response. complete_task is
+  a self-claim with no engine validation.
+- Historian's event log captures all contract verbs for
+  post-hoc analysis (was the contract honored? did gossip
+  propagate the break?).
+- No new verbs in this design. Future v2 may add `bind_contract`
+  with escrow if soft-only proves to underperform.
+
 ### D12 — Population: configurable, start small (10-20), scale up
 
 Experiment YAML declares the population mix per run:
