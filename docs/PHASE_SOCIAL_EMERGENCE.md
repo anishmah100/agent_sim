@@ -19,6 +19,29 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D8 — Items observable within vision radius (full info)
+
+Items on the ground appear in the observation as a new
+`visible_items[]` field. Each entry: position, sprite id, quantity
+(for stackables). Range matches `visible_entities` (12 tiles day,
+6 night, line-of-sight blocked by walls).
+
+**Why:** the simplest information-symmetric baseline. Every agent
+in line of sight knows about the same items. No scouting strategy
+required. D7's scattered wealth becomes findable. We can tighten
+this later as a Nowak `q` knob (info reach) if the literature-
+predicted emergence direction is interesting to test.
+
+**How to apply:**
+- New observation field `visible_items[]` parallel to
+  `visible_entities` and `visible_objects`. Different field because
+  the semantics differ (items can be picked up, decorations cannot).
+- Engine `observation.go` populates from a spatial query over the
+  item-entity layer.
+- Items dropped via `drop` verb (already entity-backed) appear
+  immediately on next observation; the scatter from D7 needs to be
+  promoted from `decorations` to entity-backed items (cleanup task).
+
 ### D7 — Wealth: scattered seed + agent-driven circulation
 
 Gold enters the world stochastically (scattered piles, gems,
