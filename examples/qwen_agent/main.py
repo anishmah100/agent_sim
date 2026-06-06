@@ -66,12 +66,12 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
             d = _chebyshev(pos, obj.pos)
             if d < nearest_d:
                 nearest_d, nearest = d, obj
-        if nearest is not None and nearest_d <= 6:
+        if nearest is not None:
             if nearest_d <= 1:
                 # Adjacent: enter + queue an exit so the SAME batch
                 # registers both EnteredBuilding and ExitedBuilding
-                # for the historian. Qwen's plan for this cycle is
-                # discarded — the door opportunity is more valuable.
+                # for the historian. Qwen's plan is discarded here —
+                # the door opportunity is the more valuable observation.
                 _nudge_log.info(
                     "nudge OVERRIDE enter+exit door=%s pos=%s door_pos=%s",
                     nearest.object_id, pos, nearest.pos)
@@ -79,11 +79,10 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
                     actions=[Enter(target=nearest.object_id), Exit()],
                     reasoning=(batch.reasoning or "") + " [nudge: enter+exit door]",
                 )
-            else:
-                # Within sight but not adjacent: walk straight to it,
-                # discarding Qwen's other actions. With Qwen's plan
-                # included the agent oscillated; with this override
-                # they converge in chebyshev cycles.
+            elif nearest_d <= 2:
+                # Very close: full override of Qwen with one step. At
+                # this range we have just 1-2 cycles to close before
+                # Qwen wanders off; soft-prepend lost too often.
                 dx = max(-1, min(1, nearest.pos[0] - pos[0]))
                 dy = max(-1, min(1, nearest.pos[1] - pos[1]))
                 target = (pos[0] + dx, pos[1] + dy)
@@ -94,6 +93,20 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
                     actions=[Move(target=target)],
                     reasoning=(batch.reasoning or "") + " [nudge: closing on door]",
                 )
+            elif nearest_d <= 6:
+                # Sight but distant: SOFT prepend one step toward the
+                # door. Qwen keeps its other actions (speak/wait/look)
+                # so we don't kill social behavior — agents in Eldoria
+                # villages always see SOME door at this radius, and an
+                # override here suppressed all other verbs (smoke #8
+                # produced verbs=['move'] only).
+                dx = max(-1, min(1, nearest.pos[0] - pos[0]))
+                dy = max(-1, min(1, nearest.pos[1] - pos[1]))
+                target = (pos[0] + dx, pos[1] + dy)
+                actions.insert(0, Move(target=target))
+                _nudge_log.info(
+                    "nudge SOFT step-toward-door door=%s d=%d pos=%s -> %s",
+                    nearest.object_id, nearest_d, pos, target)
 
     # Rule 2: EXIT shortly after entering. inside_building flag is
     # the engine's signal we're inside (property.go sets it).
