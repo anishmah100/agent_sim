@@ -19,6 +19,33 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D6 — Mixed food economy (forage + craft + vendor)
+
+Three food pathways coexist:
+- **Foragable**: fruit from trees, fish from water. Low satiety
+  per unit, scarce/slow-regenerating. The hermit's safety net.
+- **Craftable**: bread = wheat + oven (or similar pipelines).
+  Medium effort — gather + processing step at a workstation.
+- **Vendor-only**: cooked meals sold at market stalls by
+  rule-based NPCs for gold. High satiety, requires currency.
+
+**Why:** A spectrum of survival strategies maps to a spectrum of
+social engagement. A hermit can survive on apples but slowly. A
+gold-rich agent eats well from vendors but must earn gold somehow.
+A craftsman trades raw ingredients for processed food. Most
+real-world economic dynamics emerge from THIS shape — opt-in
+participation in the market, not coerced.
+
+**How to apply:**
+- `chop` verb (already wired) on apple trees yields `item:apple`.
+- Add `forage` verb (or extend `chop`) for berries, fish, etc.
+- Add `cook` / `craft` verbs taking ingredients + workstation
+  proximity → produces a higher-satiety food item.
+- Vendor NPCs (rule-based) accept `trade` verb at their stall
+  position, sell food for gold.
+- Item rarity / regeneration timer tuned so foraging is viable
+  but slow; market is fastest.
+
 ### D5 — Experiment spawn is clustered, not scattered
 
 Agents start within a tight radius of an "experiment hub" tile,
