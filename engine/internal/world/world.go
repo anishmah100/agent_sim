@@ -884,23 +884,14 @@ func (w *World) Tick() {
 			}
 		}
 
-		// Idle: pick a wander target.
-		if e.CurrentAction == "" && len(e.walkPath) == 0 && e.WalkProgress >= 1 {
-			// Once every ~5 s, demo a random action.
-			if w.rng.IntN(300) == 0 {
-				actions := []string{"attack", "interact", "hit"}
-				e.CurrentAction = actions[w.rng.IntN(len(actions))]
-				e.actionTicks = 36
-				e.Facing = FacingS
-				continue
-			}
-			// Otherwise wander.
-			if w.rng.IntN(120) == 0 {
-				if t, ok := w.pickWanderTarget(e, 6); ok {
-					w.startMove(e, t)
-				}
-			}
-		}
+		// D3 — legacy demo-wander + random-action loop REMOVED.
+		// Non-PlayerControlled entities used to wander randomly and
+		// occasionally fire fake attack/interact/hit actions every ~5
+		// sec, which contaminated emergence studies. After D3 the only
+		// motion of non-PlayerControlled entities comes from
+		// rule-based bot archetypes (D16) connecting via the SDK like
+		// any other agent. If a non-PlayerControlled entity exists at
+		// all, it idles in place.
 
 		// Advance walk.
 		if e.CurrentAction == "move" && e.WalkProgress < 1 {

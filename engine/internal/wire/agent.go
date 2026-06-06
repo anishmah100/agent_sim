@@ -191,13 +191,27 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 			if !syscore.IsAgentArchetype(e.Archetype) {
 				continue
 			}
-			// Skip entities already owned by a live agent.
+			// Skip entities already owned by a live agent OR by an
+			// agent that has registered but not yet connected its WS.
+			// Without the h.registry check, two near-simultaneous
+			// registrations to a sparse world could both bind to the
+			// same auto-spawned entity (a race surfaced when D3
+			// stripped the 250 pre-declared bodies and every register
+			// goes through SpawnAgentEntity).
 			h.mu.Lock()
 			taken := false
 			for _, c := range h.live {
 				if c.rec != nil && c.rec.EntityID == id {
 					taken = true
 					break
+				}
+			}
+			if !taken {
+				for _, r := range h.registry {
+					if r.EntityID == id {
+						taken = true
+						break
+					}
 				}
 			}
 			h.mu.Unlock()
