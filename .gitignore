@@ -58,6 +58,7 @@ worlds/snapshots/*.bin
 # Live editor scratch — re-applied on every engine boot via the
 # tile-edits overlay; shouldn't pollute git history.
 worlds/*/tile_edits.json
+worlds/*/decoration_edits.json
 
 # ── Claude Code session metadata ─────────────────────────────────────
 .claude/

@@ -121,6 +121,37 @@ export class DecorationLayer {
     };
   }
 
+  /** Add a single decoration after the initial load — used by the
+   *  editor to optimistically render a placement before the engine
+   *  round-trip completes. Loads the texture if needed, then registers
+   *  in the spatial bucket so it appears on the next refreshVisible(). */
+  async addOne(spec: DecorationSpec): Promise<void> {
+    const i = this.specs.length;
+    this.specs.push(spec);
+    const BUCKET = DecorationLayer.BUCKET;
+    const bx = Math.floor(spec.x / BUCKET);
+    const by = Math.floor(spec.y / BUCKET);
+    const key = `${bx},${by}`;
+    let arr = this.bucketIndex.get(key);
+    if (!arr) { arr = []; this.bucketIndex.set(key, arr); }
+    arr.push(i);
+    if (!this.cache.has(spec.sprite)) {
+      const url = spriteUrl(spec.sprite);
+      if (url) {
+        try {
+          const tex = await Assets.load<Texture>(url);
+          tex.source.scaleMode = "nearest";
+          this.cache.set(spec.sprite, tex);
+        } catch (e) {
+          console.warn(`addOne: texture load failed for ${spec.sprite}`, e);
+        }
+      }
+    }
+    // Force a refresh against the current viewport so the new sprite
+    // materialises immediately if it's in view.
+    this.hasVis = false;
+  }
+
   async load(specs: DecorationSpec[]): Promise<void> {
     this.clear();
     this.specs = specs.slice();

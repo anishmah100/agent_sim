@@ -553,6 +553,13 @@ func Load(path string) (*World, error) {
 		w.occupants[tile] = fe.EntityID
 	}
 
+	// Replay any editor-placed decorations on top of the base bundle
+	// AFTER entity loading so additive overlays survive engine restart.
+	// Non-fatal: a corrupt overlay falls through to a clean boot.
+	if err := w.ApplyDecorationEditsOverlay(); err != nil {
+		fmt.Fprintf(os.Stderr, "world: decoration edits overlay: %v\n", err)
+	}
+
 	// Post-load displacement pass: any entity whose declared tile got
 	// stomped by a decoration footprint (procedural worldgen places
 	// entities + decorations independently) ends up stuck — every

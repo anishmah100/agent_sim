@@ -248,6 +248,7 @@ func main() {
 	mux.HandleFunc("/api/v1/world/rulebook.json", wire.RulebookHandler(w, bundle, host, tickRate))
 	mux.HandleFunc("/api/v1/world/history", historian.Handler(hist))
 	mux.HandleFunc("/api/v1/world/edit", wire.TileEditHandler(w))
+	mux.HandleFunc("/api/v1/world/edit_deco", wire.DecorationEditHandler(w))
 	mux.HandleFunc("/api/v1/agents", wire.AgentsListHandler(agents, w))
 	// AGENT-A7 inspector → mental_state endpoint. Path includes the
 	// entity id; the handler parses it out.

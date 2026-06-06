@@ -53,6 +53,11 @@ export interface PixiHandle {
   onInteriorPropHoverEnter(handler: (ev: DecorationInfoEvent) => void): () => void;
   /** Same hover-exit signal for interior props. */
   onInteriorPropHoverExit(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** Editor — drop a decoration at (tileX, tileY). The sprite id +
+   *  footprint come from the editor's selected palette entry. The
+   *  caller is responsible for POSTing to /api/v1/world/edit_deco
+   *  for persistence; this method only updates the local view. */
+  addDecoration(spec: import("./Decoration").DecorationSpec): Promise<void>;
   ingestAudible(events: AudibleEvent[]): void;
   /** Editor — repaint one tile to a new glyph. Returns previous glyph
    *  for optimistic-update revert, or undefined if out of bounds. */
@@ -288,6 +293,10 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
     onInteriorPropHoverExit(handler) {
       return interior.onPropHoverExit(handler);
+    },
+
+    async addDecoration(spec) {
+      await decorations.addOne(spec);
     },
 
     setTileGlyph(tileX, tileY, glyph) {

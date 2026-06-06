@@ -27,6 +27,7 @@ import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
 import { HUD } from "./HUD";
 import { Editor } from "./Editor";
+import type { EditorCategory, PaletteEntry } from "./EditorPalettes";
 import type { TileKind } from "../render/tiles";
 import { Minimap } from "./Minimap";
 import { StoryFeed } from "./StoryFeed";
@@ -57,6 +58,8 @@ export function App() {
   // glyph is enough to start working.
   const [editorTool, setEditorTool] = createSignal<"select" | "paint" | "erase">("paint");
   const [editorGlyph, setEditorGlyph] = createSignal<string | null>(null);
+  const [editorCategory, setEditorCategory] = createSignal<EditorCategory>("tile");
+  const [editorDeco, setEditorDeco] = createSignal<PaletteEntry | null>(null);
   const [tilesLegend, setTilesLegend] = createSignal<Record<string, TileKind> | null>(null);
   const [mentalState, setMentalState] = createSignal<MentalState | null>(null);
   // InfoPanel state — populated when the user clicks any non-veg
@@ -127,20 +130,23 @@ export function App() {
       // editor's "click to paint" surface never wired up — Phase
       // WORLD-3 shipped the panel, this branch is Phase WORLD-4's
       // missing piece.
-      if (editorOpen() && editorTool() === "paint" && editorGlyph()) {
+      if (editorOpen() && editorCategory() === "tile" && editorTool() === "paint" && editorGlyph()) {
         paintTileAt(ev.tileX, ev.tileY, editorGlyph()!);
         return;
       }
-      if (editorOpen() && editorTool() === "erase") {
+      if (editorOpen() && editorCategory() === "tile" && editorTool() === "erase") {
         // Erase paints the default walkable glyph the world declares.
-        // For Eldoria that's "g" → grass. Fall back to the first
-        // walkable glyph in the legend if "g" is missing.
         const legend = tilesLegend();
         const defaultGlyph =
           (legend && legend["g"] !== undefined) ? "g"
           : Object.keys(legend ?? {}).find((k) => legend?.[k] === "grass")
           ?? Object.keys(legend ?? {})[0];
         if (defaultGlyph) paintTileAt(ev.tileX, ev.tileY, defaultGlyph);
+        return;
+      }
+      if (editorOpen() && editorCategory() !== "tile" && editorDeco()) {
+        // Decoration drop — POSTs the engine then optimistically renders.
+        dropDecorationAt(ev.tileX, ev.tileY, editorDeco()!);
         return;
       }
       if (ev.entity) {
@@ -152,6 +158,44 @@ export function App() {
         closeInspector();
       }
     });
+
+    // dropDecorationAt — POST to /api/v1/world/edit_deco + optimistically
+    // render the new sprite locally. Real-time: the engine adds the
+    // decoration to the live world so agents observe it on the next
+    // tick, walkability updates immediately, and a building's door
+    // gets registered for entry. Persists to a sidecar overlay so
+    // a restart re-applies the drop.
+    async function dropDecorationAt(tileX: number, tileY: number, entry: PaletteEntry) {
+      if (tileX < 0 || tileY < 0) return;
+      const spec = {
+        x: tileX,
+        y: tileY,
+        sprite: entry.sprite,
+        height_tiles: entry.height_tiles,
+        footprint_w: entry.footprint_w,
+        footprint_h: entry.footprint_h,
+        walkable: entry.walkable,
+      };
+      // Optimistic render first so the user gets instant feedback.
+      void pixiHandle?.addDecoration(spec);
+      try {
+        const { ENGINE_URL } = await import("../net/api");
+        const r = await fetch(
+          `${ENGINE_URL}/api/v1/world/edit_deco`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(spec),
+          },
+        );
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          console.warn(`deco drop rejected: ${body.reason ?? r.status}`);
+        }
+      } catch (e) {
+        console.warn(`deco drop failed: ${(e as Error).message}`);
+      }
+    }
 
     // paintTileAt — POST to /api/v1/world/edit + optimistically repaint
     // the Pixi tilemap so the user sees the change instantly. Reverts
@@ -451,11 +495,10 @@ export function App() {
         onToolChange={setEditorTool}
         selectedGlyph={editorGlyph()}
         onSelectedGlyphChange={setEditorGlyph}
-        // Save is a noop in this version — every paint persists
-        // immediately via /api/v1/world/edit, so the user doesn't need
-        // an explicit "save". Left in the UI so the button isn't
-        // suddenly absent; clicking just flashes confirmation.
-        onSave={() => { /* paints already persisted per-stroke */ }}
+        category={editorCategory()}
+        onCategoryChange={setEditorCategory}
+        selectedDeco={editorDeco()}
+        onSelectedDecoChange={setEditorDeco}
       />
 
       <AgentsPicker

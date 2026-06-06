@@ -71,3 +71,45 @@ func respondEdit(rw http.ResponseWriter, status int, body editResp) {
 	rw.WriteHeader(status)
 	_ = json.NewEncoder(rw).Encode(body)
 }
+
+// DecorationEditHandler — POST /api/v1/world/edit_deco
+//
+// Body: same as world.DecorationEdit (x, y, sprite, height_tiles,
+// footprint_w, footprint_h, walkable).
+// Response: {"ok":bool, "reason":"..."}
+//
+// Adds a decoration to the live world AND persists it to the bundle's
+// decoration_edits.json overlay so a restart sees the same placement.
+// Updates walkability + (for bld:* sprites) door registration so the
+// new building behaves like a baked-in one.
+func DecorationEditHandler(w *world.World) http.HandlerFunc {
+	return func(rw http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			rw.Header().Set("Allow", "POST")
+			http.Error(rw, "method_not_allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body world.DecorationEdit
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			respondEdit(rw, http.StatusBadRequest,
+				editResp{OK: false, Reason: "bad_json"})
+			return
+		}
+		w.LockWrite()
+		err := w.AddDecoration(body)
+		w.UnlockWrite()
+		if err != nil {
+			respondEdit(rw, http.StatusBadRequest,
+				editResp{OK: false, Reason: err.Error()})
+			return
+		}
+		if err := w.AppendDecorationEditOverlay(body); err != nil {
+			respondEdit(rw, http.StatusOK, editResp{
+				OK:     true,
+				Reason: "persist_failed:" + err.Error(),
+			})
+			return
+		}
+		respondEdit(rw, http.StatusOK, editResp{OK: true})
+	}
+}

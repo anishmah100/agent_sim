@@ -1,14 +1,23 @@
 // Editor — dev-mode panel overlaid on the Pixi viewport. Toggled with
-// Cmd+E / Ctrl+E. Matches the existing FrontendV3 visual style (dark
-// palette, single-tile chrome, inline styles).
+// Cmd+E / Ctrl+E. Real-time: every paint / decoration drop mutates the
+// LIVE engine world and persists to a sidecar overlay so a restart
+// re-applies the same edits.
 //
-// Scope (Phase WORLD-3): scaffolds the tile palette + tool selector +
-// "Save" button. Live tile-paint that mutates the Pixi tilemap and
-// roundtrips to the engine is Phase WORLD-4 — this commit ships the UI
-// surface so the user can see the editor and confirm the layout before
-// the heavy plumbing lands.
+// Three palettes:
+//   1. Tile      — repaint the ground (grass / stone / dirt / etc).
+//   2. Building  — drop a cottage, blacksmith, granary, watchtower,
+//                  market stall. Updates walkability + door registration.
+//   3. Item      — drop a coin, gem, weapon, food. Walkable, single-tile.
+//
+// Clicking the canvas while the editor is open dispatches to whichever
+// category is active. The Solid layer wires the canvas click to the
+// appropriate POST.
 
-import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
+import { For, Show, onCleanup, onMount } from "solid-js";
+import { BUILDING_PALETTE, ITEM_PALETTE, type EditorCategory, type PaletteEntry } from "./EditorPalettes";
+
+const ENGINE_URL =
+  import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
 
 export type EditorTool = "select" | "paint" | "erase";
 
@@ -20,27 +29,28 @@ export interface EditorProps {
   onToolChange: (t: EditorTool) => void;
   selectedGlyph: string | null;
   onSelectedGlyphChange: (g: string | null) => void;
-  onSave?: () => void;
+  category: EditorCategory;
+  onCategoryChange: (c: EditorCategory) => void;
+  selectedDeco: PaletteEntry | null;
+  onSelectedDecoChange: (e: PaletteEntry | null) => void;
 }
 
 export function Editor(props: EditorProps) {
-  // Tool + selected glyph are controlled by the parent so the canvas
-  // click handler can read them. Old local state is gone.
   const tool = () => props.tool;
   const setTool = (t: EditorTool) => props.onToolChange(t);
   const selectedGlyph = () => props.selectedGlyph;
   const setSelectedGlyph = (g: string | null) => props.onSelectedGlyphChange(g);
-  // Cached so the Show below still has a stable value.
-  void createSignal;
+  const category = () => props.category;
+  const setCategory = (c: EditorCategory) => props.onCategoryChange(c);
+  const selectedDeco = () => props.selectedDeco;
+  const setSelectedDeco = (e: PaletteEntry | null) => props.onSelectedDecoChange(e);
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Cmd+E (mac) / Ctrl+E (others) toggle.
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e") {
         e.preventDefault();
         props.onToggle(!props.open);
       }
-      // ESC closes.
       if (e.key === "Escape" && props.open) {
         props.onToggle(false);
       }
@@ -57,14 +67,14 @@ export function Editor(props: EditorProps) {
           top: "48px",
           right: "0",
           bottom: "0",
-          width: "260px",
+          width: "300px",
           background: "rgba(24, 20, 37, 0.95)",
           "border-left": "1px solid #3a4466",
           color: "#ead4aa",
           padding: "12px",
           display: "flex",
           "flex-direction": "column",
-          gap: "12px",
+          gap: "10px",
           "z-index": "9",
           "font-size": "13px",
           "font-family": "system-ui, sans-serif",
@@ -84,90 +94,188 @@ export function Editor(props: EditorProps) {
           </button>
         </div>
 
-        <div style={{ opacity: "0.7", "font-size": "11px" }}>
-          Pick a tile glyph, then click anywhere on the world to paint.
-          Cmd+E toggles. Erase paints grass.
+        <div style={{ opacity: "0.7", "font-size": "11px", "line-height": "1.4" }}>
+          Real-time. Every edit hits the live engine so agents in the
+          world see the change immediately. Cmd+E toggles.
         </div>
 
-        {/* Tool selector */}
-        <div>
-          <div style={{ opacity: "0.7", "margin-bottom": "4px" }}>Tool</div>
-          <div style={{ display: "flex", gap: "4px" }}>
-            <For each={["select", "paint", "erase"] as EditorTool[]}>
-              {(t) => (
-                <button
-                  type="button"
-                  onClick={() => setTool(t)}
-                  style={toolBtnStyle(tool() === t)}
-                  data-testid={`tool-${t}`}
-                >
-                  {t}
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-
-        {/* Tile palette — from the world's tiles_legend */}
-        <Show when={props.tilesLegend} fallback={<NoLegend />}>
-          {(legend) => (
-            <div>
-              <div style={{ opacity: "0.7", "margin-bottom": "4px" }}>
-                Tile palette ({Object.keys(legend()).length} glyphs)
-              </div>
-              <div
-                style={{
-                  display: "grid",
-                  "grid-template-columns": "repeat(auto-fill, minmax(72px, 1fr))",
-                  gap: "4px",
-                }}
+        {/* Category tabs */}
+        <div style={{ display: "flex", gap: "4px" }}>
+          <For each={["tile", "building", "item"] as EditorCategory[]}>
+            {(c) => (
+              <button
+                type="button"
+                onClick={() => setCategory(c)}
+                style={categoryBtnStyle(category() === c)}
+                data-testid={`category-${c}`}
               >
-                <For each={Object.entries(legend())}>
-                  {([glyph, kind]) => (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedGlyph(glyph)}
-                      style={paletteBtnStyle(selectedGlyph() === glyph)}
-                      title={kind}
-                      data-testid={`palette-${glyph}`}
-                    >
-                      <span
-                        style={{
+                {c}
+              </button>
+            )}
+          </For>
+        </div>
+
+        {/* Tile-mode body */}
+        <Show when={category() === "tile"}>
+          <div>
+            <div style={{ opacity: "0.7", "margin-bottom": "4px" }}>Tool</div>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <For each={["paint", "erase"] as EditorTool[]}>
+                {(t) => (
+                  <button
+                    type="button"
+                    onClick={() => setTool(t)}
+                    style={toolBtnStyle(tool() === t)}
+                    data-testid={`tool-${t}`}
+                  >
+                    {t}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+          <Show when={props.tilesLegend} fallback={<NoLegend />}>
+            {(legend) => (
+              <div>
+                <div style={{ opacity: "0.7", "margin-bottom": "4px" }}>
+                  Ground tile
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    "grid-template-columns": "repeat(auto-fill, minmax(72px, 1fr))",
+                    gap: "4px",
+                  }}
+                >
+                  <For each={Object.entries(legend())}>
+                    {([glyph, kind]) => (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGlyph(glyph)}
+                        style={paletteBtnStyle(selectedGlyph() === glyph)}
+                        title={kind}
+                        data-testid={`palette-${glyph}`}
+                      >
+                        <span style={{
                           "font-family": "monospace",
                           "font-size": "16px",
                           "font-weight": "bold",
-                        }}
-                      >
-                        {glyph}
-                      </span>
-                      <br />
-                      <span style={{ opacity: "0.6", "font-size": "11px" }}>{kind}</span>
-                    </button>
-                  )}
-                </For>
+                        }}>
+                          {glyph}
+                        </span>
+                        <br />
+                        <span style={{ opacity: "0.6", "font-size": "11px" }}>{kind}</span>
+                      </button>
+                    )}
+                  </For>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </Show>
+          <div style={{ opacity: "0.5", "font-size": "11px" }}>
+            Click the world to paint. Selected: <code>{selectedGlyph() ?? "(none)"}</code>
+          </div>
         </Show>
 
-        {/* Save */}
-        <div style={{ "margin-top": "auto" }}>
-          <button
-            type="button"
-            onClick={() => props.onSave?.()}
-            style={primaryBtnStyle()}
-            disabled={!selectedGlyph() || tool() !== "paint"}
-            data-testid="save-btn"
-          >
-            Save back to YAML
-          </button>
-          <div style={{ opacity: "0.5", "font-size": "11px", "margin-top": "4px" }}>
-            Selected glyph: <code>{selectedGlyph() ?? "(none)"}</code> ·
-            tool: <code>{tool()}</code>
+        {/* Decoration-mode body — buildings + items share the same UI */}
+        <Show when={category() !== "tile"}>
+          <PalettePicker
+            entries={category() === "building" ? BUILDING_PALETTE : ITEM_PALETTE}
+            selected={selectedDeco()}
+            onSelect={setSelectedDeco}
+            label={category() === "building" ? "Buildings" : "Items"}
+          />
+          <div style={{ opacity: "0.5", "font-size": "11px" }}>
+            Click the world to drop. Selected:{" "}
+            <code>{selectedDeco()?.label ?? "(none)"}</code>
           </div>
-        </div>
+        </Show>
       </div>
     </Show>
+  );
+}
+
+function PalettePicker(props: {
+  entries: PaletteEntry[];
+  selected: PaletteEntry | null;
+  onSelect: (e: PaletteEntry) => void;
+  label: string;
+}) {
+  return (
+    <div>
+      <div style={{ opacity: "0.7", "margin-bottom": "4px" }}>
+        {props.label} ({props.entries.length})
+      </div>
+      <div
+        style={{
+          display: "grid",
+          "grid-template-columns": "repeat(auto-fill, minmax(64px, 1fr))",
+          gap: "4px",
+        }}
+      >
+        <For each={props.entries}>
+          {(e) => (
+            <button
+              type="button"
+              onClick={() => props.onSelect(e)}
+              title={e.label}
+              data-testid={`palette-deco-${e.sprite.replace(/[:_]/g, "-")}`}
+              style={{
+                ...paletteBtnStyle(props.selected?.sprite === e.sprite),
+                display: "flex",
+                "flex-direction": "column",
+                "align-items": "center",
+                gap: "2px",
+                padding: "4px",
+              }}
+            >
+              <img
+                src={`${ENGINE_URL}/art/manifests/`} // placeholder; real URL injected
+                alt=""
+                style={{ display: "none" }}
+              />
+              <DecoThumb sprite={e.sprite} />
+              <span style={{
+                "font-size": "9px",
+                "line-height": "1.1",
+                "text-align": "center",
+                opacity: 0.85,
+              }}>
+                {e.label}
+              </span>
+            </button>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
+function DecoThumb(props: { sprite: string }) {
+  // Resolve a thumbnail URL for the sprite. Mirrors the catalog
+  // logic — buildings live at v2_<name>.png or processed/objects/...,
+  // items at v2_items_master_v2/<name>.png, stalls at v2_market_stall/...
+  // For an editor preview we accept a missing image (broken-image icon
+  // in browser, no fault state needed).
+  const [cat, name] = props.sprite.split(":");
+  let url = `${ENGINE_URL}/art/processed/`;
+  if (cat === "item") url += `v2_items_master_v2/${name}.png`;
+  else if (cat === "bld" && name.startsWith("stall_")) url += `v2_market_stall/${name}.png`;
+  else if (cat === "bld" && /^(blacksmith|town_hall|granary|watchtower|well|000|001)$/.test(name)) {
+    url += name === "000" || name === "001" ? `objects/buildings/obj_${name}.png` : `v2_${name}.png`;
+  } else url += `${name}.png`;
+  return (
+    <img
+      src={url}
+      alt=""
+      style={{
+        width: "32px",
+        height: "32px",
+        "object-fit": "contain",
+        "image-rendering": "pixelated",
+      }}
+      onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+    />
   );
 }
 
@@ -189,6 +297,21 @@ function btnStyle() {
     padding: "2px 8px",
     cursor: "pointer",
     "font-size": "13px",
+  };
+}
+
+function categoryBtnStyle(active: boolean) {
+  return {
+    flex: "1",
+    background: active ? "#feae34" : "#262b44",
+    color: active ? "#1f2238" : "#ead4aa",
+    border: "1px solid #3a4466",
+    "border-radius": "3px",
+    padding: "6px 8px",
+    cursor: "pointer",
+    "font-size": "12px",
+    "font-weight": "700",
+    "text-transform": "capitalize" as const,
   };
 }
 
@@ -214,19 +337,5 @@ function paletteBtnStyle(active: boolean) {
     padding: "6px",
     cursor: "pointer",
     "text-align": "center" as const,
-  };
-}
-
-function primaryBtnStyle() {
-  return {
-    background: "#feae34",
-    color: "#1f2238",
-    border: "none",
-    "border-radius": "3px",
-    padding: "8px 14px",
-    cursor: "pointer",
-    "font-weight": "bold",
-    "font-size": "13px",
-    width: "100%",
   };
 }
