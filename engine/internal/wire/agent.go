@@ -79,6 +79,10 @@ type agentRecord struct {
 	Persona   map[string]any
 	VisionMode string
 	CadenceMs int
+	// ConnectedAt — unix milliseconds when the WS connect succeeded.
+	// Zero before connect. Surfaced by /api/v1/agents so the picker UI
+	// can show recency.
+	ConnectedAt int64
 
 	// ShareReasoning is the per-agent opt-in for capturing the
 	// `reasoning` trace attached to actions. Engine-level capture
@@ -296,6 +300,7 @@ func (h *AgentHub) HandleWS(rw http.ResponseWriter, r *http.Request) {
 		done: make(chan struct{}),
 	}
 	c.cadence.Store(int64(rec.CadenceMs))
+	rec.ConnectedAt = nowMs()
 	h.live[rec.AgentID] = c
 	h.mu.Unlock()
 

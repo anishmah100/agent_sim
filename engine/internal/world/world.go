@@ -552,8 +552,85 @@ func Load(path string) (*World, error) {
 		w.entities[fe.EntityID] = e
 		w.occupants[tile] = fe.EntityID
 	}
+
+	// Post-load displacement pass: any entity whose declared tile got
+	// stomped by a decoration footprint (procedural worldgen places
+	// entities + decorations independently) ends up stuck — every
+	// move action rejects because the source tile is non-walkable
+	// and the dispatcher's tile-occupancy lookup goes haywire. The
+	// user reported finding npc_aspendell_3's "child of Birchwood"
+	// frozen ON TOP of a cottage; that's this case. We relocate
+	// each such entity to the nearest walkable tile within a small
+	// radius and warn so the worldgen can be tightened later.
+	w.relocateStuckEntities()
+
 	return w, nil
 }
+
+// relocateStuckEntities scans every loaded entity, finds those on
+// non-walkable tiles (because a decoration footprint stomped their
+// spawn after the entity was placed), and moves them to the closest
+// walkable tile within RELOCATE_RADIUS. Caller must hold no locks —
+// runs inside Load before any concurrent access exists.
+func (w *World) relocateStuckEntities() {
+	const radius = 8
+	moved := 0
+	stuck := 0
+	for id, e := range w.entities {
+		if w.IsWalkable(e.LogicalTile) {
+			continue
+		}
+		// BFS outward until we find a walkable tile or exhaust the
+		// radius. Diamond distance: prefer cardinal neighbours, then
+		// step out. We don't need a real BFS — a ring scan is fine.
+		newTile, ok := w.nearestWalkable(e.LogicalTile, radius)
+		if !ok {
+			stuck++
+			fmt.Fprintf(os.Stderr,
+				"world: entity %s stuck at %v — no walkable tile within %d (worldgen bug)\n",
+				id, e.LogicalTile, radius)
+			continue
+		}
+		// Update occupancy maps to reflect the new tile.
+		if w.occupants[e.LogicalTile] == id {
+			delete(w.occupants, e.LogicalTile)
+		}
+		e.LogicalTile = newTile
+		e.WalkFromTile = newTile
+		e.recomputeRenderPos()
+		w.occupants[newTile] = id
+		moved++
+	}
+	if moved > 0 || stuck > 0 {
+		fmt.Fprintf(os.Stderr,
+			"world: relocated %d stuck entities (%d unsalvageable)\n",
+			moved, stuck)
+	}
+}
+
+func (w *World) nearestWalkable(from Tile, radius int) (Tile, bool) {
+	// Try the 8-neighbours first (often enough), then expand.
+	for r := 1; r <= radius; r++ {
+		for dy := -r; dy <= r; dy++ {
+			for dx := -r; dx <= r; dx++ {
+				// Only ring cells.
+				if absInt(dx) != r && absInt(dy) != r {
+					continue
+				}
+				t := Tile{from[0] + dx, from[1] + dy}
+				if !w.IsWalkable(t) {
+					continue
+				}
+				if _, occupied := w.occupants[t]; occupied {
+					continue
+				}
+				return t, true
+			}
+		}
+	}
+	return Tile{}, false
+}
+
 
 // IsWalkable returns true if (x,y) is on the map AND has walkable
 // terrain. Does not consider dynamic occupancy.

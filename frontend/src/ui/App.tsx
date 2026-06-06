@@ -28,6 +28,7 @@ import { Editor } from "./Editor";
 import type { TileKind } from "../render/tiles";
 import { Minimap } from "./Minimap";
 import { StoryFeed } from "./StoryFeed";
+import { AgentsPicker } from "./AgentsPicker";
 import { JoinAgent } from "./JoinAgent";
 import { Onboarding } from "./Onboarding";
 
@@ -47,6 +48,7 @@ export function App() {
   const [liveEntities, setLiveEntities] = createSignal<EntityState[]>([]);
   const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
   const [editorOpen, setEditorOpen] = createSignal(false);
+  const [agentsPickerOpen, setAgentsPickerOpen] = createSignal(false);
   // Editor state hoisted up so the canvas click handler can read it.
   // When paint+glyph is set and editorOpen, a click paints instead of
   // inspecting. Default tool=paint so opening the editor + clicking a
@@ -313,6 +315,23 @@ export function App() {
           </button>
           <button
             type="button"
+            data-testid="agents-toggle-button"
+            onClick={() => setAgentsPickerOpen(!agentsPickerOpen())}
+            title="Find connected LLM agents"
+            style={{
+              padding: "4px 10px",
+              background: agentsPickerOpen() ? "#feae34" : "#3a4466",
+              color: agentsPickerOpen() ? "#1f2238" : "#ead4aa",
+              border: agentsPickerOpen() ? "1px solid #feae34" : "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            agents
+          </button>
+          <button
+            type="button"
             data-testid="editor-toggle-button"
             onClick={() => setEditorOpen(!editorOpen())}
             title="Toggle world editor (Cmd+E)"
@@ -415,6 +434,23 @@ export function App() {
         // an explicit "save". Left in the UI so the button isn't
         // suddenly absent; clicking just flashes confirmation.
         onSave={() => { /* paints already persisted per-stroke */ }}
+      />
+
+      <AgentsPicker
+        open={agentsPickerOpen()}
+        onClose={() => setAgentsPickerOpen(false)}
+        onPick={(a) => {
+          // Center the viewport on the agent's tile, zoom in enough
+          // to see them, and open the inspector so the user can
+          // watch their reasoning trace live.
+          pixiHandle?.centerOn(a.pos[0], a.pos[1]);
+          pixiHandle?.setSelectedEntity(a.entity_id);
+          setSelectedId(a.entity_id);
+          // The mental-state inspector populates from the historian
+          // — fire the same fetch the click-to-inspect path uses.
+          fetchAndSetMentalState(a.entity_id);
+          setAgentsPickerOpen(false);
+        }}
       />
 
       {leaderboardsOpen() && (
