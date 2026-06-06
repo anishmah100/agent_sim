@@ -21,9 +21,10 @@ import (
 )
 
 const (
-	DefaultHungerPerTick     = 0.0
-	DefaultHungerDamageAbove = 1.0 // never deal damage by default
-	DefaultHungerDamageRate  = 0
+	DefaultHungerPerTick           = 0.0
+	DefaultHungerDamageAbove       = 1.0 // never deal damage by default
+	DefaultHungerDamageRate        = 0
+	DefaultHungerDamageIntervalTks = 1 // every-tick damage (compat default)
 )
 
 // HungerSpike — emitted each time an entity crosses into starvation.
@@ -64,6 +65,14 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 	}
 	above := w.Tuning("hunger_damage_above", DefaultHungerDamageAbove)
 	rate := w.TuningInt("hunger_damage_rate", DefaultHungerDamageRate)
+	// D4 — apply damage at intervals (not every tick) so an int rate
+	// like 1 corresponds to ~1 HP per N seconds, not 60 HP/sec at
+	// 60 Hz. Default interval = 1 preserves backwards compatibility.
+	interval := w.TuningInt("hunger_damage_interval_ticks", DefaultHungerDamageIntervalTks)
+	if interval < 1 {
+		interval = 1
+	}
+	damageThisTick := tick%uint64(interval) == 0
 	for _, id := range w.EntityIDs() {
 		e := w.EntityByID(id)
 		if e == nil {
@@ -81,8 +90,9 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 		w.MutateEntity(id, func(real syscore.Entity) {
 			real.SetExtra("hunger", next)
 		})
-		// Damage path.
-		if next > above && rate > 0 {
+		// Damage path. Only apply on tick boundaries of `interval`,
+		// so 60 Hz × interval 324 ≈ 1 HP per 5.4 sec at rate=1.
+		if next > above && rate > 0 && damageThisTick {
 			hpRaw, _ := e.GetExtra("hp")
 			hp, _ := hpRaw.(int)
 			if hp > 0 {

@@ -14,11 +14,19 @@ the engine needs from this file is set via register_tuning / register_item
 """
 
 # ---- Tunings ----
-# Vitality
-register_tuning("hunger_per_tick",     0.0008)  # ~5min from 0 to 1
-register_tuning("hunger_damage_above", 0.9)     # above this, lose hp each tick
-register_tuning("hunger_damage_rate",  1)       # hp lost per tick when starving
-register_tuning("max_hp",              100)
+# Vitality (D4 calibration)
+# At 60 Hz, 30 in-game min = 108_000 ticks. hunger_per_tick = 1/108_000
+# (~9.26e-6) so hunger reaches 1.0 in exactly 30 in-game min. Damage
+# threshold at 0.7 → starvation starts at ~21 min. damage_interval=324
+# (5.4 sec @ 60Hz) × rate=1 means 1 HP per 5.4 sec; from threshold to
+# corpse = 100 HP × 5.4 sec = 9 in-game min. Total = ~30 min from full
+# agent to corpse. Per user (D22): treat as starting numbers; tune by
+# observed substrate-validation dynamics.
+register_tuning("hunger_per_tick",                0.00001)
+register_tuning("hunger_damage_above",            0.7)
+register_tuning("hunger_damage_rate",             1)
+register_tuning("hunger_damage_interval_ticks",   324)
+register_tuning("max_hp",                         100)
 
 # Combat
 register_tuning("attack_damage",       10)

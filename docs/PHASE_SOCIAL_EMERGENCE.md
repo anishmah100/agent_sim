@@ -709,10 +709,14 @@ that hunger is salient within a single experiment (~15-min real
 time, 2x time speed) but long enough that agents can plan, travel,
 negotiate without dying mid-conversation.
 
-**How to apply:**
-- Eldoria's tunings: `hunger_per_tick`, `hunger_damage_above`,
-  `hunger_damage_rate` are non-zero. Calibrated so a full agent
-  starves in ~1800 in-game ticks (30 min × 60 Hz).
+**How to apply** (numbers corrected during P2 build):
+- Eldoria's tunings (60 Hz, 30 in-game min = 108_000 ticks):
+  - `hunger_per_tick = 0.00001` (1/108_000 → reaches 1.0 in 30 in-game min).
+  - `hunger_damage_above = 0.7` (damage at minute 21 of unattended).
+  - `hunger_damage_rate = 1` HP per interval.
+  - `hunger_damage_interval_ticks = 324` (5.4 sec @ 60 Hz). From
+    threshold to corpse = 100 HP × 5.4 sec = 9 in-game min. Total
+    elapsed = ~30 in-game min from full agent to corpse.
 - Food items have `satiety` values (apple 0.25, bread 0.5 — match
   current rulebook). Eating restores hunger.
 - New verb: `eat` with target=inventory item id. Currently absent.

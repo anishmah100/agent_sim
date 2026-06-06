@@ -74,8 +74,8 @@ func TestLoadBundle_EldoriaCarriesRules(t *testing.T) {
 	if got := w.Rules.GetInt("attack_damage", -1); got != 10 {
 		t.Fatalf("eldoria attack_damage: want 10, got %d", got)
 	}
-	if got := w.Rules.GetFloat("hunger_per_tick", -1); got != 0.0008 {
-		t.Fatalf("eldoria hunger_per_tick: want 0.0008, got %v", got)
+	if got := w.Rules.GetFloat("hunger_per_tick", -1); got != 0.00001 {
+		t.Fatalf("eldoria hunger_per_tick: want 0.00001 (D4 calibration), got %v", got)
 	}
 	// And an item.
 	if _, ok := w.Rules.Item("apple"); !ok {
@@ -120,8 +120,8 @@ func TestLoadBundle_EldoriaTuningsReachAdapter(t *testing.T) {
 	if got := a.TuningInt("starting_gold", 10); got != 25 {
 		t.Fatalf("eldoria starting_gold through adapter: want 25, got %d", got)
 	}
-	if got := a.Tuning("hunger_per_tick", 0); got != 0.0008 {
-		t.Fatalf("eldoria hunger_per_tick through adapter: want 0.0008, got %v", got)
+	if got := a.Tuning("hunger_per_tick", 0); got != 0.00001 {
+		t.Fatalf("eldoria hunger_per_tick through adapter: want 0.00001 (D4), got %v", got)
 	}
 }
 
