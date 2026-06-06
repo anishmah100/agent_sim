@@ -30,6 +30,7 @@ from typing import Optional
 from agent_sim_sdk import (
     Agent, ActionBatch, VisionMode, register_agent,
     Move, Speak, Shout, Whisper, Interact, Wait,
+    WorkForPay, Pay, Give,
 )
 
 
@@ -191,6 +192,84 @@ async def main_async(args) -> None:
     rec = tail_for_kind(events_path, "ActionAccepted", seq0, timeout_s=15.0)
     record("move -> ActionAccepted", ok=(rec is not None),
            detail=("seq=" + str(rec.get("seq")) if rec else "no event seen"))
+
+    # 5) work_for_pay -> GoldTransferred (Grant variant).
+    # Money system credits the worker and queues GoldTransferred with
+    # From="" + Cause="work_for_pay". This is the cleanest way to
+    # prove the economy verbs work without needing a counter-party.
+    seq0 = cur_max_seq(events_path)
+    await agent.act_batch(ActionBatch(actions=[WorkForPay()],
+                                      reasoning="exercise: work_for_pay"))
+    rec = tail_for_kind(events_path, "GoldTransferred", seq0, timeout_s=15.0)
+    record("work_for_pay -> GoldTransferred (Grant)",
+           ok=(rec is not None),
+           detail=("seq=" + str(rec.get("seq")) if rec
+                   else "no event — money system not firing Grant"))
+
+    # 6) pay -> GoldTransferred (Pay variant).
+    # Requires an adjacent target and self balance ≥ amount. After
+    # work_for_pay above, balance should be > 0. If no entity is
+    # already within 1 tile, walk toward the closest visible one for
+    # up to 20 steps and then pay them.
+    try:
+        obs = await asyncio.wait_for(agent._inbox.get(), timeout=5.0)
+    except asyncio.TimeoutError:
+        obs = None
+    adjacent = None
+    if obs is not None:
+        my_pos = obs.self.pos
+        for ent in (obs.visible_entities or []):
+            d = max(abs(ent.pos[0] - my_pos[0]),
+                    abs(ent.pos[1] - my_pos[1]))
+            if d <= 1:
+                adjacent = ent
+                break
+        if adjacent is None and obs.visible_entities:
+            # Walk to nearest visible entity.
+            nearest = min(obs.visible_entities,
+                          key=lambda e: max(abs(e.pos[0] - my_pos[0]),
+                                            abs(e.pos[1] - my_pos[1])))
+            for _ in range(20):
+                d = max(abs(nearest.pos[0] - my_pos[0]),
+                        abs(nearest.pos[1] - my_pos[1]))
+                if d <= 1:
+                    adjacent = nearest
+                    break
+                step = step_toward(my_pos, nearest.pos)
+                await agent.act_batch(ActionBatch(
+                    actions=[Move(target=step)],
+                    reasoning="walk to entity to pay",
+                ))
+                try:
+                    obs = await asyncio.wait_for(agent._inbox.get(), timeout=5.0)
+                    my_pos = obs.self.pos
+                    # Refresh nearest position; the entity may have moved.
+                    nearest = next((e for e in (obs.visible_entities or [])
+                                    if e.entity_id == nearest.entity_id),
+                                   nearest)
+                except asyncio.TimeoutError:
+                    break
+    if adjacent is None:
+        record("pay -> GoldTransferred (Pay)", ok=False,
+               detail="no entity within 1 tile to pay")
+    else:
+        seq0 = cur_max_seq(events_path)
+        await agent.act_batch(ActionBatch(
+            actions=[Pay(target=adjacent.entity_id, amount=1)],
+            reasoning="exercise: pay 1 gold to adjacent",
+        ))
+        rec = tail_for_kind(events_path, "GoldTransferred", seq0, timeout_s=15.0)
+        # We accept either "GoldTransferred" with non-empty From OR
+        # rejection (logged via engine, not on the event stream). To
+        # disambiguate, check the latest action_ack: tail won't see
+        # rejections, so a missing event here means the pay was
+        # silently dropped at dispatch — which would be a substrate
+        # bug.
+        record("pay -> GoldTransferred (Pay)",
+               ok=(rec is not None),
+               detail=("seq=" + str(rec.get("seq")) if rec
+                       else "pay didn't produce GoldTransferred — check "
+                            "adjacency / balance / verb routing"))
 
     # Teardown.
     await agent.close()
