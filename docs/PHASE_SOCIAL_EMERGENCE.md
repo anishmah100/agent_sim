@@ -19,6 +19,39 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D18 — Inspector tabs: 5 tabs, Mind default
+
+When an agent is clicked, the inspector slides in with five tabs:
+
+1. **Mind** (default) — D14 slots (goal/plan/beliefs/emotion)
+   prominently, then a scrolling list of recent free-form mental
+   notes. The viewer's first view of the agent's intent.
+2. **Speech** — chronological dialogue this agent has uttered or
+   heard (speak / shout / whisper / death_scream).
+3. **Inventory** — items, gold, equipped slot, HP, hunger. Full
+   researcher view (this is the data D9 keeps private from other
+   agents).
+4. **Witnesses** — D10 events: deaths this agent witnessed (with
+   killer + victim entity_ids), gossip received, gossip emitted.
+   The reputation-substrate evidence trail.
+5. **Relationships** — inferred trust/affinity per other agent
+   based on interaction history. D19 will decide what data goes
+   in.
+
+**Why:** five matches researcher needs without becoming a wall.
+Mind first because intent is the most important thing to convey
+when you click an agent. Witnesses is the unique-to-our-benchmark
+tab — no prior agent simulation surfaces "who saw whom kill whom"
+explicitly.
+
+**How to apply:**
+- Update `frontend/src/ui/Inspector.tsx` to add Inventory,
+  Witnesses, Relationships tabs.
+- Existing Trace tab is REMOVED — D14 subsumes it into Mind.
+- The mental-state endpoint in the engine grows to include
+  inventory + witness events + relationship deltas. Or four
+  separate endpoints behind one fetch — TBD by implementation.
+
 ### D17 — UI: cinematic, world canvas is hero, drill-down on click
 
 Layout philosophy:
