@@ -19,6 +19,46 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D14 — Mental state = free-form text + recommended slots, private
+
+Substrate verb: `submit_mental_note(text: str, tag?: str, slots?: {goal?, plan?, beliefs?, emotion?})`.
+
+- **Always private** to the emitting agent + the researcher view
+  (inspector UI). Other agents NEVER see it. This preserves the
+  deception/manipulation dynamic (agent says X but thought Y is
+  measurable because Y is recorded for the researcher).
+- **Free-form text** as the primary payload. Any bot architecture
+  can emit whatever text it wants.
+- **Recommended (not required) slots**: `goal`, `plan`, `beliefs`,
+  `emotion`. Bots fill any subset. The UI prominently shows
+  populated slots for legibility (viewer can scan "what is this
+  agent's current goal?" at a glance).
+- **Emitted on the bot's own cadence.** Substrate doesn't require
+  per-tick emission. The 4-layer Qwen brain may emit per-decision;
+  a reactive bot may emit once per minute; a researcher may opt
+  out entirely (mental state stays empty).
+
+**Why:** matches the user's "loose, architecture-agnostic" principle
+while giving the UI enough structure to be legible. The slots are
+recommendations, not enforcement — bot authors who reject the
+goal/plan/belief frame simply don't populate them. The deception
+emergence dimension is preserved because mental state never enters
+the world's observation channel.
+
+**How to apply:**
+- New action verb: `mental_note { text, tag?, slots? }`. Engine
+  records to historian event log, never relays to other agents.
+- Inspector UI: "Mind" tab shows latest slots prominently + a
+  rolling list of recent free-form notes.
+- Historian event kind: `MentalNote { entity_id, tick, text, tag,
+  slots }`. Indexed for fast retrieval.
+- SDK exposes a typed helper `agent.note(text, slots={...})` for
+  ergonomics.
+- Deprecate the current 4-layer-specific `ReasoningTrace` +
+  `ReflectiveNote` events: they were architecturally-coupled; the
+  generic `MentalNote` subsumes both. The 4-layer brain just calls
+  `note()` from each layer with the appropriate `tag`.
+
 ### D13 — Soft contracts only. No engine-enforced collateral
 
 `propose_task` / `accept_task` / `complete_task` continue as
