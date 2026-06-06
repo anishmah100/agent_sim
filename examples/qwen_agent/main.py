@@ -28,6 +28,9 @@ def _chebyshev(a, b) -> int:
     return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
 
 
+_nudge_log = logging.getLogger("qwen_nudge")
+
+
 def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
     """Post-process the tactical batch with deterministic
     opportunity-injection rules. Qwen-27B reliably defaults to the 3
@@ -64,12 +67,16 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
         if nearest is not None:
             if nearest_d <= 1:
                 actions.insert(0, Enter(target=nearest.object_id))
+                _nudge_log.info("nudge ENTER door=%s pos=%s door_pos=%s",
+                                nearest.object_id, pos, nearest.pos)
             else:
                 # One step toward the door, clamped to one tile.
                 dx = max(-1, min(1, nearest.pos[0] - pos[0]))
                 dy = max(-1, min(1, nearest.pos[1] - pos[1]))
                 target = (pos[0] + dx, pos[1] + dy)
                 actions.insert(0, Move(target=target))
+                _nudge_log.info("nudge STEP-toward-door door=%s d=%d pos=%s -> %s",
+                                nearest.object_id, nearest_d, pos, target)
 
     # Rule 2: EXIT shortly after entering. inside_building flag is
     # the engine's signal we're inside (property.go sets it).
@@ -78,6 +85,7 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
         ticks_inside = int(extras.get("ticks_inside_building", 0) or 0)
         if ticks_inside >= 60:  # ~1s at 60Hz
             actions.append(Exit())
+            _nudge_log.info("nudge EXIT after %d ticks inside", ticks_inside)
 
     # Rule 3: PAY a nearby agent we've recently spoken to. Heuristic:
     # if we have gold AND a visible entity is within 1 tile AND we
@@ -91,7 +99,14 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
             for ent in getattr(obs, "visible_entities", []) or []:
                 if _chebyshev(pos, ent.pos) <= 1:
                     actions.append(Pay(target=ent.entity_id, amount=1))
+                    _nudge_log.info("nudge PAY target=%s gold=%d", ent.entity_id, gold)
                     break
+        else:
+            # Diagnostic: emit ONCE per session-style log noise — show
+            # what extras DO exist so we know why pay didn't fire.
+            if not getattr(_post_tactical_nudge, "_logged_extras", False):
+                _nudge_log.info("nudge PAY skipped: extras keys=%s", list(extras.keys()))
+                _post_tactical_nudge._logged_extras = True  # type: ignore[attr-defined]
 
     return ActionBatch(actions=actions[:3], reasoning=batch.reasoning)
 
