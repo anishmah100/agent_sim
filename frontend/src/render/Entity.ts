@@ -98,8 +98,15 @@ function worldObjectSpriteId(e: EntityState): string {
       ];
       return `stage:${stageNames[stage]}`;
     }
-    case "item":
+    case "item": {
+      // D8 — read sprite from the entity's public extras. The engine
+      // sets entity.Extras["sprite"] = "item:<kind>" at spawn (see
+      // promote_scattered_items_to_entities.py + handleDrop). Falls
+      // back to wood_log only if extras are completely missing.
+      const sprite = (e as any).extras?.sprite as string | undefined;
+      if (sprite) return sprite;
       return "item:wood_log";
+    }
   }
   return "veg:tree_oak";
 }
@@ -152,6 +159,16 @@ interface RenderedEntity {
   movingSince: number;             // ms — for idle detection
 }
 
+export interface ItemHoverEvent {
+  /** Entity id of the hovered item. */
+  entity_id: string;
+  /** Sprite (e.g. "item:apple") from entity.extras.sprite, or
+   *  "item:unknown" if missing. */
+  sprite: string;
+  /** Tile position. */
+  pos: [number, number];
+}
+
 export class EntityLayer {
   readonly container: Container;
   private items = new Map<string, RenderedEntity>();
@@ -159,6 +176,27 @@ export class EntityLayer {
   private selectedId: string | null = null;
   private pulsePhase = 0;
   private atlas: CharacterAtlas | null = null;
+  private itemHoverEnterHandlers: Array<(ev: ItemHoverEvent) => void> = [];
+  private itemHoverExitHandlers: Array<(ev: ItemHoverEvent) => void> = [];
+
+  /** Subscribe to pointer-enter on an item-archetype entity. Used by
+   *  the App layer to drive the InfoPanel (D8 + D17). */
+  onItemHoverEnter(h: (ev: ItemHoverEvent) => void): () => void {
+    this.itemHoverEnterHandlers.push(h);
+    return () => {
+      const i = this.itemHoverEnterHandlers.indexOf(h);
+      if (i >= 0) this.itemHoverEnterHandlers.splice(i, 1);
+    };
+  }
+
+  /** Subscribe to pointer-exit on an item-archetype entity. */
+  onItemHoverExit(h: (ev: ItemHoverEvent) => void): () => void {
+    this.itemHoverExitHandlers.push(h);
+    return () => {
+      const i = this.itemHoverExitHandlers.indexOf(h);
+      if (i >= 0) this.itemHoverExitHandlers.splice(i, 1);
+    };
+  }
 
   constructor() {
     this.container = new Container();
@@ -415,11 +453,36 @@ export class EntityLayer {
       .fill({ color: 0x000000, alpha: 0.28 });
     wrap.addChildAt(shadow, 0);
 
-    // No hover outline on world-object entities — the viewport-level
-    // hit test in input.ts already handles click selection. Adding the
-    // OutlineFilter here produces a visible bounding-box halo even
-    // without active hover (Playwright + the viewport's catch-all
-    // hitArea caused pointerover to fire spuriously).
+    // Items: hover outline + emit hover events for the InfoPanel.
+    // The InfoPanel describes them via SpriteInfo.describeSprite(sprite),
+    // same path used by buildings/wells/stalls. Clicks on items are
+    // intentionally NOT forwarded to the Inspector — items aren't
+    // agents, they don't have Mind/Speech/Trace, and a click-to-open
+    // inspector was confusing per user feedback during P2 build.
+    if (e.archetype === "item") {
+      wrap.eventMode = "static";
+      wrap.cursor = "help";
+      const sprite = worldObjectSpriteId(e);
+      const evShape: ItemHoverEvent = {
+        entity_id: e.entity_id,
+        sprite,
+        pos: [e.pos[0], e.pos[1]],
+      };
+      wrap.on("pointerover", () => {
+        wrap.filters = [HOVER_OUTLINE];
+        for (const h of this.itemHoverEnterHandlers) h(evShape);
+      });
+      wrap.on("pointerout", () => {
+        wrap.filters = [];
+        for (const h of this.itemHoverExitHandlers) h(evShape);
+      });
+      // Block click bubble — input.ts's viewport-level hit-test
+      // turns canvas clicks into an entity click, which App opens
+      // the inspector for. Item entities should NOT open the
+      // inspector; stop the click on the sprite so it never reaches
+      // the viewport listener.
+      wrap.on("pointertap", (ev) => { ev.stopPropagation(); });
+    }
 
     this.applyPos(wrap, e.pos);
     this.container.addChild(wrap);

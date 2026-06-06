@@ -53,6 +53,12 @@ export interface PixiHandle {
   onInteriorPropHoverEnter(handler: (ev: DecorationInfoEvent) => void): () => void;
   /** Same hover-exit signal for interior props. */
   onInteriorPropHoverExit(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** D8 — pointer-enter on an item-archetype entity. Used to drive
+   *  the InfoPanel for items on the ground (apples, swords, coin
+   *  piles, etc). */
+  onItemHoverEnter(handler: (ev: import("./Entity").ItemHoverEvent) => void): () => void;
+  /** D8 — pointer-exit. */
+  onItemHoverExit(handler: (ev: import("./Entity").ItemHoverEvent) => void): () => void;
   /** Editor — drop a decoration at (tileX, tileY). The sprite id +
    *  footprint come from the editor's selected palette entry. The
    *  caller is responsible for POSTing to /api/v1/world/edit_deco
@@ -308,6 +314,12 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
     onInteriorPropHoverExit(handler) {
       return interior.onPropHoverExit(handler);
+    },
+    onItemHoverEnter(handler) {
+      return entities.onItemHoverEnter(handler);
+    },
+    onItemHoverExit(handler) {
+      return entities.onItemHoverExit(handler);
     },
 
     async addDecoration(spec) {

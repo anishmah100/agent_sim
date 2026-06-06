@@ -164,6 +164,12 @@ export function App() {
         return;
       }
       if (ev.entity) {
+        // D8 — items are NOT agents. Don't open the Mind/Speech/Trace
+        // inspector for them; the InfoPanel (hover-driven) is the
+        // right surface for "what is this thing on the ground".
+        if (ev.entity.archetype === "item") {
+          return;
+        }
         setSelectedId(ev.entity.entity_id);
         setSelectedSnapshot(ev.entity);
         pixiHandle?.setSelectedEntity(ev.entity.entity_id);
@@ -297,6 +303,9 @@ export function App() {
       }
     };
     pixiHandle.onDecorationHoverEnter((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "world"));
+    // D8 — items get the same hover-driven InfoPanel as decorations.
+    pixiHandle.onItemHoverEnter((ev) => showInfoFor(ev.sprite, ev.pos[0], ev.pos[1], "world"));
+    pixiHandle.onItemHoverExit((ev) => hideInfoFor(ev.sprite));
     pixiHandle.onDecorationHoverExit((ev) => hideInfoFor(ev.sprite));
     pixiHandle.onInteriorPropHoverEnter((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "interior"));
     pixiHandle.onInteriorPropHoverExit((ev) => hideInfoFor(ev.sprite));

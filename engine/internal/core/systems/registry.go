@@ -32,6 +32,11 @@ type World interface {
 	SpawnEntityFromSpec(spec EntitySpec) (Entity, error)
 
 	EmitSound(at [2]int, kind string)
+	// EmitDeathScream — D10. Emits an anonymous wide-radius scream +
+	// targeted kill_witnessed audibles to LOS witnesses. Killer ""
+	// means non-combat death (no witness event). Muffled=true for
+	// kills inside buildings (narrows scream radius).
+	EmitDeathScream(at [2]int, victimID, killerID string, muffled bool)
 	QueueEvent(eventbus.Event)
 	GetService(name string) any
 	RegisterService(name string, svc any)

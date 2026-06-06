@@ -17,7 +17,10 @@ import (
 
 const (
 	DefaultMaxHP        = 100
-	DefaultAttackDamage = 12
+	// DefaultAttackDamage — D21 changed this from 12 to 4 to match the
+	// unarmed weapon stat (weaponStats's unarmedDmg). Verbs that don't
+	// resolve a weapon still see this default via the fallback path.
+	DefaultAttackDamage = 4
 	DefaultHealAmount   = 25
 )
 
@@ -324,9 +327,99 @@ func (s *service) DealDamage(w syscore.World, targetID string, amount int, cause
 			})
 		}
 		w.QueueEvent(EntityDied{EntityID: targetID, Killer: killer, Cause: cause})
-		w.EmitSound(target.Pos(), "death_scream")
+		// D10 — drop full inventory + gold + equipped at corpse tile so
+		// loot is recoverable. Iterate inventory + spawn an entity per
+		// item (mirrors what handleDrop does for a single item).
+		inv, _ := target.GetExtra("inventory")
+		if items, ok := inv.([]string); ok {
+			for _, iid := range items {
+				_, _ = w.SpawnEntityFromSpec(syscore.EntitySpec{
+					Archetype:   "item",
+					Pos:         target.Pos(),
+					DisplayName: itemKindFromID(iid),
+					Extras: map[string]any{
+						"sprite": spriteFromItemID(iid),
+						"source": "death_drop",
+					},
+				})
+			}
+			w.MutateEntity(targetID, func(real syscore.Entity) {
+				real.SetExtra("inventory", []string{})
+			})
+		}
+		// Equipped weapon also drops.
+		if eqRaw, ok := target.GetExtra("equipped"); ok {
+			if eq, ok2 := eqRaw.(map[string]any); ok2 {
+				for _, raw := range eq {
+					iid, _ := raw.(string)
+					if iid == "" {
+						continue
+					}
+					_, _ = w.SpawnEntityFromSpec(syscore.EntitySpec{
+						Archetype:   "item",
+						Pos:         target.Pos(),
+						DisplayName: itemKindFromID(iid),
+						Extras: map[string]any{
+							"sprite": spriteFromItemID(iid),
+							"source": "death_drop",
+						},
+					})
+				}
+				w.MutateEntity(targetID, func(real syscore.Entity) {
+					real.SetExtra("equipped", map[string]any{})
+				})
+			}
+		}
+		// D10 audible: anonymous scream + targeted witness events.
+		muffled := false
+		if ib, ok := target.GetExtra("inside_building"); ok {
+			if s, ok2 := ib.(string); ok2 && s != "" {
+				muffled = true
+			}
+		}
+		w.EmitDeathScream(target.Pos(), targetID, killer, muffled)
 	}
 	return newHP, died
+}
+
+// spriteFromItemID + itemKindFromID — D10 death drop helpers. Mirror
+// of the inventory system's same-name helpers (kept duplicated to
+// avoid creating a circular import: combat doesn't import inventory).
+// "item:sword_short#42" → sprite "item:sword_short", kind "sword_short".
+func spriteFromItemID(id string) string {
+	if id == "" {
+		return ""
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' {
+			id = id[:i]
+			break
+		}
+	}
+	hasColon := false
+	for i := 0; i < len(id); i++ {
+		if id[i] == ':' {
+			hasColon = true
+			break
+		}
+	}
+	if !hasColon {
+		return "item:" + id
+	}
+	return id
+}
+
+func itemKindFromID(id string) string {
+	if len(id) > 5 && id[:5] == "item:" {
+		id = id[5:]
+	}
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' {
+			id = id[:i]
+			break
+		}
+	}
+	return id
 }
 
 func extrasInt(e syscore.Entity, k string) int {

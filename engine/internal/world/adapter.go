@@ -97,6 +97,84 @@ func (a *WorldAdapter) EmitSound(at [2]int, kind string) {
 	})
 }
 
+// EmitDeathScream — D10. When an agent dies, emit a wide-radius
+// anonymous death scream + a targeted kill_witnessed audible to each
+// agent within line-of-sight of the killing tile. Non-witnesses hear
+// "a scream from somewhere" but don't learn killer/victim identity;
+// witnesses get the truth and can choose to gossip about it.
+//
+// at        — killing tile (rounded to 5-tile cell for the
+//              anonymous scream to obfuscate exact position).
+// victimID  — the dead entity's id; carried in the witness event only.
+// killerID  — the attacker's id; carried in the witness event only.
+//              Empty for non-combat deaths (starvation, etc).
+// muffled   — true when the kill occurred inside a building. Reduces
+//              scream radius to ~10 tiles, simulating muffled sound.
+func (a *WorldAdapter) EmitDeathScream(at [2]int, victimID, killerID string, muffled bool) {
+	// Round position to 5-tile cell for anonymity.
+	approxX := (at[0] / 5) * 5
+	approxY := (at[1] / 5) * 5
+	radius := 35
+	if muffled {
+		radius = 10
+	}
+	a.W.audibleAppend(AudibleEvent{
+		EventID:   nextEventID(&a.W.eventSeq),
+		Kind:      "sound",
+		SoundKind: "death_scream",
+		FromPos:   [2]int{approxX, approxY},
+		Tick:      a.W.tick,
+		radius:    radius,
+		// FromEntity intentionally empty — anonymous.
+	})
+	if killerID == "" {
+		return // starvation etc: no witness event
+	}
+	// Witness events: deliver a targeted "kill_witnessed" audible to
+	// every entity with line-of-sight to the killing tile.
+	// LOS check uses the existing lineOfSight helper. Witnesses must
+	// also be within their own vision radius of the kill (12 tiles
+	// day, 6 night — for simplicity here use 12; observation builder
+	// filters by per-agent day_phase if needed).
+	const witnessRadius = 12
+	// Build the witness event payload once.
+	witnessText := `{"killer":"` + killerID + `","victim":"` + victimID + `"}`
+	for id, ent := range a.W.entities {
+		if ent.InsideBuilding != "" && muffled {
+			// Inside-building observers can't witness an outdoor kill.
+			continue
+		}
+		if id == victimID || id == killerID {
+			continue
+		}
+		// Chebyshev + LOS.
+		dx := at[0] - ent.LogicalTile[0]
+		if dx < 0 {
+			dx = -dx
+		}
+		dy := at[1] - ent.LogicalTile[1]
+		if dy < 0 {
+			dy = -dy
+		}
+		if dx > witnessRadius || dy > witnessRadius {
+			continue
+		}
+		if !a.W.lineOfSight(ent.LogicalTile, Tile{at[0], at[1]}) {
+			continue
+		}
+		a.W.audibleAppend(AudibleEvent{
+			EventID:   nextEventID(&a.W.eventSeq),
+			Kind:      "sound",
+			SoundKind: "kill_witnessed",
+			FromPos:   at, // witnesses see the true position
+			Text:      witnessText,
+			Tick:      a.W.tick,
+			radius:    1,
+			whisperTo: id, // only this witness receives it
+		})
+	}
+}
+
 func (a *WorldAdapter) QueueEvent(ev eventbus.Event) { a.Bus.Queue(ev) }
 
 func (a *WorldAdapter) GetService(name string) any   { return a.services[name] }

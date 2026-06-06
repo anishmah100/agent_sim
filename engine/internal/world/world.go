@@ -83,6 +83,13 @@ var publicExtraKeys = map[string]bool{
 	"max_hp":      true,
 	"gold":        true,
 	"locked":      true, // building lock state
+	// D8 — sprite + quantity exposed to the frontend renderer so item
+	// entities are drawn with their actual sprite (not a hardcoded
+	// wood_log fallback). Quantity is the stack size for coin piles
+	// etc. Source is metadata for debugging (drop / world_seed / etc).
+	"sprite":   true,
+	"quantity": true,
+	"source":   true,
 }
 
 // MarshalJSON emits the render-friendly fields the frontend expects.
