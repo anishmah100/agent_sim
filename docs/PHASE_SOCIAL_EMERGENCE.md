@@ -19,6 +19,50 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D15 — Live hierarchical narrator at four levels
+
+Continuous summarization runs alongside the engine. Four levels:
+
+- **L1 — Individual narrator** (per-agent, ~1 every 60 in-game sec).
+  Summarizes each agent's recent actions + dialogue. Drives the
+  Story Feed and the inspector's "Recent activity" pane.
+- **L2 — Group narrator** (interaction-cluster, ~1 every 5
+  in-game min). Detects clusters of agents currently
+  interacting (proximity + speech overlap) and writes
+  "what's happening in this group right now" summaries.
+- **L3 — Society narrator** (whole-experiment, ~1 every 15
+  in-game min). High-level state of the cast: factions, wealth
+  distribution, ongoing conflicts.
+- **L4 — World/Era narrator** (per-experiment closing summary, 1
+  per run). The narrative the demo viewer sees as the "story."
+
+**Cost containment** (matters for the $25 Anthropic budget):
+- L1 + L2 run on **local Qwen** (cheap, fast, good enough for
+  short-context summaries).
+- L3 + L4 run on **Claude** (richer narrative, less frequent).
+- Per 30-min experiment at 4x speed (7.5 real min):
+  L1 = ~30 Qwen calls; L2 = ~6 Qwen calls; L3 = ~2 Claude calls;
+  L4 = 1 Claude call. Total: ~36 Qwen + 3 Claude per run.
+- 5 iteration runs ≈ 15 Claude calls. Well under budget.
+
+**Why:** matches the user's "stunning visualization at a glance"
+goal AND the long-horizon citable artifact goal. Demo viewers see
+narrative live; researchers replay raw events offline. Both
+audiences served.
+
+**How to apply:**
+- New process: `narrator` subdir under `tools/` running parallel
+  to engine. Subscribes to event bus, emits NarratorSummary
+  events into the historian.
+- Inspector UI gets a "Narrative" tab with L1+L2 live, L3+L4
+  appearing as they're produced.
+- Cost limits enforced at run-start: experiment YAML declares
+  budget caps (max_claude_calls, max_qwen_calls); the narrator
+  refuses calls past the cap.
+- Higher-level narrators take lower-level narrator outputs as
+  input (not raw events) — L3 reads L2's group summaries, not the
+  10000 individual events. This is what makes hierarchy efficient.
+
 ### D14 — Mental state = free-form text + recommended slots, private
 
 Substrate verb: `submit_mental_note(text: str, tag?: str, slots?: {goal?, plan?, beliefs?, emotion?})`.
