@@ -181,24 +181,38 @@ export function App() {
       }
     }
 
-    // Subscribe to decoration + interior-prop clicks. Both feed the
-    // same InfoPanel — the source flag tweaks the "Location" label.
+    // Hover-driven InfoPanel: enter shows it for the sprite under the
+    // pointer, exit hides it. Mouse-leave-then-enter on a neighbouring
+    // sprite swaps the contents naturally without an explicit close.
+    // The `hoveredSprite` guard handles the race when pointerover on
+    // sprite B fires before pointerout on sprite A.
+    let hoveredSprite: string | null = null;
     const showInfoFor = (sprite: string, x: number, y: number, source: "world" | "interior") => {
       const desc = describeSprite(sprite);
-      if (!desc) return; // veg / unrecognised → no panel
+      if (!desc) return;
+      hoveredSprite = sprite;
       setInfo(desc);
       setInfoAt({ x, y });
       setInfoSource(source);
     };
-    pixiHandle.onDecorationInfo((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "world"));
-    pixiHandle.onInteriorPropInfo((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "interior"));
-
-    // ESC closes the inspector AND any open info panel.
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (info()) setInfo(null);
-        closeInspector();
+    const hideInfoFor = (sprite: string) => {
+      // Only hide if the most-recent hover was this sprite — otherwise
+      // the user has already moved to a different decoration and the
+      // panel is showing that one.
+      if (hoveredSprite === sprite) {
+        hoveredSprite = null;
+        setInfo(null);
       }
+    };
+    pixiHandle.onDecorationHoverEnter((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "world"));
+    pixiHandle.onDecorationHoverExit((ev) => hideInfoFor(ev.sprite));
+    pixiHandle.onInteriorPropHoverEnter((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "interior"));
+    pixiHandle.onInteriorPropHoverExit((ev) => hideInfoFor(ev.sprite));
+
+    // ESC closes the inspector. (The info panel hides on mouse-out
+    // automatically — no manual close needed.)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeInspector();
     };
     window.addEventListener("keydown", onKey);
     onCleanup(() => window.removeEventListener("keydown", onKey));
@@ -389,27 +403,6 @@ export function App() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              const tick = liveTick() ?? 0;
-              const url = new URL(window.location.href);
-              url.searchParams.set("t", String(tick));
-              navigator.clipboard?.writeText(url.toString());
-            }}
-            title="Copy a share link pinned to the current tick"
-            style={{
-              padding: "4px 10px",
-              background: "#3a4466",
-              color: "#ead4aa",
-              border: "1px solid #5a6988",
-              "border-radius": "3px",
-              cursor: "pointer",
-              "font-size": "12px",
-            }}
-          >
-            share moment
-          </button>
-          <button
-            type="button"
             onClick={fitToWorld}
             style={{
               padding: "4px 10px",
@@ -436,15 +429,6 @@ export function App() {
         info={info()}
         at={infoAt()}
         source={infoSource()}
-        onClose={() => setInfo(null)}
-        onEnter={() => {
-          const i = info();
-          if (i && i.enterable && pixiHandle) {
-            void pixiHandle.openInterior(i.sprite);
-            // Keep the panel open while inside — the user can dismiss
-            // with × or ESC. The next inside-prop click swaps content.
-          }
-        }}
       />
 
       {hudOpen() && (

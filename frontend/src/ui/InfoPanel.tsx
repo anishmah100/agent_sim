@@ -1,24 +1,23 @@
-// InfoPanel — side drawer that shows what the user just clicked on the
-// world (a building, stall, well, item, FX, or interior prop). Mirrors
-// the Inspector visual language but is read-only: title, thumbnail,
-// kind, description, and a stat block. Enterable buildings get an
-// "Enter" button that triggers the interior view via onEnter.
+// InfoPanel — hover-driven side panel that previews whatever sprite
+// the pointer is currently over (a building, stall, well, item, FX, or
+// interior prop). Shows title, thumbnail, kind, description, and a
+// stat block.
 //
-// Opens whenever `info` is non-null. Closes via × or ESC.
+// Read-only. No close button — moving the pointer off the sprite
+// dismisses it. No Enter button — clicking an enterable building
+// commits to entry directly. The panel is a passive viewer; the
+// interaction model lives in PixiApp's hover/click handlers.
 
 import { For, Show } from "solid-js";
 import type { SpriteInfo } from "./SpriteInfo";
 
 export interface InfoPanelProps {
   info: SpriteInfo | null;
-  /** Tile coords of the clicked decoration — shown under the kind line. */
+  /** Tile coords of the hovered decoration — shown under the kind line. */
   at: { x: number; y: number } | null;
   /** "world" decoration on the overworld vs "interior" prop. Drives
    *  the "Location" line copy. */
   source: "world" | "interior";
-  onClose: () => void;
-  /** Called when the user clicks "Enter" on an enterable building. */
-  onEnter?: () => void;
 }
 
 export function InfoPanel(props: InfoPanelProps) {
@@ -31,6 +30,10 @@ export function InfoPanel(props: InfoPanelProps) {
             role="dialog"
             aria-label="object info"
             data-testid="info-panel"
+            // pointer-events: none so the panel itself can never become
+            // the hover target — keeping it strictly off the canvas
+            // means hover-out fires reliably when the cursor moves
+            // across the panel area, and the panel disappears.
             style={{
               position: "absolute",
               top: "56px",
@@ -46,13 +49,11 @@ export function InfoPanel(props: InfoPanelProps) {
               "font-size": "13px",
               "z-index": "20",
               "box-shadow": "0 4px 18px rgba(0,0,0,0.45)",
+              "pointer-events": "none",
             }}
           >
             <div
               style={{
-                display: "flex",
-                "justify-content": "space-between",
-                "align-items": "center",
                 "margin-bottom": "10px",
                 "padding-bottom": "8px",
                 "border-bottom": "1px solid #3a4466",
@@ -61,14 +62,6 @@ export function InfoPanel(props: InfoPanelProps) {
               <strong style={{ color: "#fee761", "font-size": "14px" }}>
                 {info.title}
               </strong>
-              <button
-                type="button"
-                onClick={() => props.onClose()}
-                aria-label="close info panel"
-                style={btnStyle()}
-              >
-                ×
-              </button>
             </div>
 
             <div style={{ display: "flex", gap: "12px", "margin-bottom": "10px" }}>
@@ -111,6 +104,11 @@ export function InfoPanel(props: InfoPanelProps) {
                 <div style={{ color: "#5a6988", "font-size": "11px" }}>
                   {info.sprite}
                 </div>
+                <Show when={info.enterable}>
+                  <div style={{ color: "#feae34", "font-size": "11px", "font-style": "italic" }}>
+                    click to enter
+                  </div>
+                </Show>
               </div>
             </div>
 
@@ -153,44 +151,9 @@ export function InfoPanel(props: InfoPanelProps) {
                 </For>
               </div>
             </Show>
-
-            <Show when={info.enterable && props.onEnter}>
-              <button
-                type="button"
-                onClick={() => props.onEnter?.()}
-                data-testid="info-enter-button"
-                style={{
-                  display: "block",
-                  width: "100%",
-                  "margin-top": "12px",
-                  padding: "6px 10px",
-                  background: "#feae34",
-                  color: "#1f2238",
-                  border: "1px solid #feae34",
-                  "border-radius": "3px",
-                  cursor: "pointer",
-                  "font-weight": "700",
-                  "font-size": "12px",
-                }}
-              >
-                Enter →
-              </button>
-            </Show>
           </div>
         );
       }}
     </Show>
   );
-}
-
-function btnStyle() {
-  return {
-    background: "transparent",
-    color: "#ead4aa",
-    border: "1px solid #5a6988",
-    "border-radius": "3px",
-    padding: "2px 8px",
-    "font-size": "13px",
-    cursor: "pointer",
-  };
 }

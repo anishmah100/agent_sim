@@ -57,10 +57,11 @@ export interface BuildingClickEvent {
   y: number;
 }
 
-/** Emitted on click of any non-vegetation decoration (buildings,
- *  stalls, items, FX, props, construction stages). Use this to drive
- *  the InfoPanel — buildings keep firing the legacy BuildingClickEvent
- *  in parallel so the interior-entry flow stays available. */
+/** Emitted on hover-enter of any non-vegetation decoration. The Solid
+ *  layer uses this to *show* the InfoPanel ephemerally — the matching
+ *  hover-exit event hides it. Clicks on enterable buildings still fire
+ *  BuildingClickEvent (the InfoPanel itself no longer has an Enter
+ *  button — click = enter directly). */
 export interface DecorationInfoEvent {
   sprite: string;
   x: number;
@@ -71,7 +72,8 @@ export class DecorationLayer {
   readonly container: Container;
   private cache = new Map<string, Texture>();
   private clickHandlers: Array<(ev: BuildingClickEvent) => void> = [];
-  private infoHandlers: Array<(ev: DecorationInfoEvent) => void> = [];
+  private hoverEnterHandlers: Array<(ev: DecorationInfoEvent) => void> = [];
+  private hoverExitHandlers: Array<(ev: DecorationInfoEvent) => void> = [];
 
   // Viewport culling state. We keep the spec list and a spatial bucket
   // so refreshVisible() can rapidly find decorations in the viewport.
@@ -100,14 +102,22 @@ export class DecorationLayer {
     };
   }
 
-  /** Fires on click of any clickable decoration (everything except
-   *  veg:* — trees, rocks, boulders, mushrooms). The InfoPanel
-   *  subscribes through here. */
-  onDecorationInfo(handler: (ev: DecorationInfoEvent) => void): () => void {
-    this.infoHandlers.push(handler);
+  /** Fires when the pointer ENTERS a non-vegetation decoration. The
+   *  InfoPanel uses this to appear. */
+  onDecorationHoverEnter(handler: (ev: DecorationInfoEvent) => void): () => void {
+    this.hoverEnterHandlers.push(handler);
     return () => {
-      const i = this.infoHandlers.indexOf(handler);
-      if (i >= 0) this.infoHandlers.splice(i, 1);
+      const i = this.hoverEnterHandlers.indexOf(handler);
+      if (i >= 0) this.hoverEnterHandlers.splice(i, 1);
+    };
+  }
+
+  /** Fires when the pointer LEAVES a non-vegetation decoration. */
+  onDecorationHoverExit(handler: (ev: DecorationInfoEvent) => void): () => void {
+    this.hoverExitHandlers.push(handler);
+    return () => {
+      const i = this.hoverExitHandlers.indexOf(handler);
+      if (i >= 0) this.hoverExitHandlers.splice(i, 1);
     };
   }
 
@@ -256,47 +266,42 @@ export class DecorationLayer {
     wrap.zIndex = spec.y;
     this.container.addChild(wrap);
 
-    // Click handling — every decoration except vegetation (trees,
-    // rocks, mushrooms, boulders, stalagmites) is hoverable and
-    // clickable. Click emits an info event for the InfoPanel; if the
-    // catalog also flags it `enterable`, the legacy BuildingClickEvent
-    // fires too (the App can offer an "Enter" button instead of
-    // auto-entering).
+    // Hover + click handling — every decoration except vegetation
+    // (trees, rocks, mushrooms, boulders, stalagmites) is interactive.
+    // Hover-enter/exit drives the InfoPanel ephemerally; a click on
+    // an enterable building triggers entry directly (no "Enter" button
+    // in the panel — hover shows info, click commits).
     const cat = artCatalog();
     const category = spec.sprite.split(":")[0];
-    const isClickable = category !== "veg";
+    const isInteractive = category !== "veg";
     const isEnterable = cat ? cat.enterable(spec.sprite) : LEGACY_ENTERABLE.has(spec.sprite);
-    if (isClickable) {
+    if (isInteractive) {
       sp.eventMode = "static";
-      sp.cursor = "pointer";
+      sp.cursor = isEnterable ? "pointer" : "help";
       const hoverFilter = new OutlineFilter({
         thickness: 2,
         color: 0xfff2a8,
         alpha: 0.85,
         knockout: false,
       });
+      const evShape: DecorationInfoEvent = {
+        sprite: spec.sprite,
+        x: spec.x,
+        y: spec.y,
+      };
       sp.on("pointerover", () => {
         sp.filters = [hoverFilter];
+        for (const h of this.hoverEnterHandlers) h(evShape);
       });
       sp.on("pointerout", () => {
         sp.filters = [];
+        for (const h of this.hoverExitHandlers) h(evShape);
       });
-      sp.on("pointertap", () => {
-        const infoEv: DecorationInfoEvent = {
-          sprite: spec.sprite,
-          x: spec.x,
-          y: spec.y,
-        };
-        for (const h of this.infoHandlers) h(infoEv);
-        if (isEnterable) {
-          const ev: BuildingClickEvent = {
-            sprite: spec.sprite,
-            x: spec.x,
-            y: spec.y,
-          };
-          for (const h of this.clickHandlers) h(ev);
-        }
-      });
+      if (isEnterable) {
+        sp.on("pointertap", () => {
+          for (const h of this.clickHandlers) h({ ...evShape });
+        });
+      }
     }
     return wrap;
   }

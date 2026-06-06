@@ -44,16 +44,15 @@ export interface PixiHandle {
   fitToWorld(): void;
   setSelectedEntity(id: string | null): void;
   onClick(handler: (ev: ClickEvent) => void): () => void;
-  /** Subscribe to clicks on any non-vegetation decoration (buildings,
-   *  stalls, items, FX, props, construction stages). The Solid layer
-   *  uses this to drive the InfoPanel. */
-  onDecorationInfo(handler: (ev: DecorationInfoEvent) => void): () => void;
-  /** Open the interior view for an enterable building sprite. Exposed
-   *  so the InfoPanel's "Enter" button can trigger entry. */
-  openInterior(sprite: string): Promise<void>;
-  /** Subscribe to interior prop clicks. Same shape as decoration info,
-   *  but `x`/`y` are interior-tile coords inside the room. */
-  onInteriorPropInfo(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** Pointer-enter on a non-vegetation decoration. The InfoPanel
+   *  appears for as long as the pointer stays on the sprite. */
+  onDecorationHoverEnter(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** Pointer-exit on a non-vegetation decoration. The panel hides. */
+  onDecorationHoverExit(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** Same hover-enter signal for interior props (inside a building view). */
+  onInteriorPropHoverEnter(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** Same hover-exit signal for interior props. */
+  onInteriorPropHoverExit(handler: (ev: DecorationInfoEvent) => void): () => void;
   ingestAudible(events: AudibleEvent[]): void;
   /** Editor — repaint one tile to a new glyph. Returns previous glyph
    *  for optimistic-update revert, or undefined if out of bounds. */
@@ -113,11 +112,14 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   // Interior overlay — fixed-position container on the stage (NOT in
   // the viewport) so it doesn't pan/zoom with the world.
   //
-  // Building clicks DO NOT auto-enter the interior anymore — the Solid
-  // layer's InfoPanel handles that with an "Enter" button. PixiApp
-  // exposes openInterior(sprite) so App.tsx can trigger entry.
+  // Click on an enterable building → enter the interior directly. The
+  // hover-driven InfoPanel preview tells the user what they're about
+  // to enter; no Enter button required.
   const interior = new InteriorLayer(app);
   app.stage.addChild(interior.container);
+  decorations.onBuildingClick(async (ev) => {
+    await interior.show(ev.sprite);
+  });
   interior.onExit(() => interior.hide());
   if (import.meta.env.DEV) {
     (window as unknown as { __interior?: InteriorLayer }).__interior = interior;
@@ -275,16 +277,17 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
       };
     },
 
-    onDecorationInfo(handler) {
-      return decorations.onDecorationInfo(handler);
+    onDecorationHoverEnter(handler) {
+      return decorations.onDecorationHoverEnter(handler);
     },
-
-    async openInterior(sprite: string) {
-      await interior.show(sprite);
+    onDecorationHoverExit(handler) {
+      return decorations.onDecorationHoverExit(handler);
     },
-
-    onInteriorPropInfo(handler) {
-      return interior.onPropInfo(handler);
+    onInteriorPropHoverEnter(handler) {
+      return interior.onPropHoverEnter(handler);
+    },
+    onInteriorPropHoverExit(handler) {
+      return interior.onPropHoverExit(handler);
     },
 
     setTileGlyph(tileX, tileY, glyph) {
