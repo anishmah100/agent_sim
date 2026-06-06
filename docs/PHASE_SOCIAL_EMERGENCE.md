@@ -19,6 +19,26 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D3 — Nuke the 250 legacy wanderers + the engine demo-action loop
+
+Empty world is the default. Every entity in the world is either an
+SDK-connected agent (LLM or rule-based) or an explicitly-spawned
+participant in an experiment. The world looks empty when idle; it
+populates only at experiment time.
+
+**Why:** the 250 wanderers and the 5-sec random-attack loop both
+contaminate any measurement. Clean baseline > "feels alive" with
+silent contamination.
+
+**How to apply:**
+- Strip the 250 entity entries from `worlds/eldoria/world.json`.
+- Delete `world.go:887-903` (the autonomous wander + demo-action
+  block) entirely. The PlayerControlled gate stays, but the
+  fallback behavior becomes "idle in place" not "wander randomly."
+- Preserve the 2 intentional heuristic-bot processes (npcs.json).
+- After cleanup: `./agent_sim start` shows an empty world with
+  no NPCs visible until agents register.
+
 ### D2 — Adopt the 5 literature-converging design recommendations
 
 Full literature snapshot: `docs/research/SOCIAL_EMERGENCE_LITERATURE.md`.
