@@ -178,6 +178,13 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 			EntityID: e.EntityID,
 			Pos:      e.LogicalTile,
 			Facing:   string(e.Facing),
+			// Copy per-entity stats (hp, gold, hunger, …) so the SDK
+			// and downstream brains can see the agent's own state.
+			// Without this the agent's own extras observation was {},
+			// which broke the qwen reflex layer (no hp gate) AND the
+			// post-tactical pay nudge (no gold balance to check).
+			Extras:           copyExtras(e.Extras),
+			InsideBuilding:   e.InsideBuilding,
 		},
 		// Initialize collection fields as empty slices, NOT nil. Go's
 		// json.Marshal renders nil as `null`, which the SDK's pydantic

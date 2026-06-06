@@ -34,6 +34,7 @@ class SelfState(BaseModel):
     pos: Pos
     facing: Facing
     extras: dict[str, Any] = Field(default_factory=dict)
+    inside_building: Optional[str] = None
     current_action: Optional[dict[str, Any]] = None
     last_action_result: Optional[dict[str, Any]] = None
 

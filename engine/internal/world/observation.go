@@ -44,9 +44,11 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 		ObsID:     obsID,
 		WorldTick: w.tick,
 		Self: SelfState{
-			EntityID: e.EntityID,
-			Pos:      e.LogicalTile,
-			Facing:   string(e.Facing),
+			EntityID:       e.EntityID,
+			Pos:            e.LogicalTile,
+			Facing:         string(e.Facing),
+			Extras:         copyExtras(e.Extras),
+			InsideBuilding: e.InsideBuilding,
 		},
 		WorldClock: WorldClockState{
 			Tick:      w.tick,
@@ -114,8 +116,29 @@ type SelfState struct {
 	Pos              Tile                   `json:"pos"`
 	Facing           string                 `json:"facing"`
 	Extras           map[string]interface{} `json:"extras,omitempty"`
+	// InsideBuilding — non-empty when this entity is currently inside a
+	// building (set by the property system's enter handler). Surfaces
+	// in observations so the SDK can offer Exit, and so the brain
+	// knows it's indoors.
+	InsideBuilding   string                 `json:"inside_building,omitempty"`
 	CurrentAction    map[string]interface{} `json:"current_action,omitempty"`
 	LastActionResult *ActionResult          `json:"last_action_result,omitempty"`
+}
+
+// copyExtras shallow-copies an entity's extras map so the observation
+// builder hands the agent a snapshot that isn't aliased to the live
+// state (which the tick may mutate while the observation is queued).
+// Caller is expected to hold whatever lock is appropriate for reading
+// e.Extras (write lock in the live path, none in the snapshot path).
+func copyExtras(src map[string]interface{}) map[string]interface{} {
+	if len(src) == 0 {
+		return nil
+	}
+	dst := make(map[string]interface{}, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+	return dst
 }
 
 type VisibleEntityState struct {

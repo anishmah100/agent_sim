@@ -49,7 +49,12 @@ class QwenLLM:
 
     # ---- LLMClient protocol ----
 
-    def persona(self, prompt: str, max_tokens: int = 500) -> dict:
+    def persona(self, prompt: str, max_tokens: int = 900) -> dict:
+        # 500 was too tight: persona output is the long-form
+        # values+initial_goals JSON — completion_tokens often hit the
+        # cap and the response was truncated mid-string, breaking the
+        # grammar's terminating "}". 900 keeps generous headroom; the
+        # grammar still stops generation as soon as JSON closes.
         return self._call(prompt, self._persona_grammar, max_tokens, layer="persona")
 
     def reflect(self, prompt: str, max_tokens: int = 500) -> dict:

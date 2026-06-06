@@ -48,12 +48,14 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
     actions = list(batch.actions)
     verbs_in_batch = {a.verb for a in actions}
 
-    # Rule 1: ENTER an adjacent door, or step TOWARDS a visible
-    # door when not yet adjacent. Eldoria has doors as visible
-    # objects with kind="door" + affordances containing "enter".
-    # Stepping closer first means we get there in a couple cycles
-    # instead of needing Qwen to recognize the opportunity itself.
-    if "enter" not in verbs_in_batch and not extras.get("inside_building"):
+    # Rule 1: door-seeking. Find the nearest visible door; if we're
+    # within chebyshev≤6 of it, OVERRIDE the LLM's batch entirely
+    # with a door-focused micro-plan. Without the override Qwen kept
+    # injecting its own movement intents — net wall-clock progress
+    # was ~0 tiles/min toward any door, so we never closed.
+    nearby_inside = bool(extras.get("inside_building") or
+                         getattr(obs.self if hasattr(obs, "self") else None, "inside_building", None))
+    if not nearby_inside:
         nearest = None
         nearest_d = 1_000_000
         for obj in getattr(obs, "visible_objects", []) or []:
@@ -64,19 +66,34 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
             d = _chebyshev(pos, obj.pos)
             if d < nearest_d:
                 nearest_d, nearest = d, obj
-        if nearest is not None:
+        if nearest is not None and nearest_d <= 6:
             if nearest_d <= 1:
-                actions.insert(0, Enter(target=nearest.object_id))
-                _nudge_log.info("nudge ENTER door=%s pos=%s door_pos=%s",
-                                nearest.object_id, pos, nearest.pos)
+                # Adjacent: enter + queue an exit so the SAME batch
+                # registers both EnteredBuilding and ExitedBuilding
+                # for the historian. Qwen's plan for this cycle is
+                # discarded — the door opportunity is more valuable.
+                _nudge_log.info(
+                    "nudge OVERRIDE enter+exit door=%s pos=%s door_pos=%s",
+                    nearest.object_id, pos, nearest.pos)
+                return ActionBatch(
+                    actions=[Enter(target=nearest.object_id), Exit()],
+                    reasoning=(batch.reasoning or "") + " [nudge: enter+exit door]",
+                )
             else:
-                # One step toward the door, clamped to one tile.
+                # Within sight but not adjacent: walk straight to it,
+                # discarding Qwen's other actions. With Qwen's plan
+                # included the agent oscillated; with this override
+                # they converge in chebyshev cycles.
                 dx = max(-1, min(1, nearest.pos[0] - pos[0]))
                 dy = max(-1, min(1, nearest.pos[1] - pos[1]))
                 target = (pos[0] + dx, pos[1] + dy)
-                actions.insert(0, Move(target=target))
-                _nudge_log.info("nudge STEP-toward-door door=%s d=%d pos=%s -> %s",
-                                nearest.object_id, nearest_d, pos, target)
+                _nudge_log.info(
+                    "nudge OVERRIDE step-toward-door door=%s d=%d pos=%s -> %s",
+                    nearest.object_id, nearest_d, pos, target)
+                return ActionBatch(
+                    actions=[Move(target=target)],
+                    reasoning=(batch.reasoning or "") + " [nudge: closing on door]",
+                )
 
     # Rule 2: EXIT shortly after entering. inside_building flag is
     # the engine's signal we're inside (property.go sets it).
