@@ -87,6 +87,16 @@ export function App() {
   let canvasContainer!: HTMLDivElement;
   let pixiHandle: PixiHandle | null = null;
   let viewer: ViewerClient | null = null;
+  // Tracks the sprite id under the pointer so hover-out only hides
+  // the info panel when the cursor *actually* leaves THAT sprite.
+  // Also reset explicitly by edits that destroy the hovered sprite
+  // (Pixi doesn't fire pointerout when the target gets destroyed
+  // under the cursor — the panel would otherwise stick forever).
+  let hoveredSprite: string | null = null;
+  const clearHoverInfo = () => {
+    hoveredSprite = null;
+    setInfo(null);
+  };
 
   const closeInspector = () => {
     setMentalState(null);
@@ -171,6 +181,11 @@ export function App() {
       if (tileX < 0 || tileY < 0) return;
       // Optimistic local removal.
       const removed = pixiHandle?.removeDecorationAt(tileX, tileY) ?? false;
+      // The hovered sprite likely just got destroyed under the cursor
+      // — Pixi won't fire pointerout on a destroyed target, so the
+      // panel would stick. Clear it manually; the next hover will
+      // repopulate it.
+      if (removed) clearHoverInfo();
       try {
         const { ENGINE_URL } = await import("../net/api");
         const r = await fetch(
@@ -261,8 +276,9 @@ export function App() {
     // pointer, exit hides it. Mouse-leave-then-enter on a neighbouring
     // sprite swaps the contents naturally without an explicit close.
     // The `hoveredSprite` guard handles the race when pointerover on
-    // sprite B fires before pointerout on sprite A.
-    let hoveredSprite: string | null = null;
+    // sprite B fires before pointerout on sprite A. hoveredSprite is
+    // hoisted to component scope so editor remove can clear it when
+    // the hovered sprite gets destroyed under the cursor.
     const showInfoFor = (sprite: string, x: number, y: number, source: "world" | "interior") => {
       const desc = describeSprite(sprite);
       if (!desc) return;
