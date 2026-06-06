@@ -237,12 +237,37 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 				if !s.seesEntity(e.LogicalTile, other.LogicalTile, r) {
 					continue
 				}
+				// D8 — items split into visible_items, not visible_entities.
+				// The hot snapshot path used to skip this split, so
+				// archetype="item" entities came in as plain
+				// VisibleEntity rows. Bots that look in visible_items
+				// (the documented field) saw nothing and could not
+				// pursue coins / food they were standing next to.
+				if other.Archetype == "item" {
+					sprite, _ := other.Extras["sprite"].(string)
+					if sprite == "" {
+						sprite = "item:" + other.EntityID
+					}
+					qty := 1
+					if q, ok := other.Extras["quantity"].(int); ok && q > 0 {
+						qty = q
+					}
+					obs.VisibleItems = append(obs.VisibleItems, VisibleItemState{
+						EntityID: other.EntityID,
+						Sprite:   sprite,
+						Pos:      other.LogicalTile,
+						Quantity: qty,
+						Label:    other.DisplayName,
+					})
+					continue
+				}
 				obs.VisibleEntities = append(obs.VisibleEntities, VisibleEntityState{
 					EntityID:      other.EntityID,
 					ApparentLabel: apparentLabel(other),
 					Pos:           other.LogicalTile,
 					Facing:        string(other.Facing),
 					Archetype:     other.Archetype,
+					ExtrasSummary: buildExtrasSummary(other),
 				})
 			}
 		}

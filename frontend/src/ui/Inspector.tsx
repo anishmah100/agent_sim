@@ -44,6 +44,18 @@ export interface SocialCounts {
   contract: number;
 }
 
+// Live vitals snapshot from the engine. Surfaced to the inspector's
+// Inventory tab + the identity header (gold / hp pills).
+export interface VitalsSnapshot {
+  hp:       number;
+  max_hp:   number;
+  hunger:   number;
+  gold:     number;
+  inventory: Array<{ id: string; kind: string; count: number }>;
+  equipped: Record<string, string>;
+  inside_building?: string;
+}
+
 export interface TraceLine {
   tick: number;
   action_id: string;
@@ -58,9 +70,10 @@ export interface MentalState {
   capture_reasoning_enabled: boolean;
   // D19 — per-pair counters keyed by the *other* agent's entity_id.
   peers?: Record<string, SocialCounts>;
+  vitals?: VitalsSnapshot;
 }
 
-type Tab = "speech" | "mind" | "trace" | "relationships";
+type Tab = "speech" | "mind" | "trace" | "relationships" | "inventory";
 
 export function Inspector(props: {
   entity: EntityState | null;
@@ -144,6 +157,12 @@ export function Inspector(props: {
           )}
         </Show>
 
+        {/* Live vitals pills — surfaced above the tabs so they are
+            always visible regardless of which tab is open. */}
+        <Show when={props.mentalState?.vitals}>
+          <VitalsPills v={props.mentalState!.vitals!} />
+        </Show>
+
         {/* Tab bar */}
         <div
           style={{
@@ -156,6 +175,9 @@ export function Inspector(props: {
         >
           <TabBtn current={tab()} value="speech" onClick={() => setTab("speech")}
                   label="Speech" enabled />
+          <TabBtn current={tab()} value="inventory"
+                  onClick={() => setTab("inventory")}
+                  label="Inventory" enabled />
           <TabBtn current={tab()} value="mind" onClick={() => setTab("mind")}
                   label="Mind" enabled={mindVisible()}
                   disabledHint="share_planner=false" />
@@ -186,6 +208,9 @@ export function Inspector(props: {
             peers={props.mentalState?.peers ?? {}}
             selfId={props.entity?.entity_id ?? ""}
           />
+        </Show>
+        <Show when={tab() === "inventory"}>
+          <InventoryTab vitals={props.mentalState?.vitals} />
         </Show>
       </div>
     </Show>
@@ -387,6 +412,136 @@ function RelationshipsTab(props: {
         </For>
       </div>
     </Show>
+  );
+}
+
+// VitalsPills — compact identity-bar showing hp / hunger / gold and
+// equipped slot. Always visible above the tab body. Flexible by
+// design: the inventory list lives in the InventoryTab; this strip
+// only carries the high-frequency scalars + a single equipped
+// indicator. Adding a new stat = add one Pill row, no schema work.
+function VitalsPills(p: { v: VitalsSnapshot }) {
+  const hpPct = () =>
+    p.v.max_hp > 0 ? Math.max(0, Math.min(100, Math.round((p.v.hp / p.v.max_hp) * 100))) : 0;
+  const hpColor = () =>
+    hpPct() >= 70 ? "#34d399" : hpPct() >= 30 ? "#fbbf24" : "#f87171";
+  const hungerLabel = () => {
+    const h = p.v.hunger || 0;
+    if (h < 0.3) return "sated";
+    if (h < 0.7) return "peckish";
+    return "starving";
+  };
+  const hungerColor = () =>
+    (p.v.hunger || 0) < 0.3 ? "#34d399"
+      : (p.v.hunger || 0) < 0.7 ? "#fbbf24"
+      : "#f87171";
+  const equipped = () => Object.entries(p.v.equipped || {})
+    .filter(([, v]) => v && v.length > 0);
+  return (
+    <div data-testid="vitals-pills"
+         style={{ display: "flex", "flex-wrap": "wrap", gap: "6px",
+                  "margin-bottom": "10px",
+                  "padding-bottom": "8px",
+                  "border-bottom": "1px solid #3a4466" }}>
+      <Pill label="HP" value={`${p.v.hp}/${p.v.max_hp || "?"}`} color={hpColor()} />
+      <Pill label="hunger" value={hungerLabel()} color={hungerColor()} />
+      <Pill label="gold" value={`${p.v.gold} g`} color="#facc15" />
+      <For each={equipped()}>
+        {([slot, item]) => (
+          <Pill label={slot} value={kindFromItemId(item)} color="#a78bfa" />
+        )}
+      </For>
+    </div>
+  );
+}
+
+function Pill(p: { label: string; value: string; color: string }) {
+  return (
+    <span style={{ display: "inline-flex", "align-items": "center",
+                    gap: "5px", padding: "2px 8px",
+                    background: "rgba(255,255,255,0.04)",
+                    border: `1px solid ${p.color}`,
+                    "border-radius": "10px",
+                    "font-size": "11px",
+                    "font-family": "ui-monospace, monospace" }}>
+      <span style={{ color: "#8b9bb4" }}>{p.label}</span>
+      <span style={{ color: p.color }}>{p.value}</span>
+    </span>
+  );
+}
+
+function kindFromItemId(id: string): string {
+  // "item:sword_short#42" -> "sword_short". Identity for already-bare kinds.
+  let k = id || "";
+  if (k.startsWith("item:")) k = k.slice(5);
+  const hash = k.indexOf("#");
+  return hash >= 0 ? k.slice(0, hash) : k;
+}
+
+function InventoryTab(props: { vitals?: VitalsSnapshot }) {
+  const items = createMemo(() => props.vitals?.inventory ?? []);
+  const equipped = createMemo(() =>
+    Object.entries(props.vitals?.equipped ?? {})
+      .filter(([, v]) => v && v.length > 0));
+  return (
+    <div data-testid="inventory-tab"
+         style={{ display: "grid", "row-gap": "10px" }}>
+      <Show when={equipped().length > 0}>
+        <div>
+          <div style={{ color: "#8b9bb4", "font-size": "10px",
+                        "margin-bottom": "4px" }}>Equipped</div>
+          <For each={equipped()}>
+            {([slot, item]) => (
+              <div style={{ display: "flex", "justify-content": "space-between",
+                            "font-family": "ui-monospace, monospace",
+                            "font-size": "12px",
+                            padding: "3px 0",
+                            "border-bottom": "1px dashed #3a4466" }}>
+                <span style={{ color: "#a78bfa" }}>{slot}</span>
+                <span>{kindFromItemId(item)}</span>
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
+      <div>
+        <div style={{ color: "#8b9bb4", "font-size": "10px",
+                      "margin-bottom": "4px" }}>
+          Carried — {items().length} item kind{items().length === 1 ? "" : "s"}
+          <span style={{ color: "#5a6988" }}>
+            {" "}(of 10 slots)
+          </span>
+        </div>
+        <Show when={items().length > 0}
+              fallback={
+                <div style={emptyStyle()}>
+                  Inventory is empty.
+                  <div style={{ "font-size": "10px",
+                                "margin-top": "6px",
+                                color: "#5a6988" }}>
+                    Coins + gems auto-convert to gold on pickup —
+                    they never show up here.
+                  </div>
+                </div>
+              }>
+          <div style={{ display: "grid", "row-gap": "4px" }}>
+            <For each={items()}>
+              {(it) => (
+                <div style={{ display: "flex",
+                              "justify-content": "space-between",
+                              "align-items": "center",
+                              "font-family": "ui-monospace, monospace",
+                              "font-size": "12px",
+                              padding: "2px 0" }}>
+                  <span>{it.kind}</span>
+                  <span style={{ color: "#feae34" }}>×{it.count}</span>
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+    </div>
   );
 }
 

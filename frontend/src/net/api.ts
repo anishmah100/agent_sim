@@ -47,6 +47,18 @@ export interface MentalStateResponse {
     attack:   number;
     contract: number;
   }>;
+  // Live vitals snapshot: hp/hunger/gold/inventory/equipped from the
+  // entity's Extras. Inventory items are aggregated by kind so the
+  // inspector can render "apple ×3" instead of three per-item rows.
+  vitals?: {
+    hp:       number;
+    max_hp:   number;
+    hunger:   number;
+    gold:     number;
+    inventory: Array<{ id: string; kind: string; count: number }>;
+    equipped: Record<string, string>;
+    inside_building?: string;
+  };
 }
 
 export async function fetchMentalState(entityID: string): Promise<MentalStateResponse> {

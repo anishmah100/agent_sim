@@ -38,6 +38,16 @@ FOOD_KINDS = {"apple", "loaf_bread", "bread_loaf", "cheese_wheel", "fish_cooked"
 
 WEAPON_KINDS = {"dagger", "sword_short", "sword_long", "axe", "club_wood", "hammer", "bow", "crossbow"}
 
+# Monetary item kinds. The engine auto-converts these to gold on
+# pickup (inventory.go's coinValues table) so the bot doesn't even
+# need a "consume coin" step — pickup IS the deposit.
+MONEY_KINDS = {"coin_single", "coins_small_pile", "coin_pouch",
+               "gem_emerald", "gem_ruby", "gem_diamond"}
+
+
+def is_money(it) -> bool:
+    return item_kind(it) in MONEY_KINDS
+
 
 # ---------------------------------------------------------------------------
 # Helpers that don't depend on FSM state.

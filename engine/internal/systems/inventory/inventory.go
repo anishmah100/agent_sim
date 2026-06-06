@@ -13,6 +13,29 @@ import (
 	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
 )
 
+// MoneyGranter — the slice of money's MoneyService that inventory
+// uses to auto-credit gold on coin/gem pickup. Kept as a local
+// interface so inventory doesn't import the money package (cycle).
+type MoneyGranter interface {
+	Grant(world syscore.World, entityID string, amount int, cause string)
+}
+
+// coinValues — monetary item kinds (extracted from item id via
+// itemKindFromID) and the gold they're worth on pickup. When a
+// pickup target's kind is in this map, the item is destroyed +
+// the value is credited via the money service; nothing lands in
+// the player's inventory. This matches the user's mental model
+// (coins are wealth, not carryable bags-of-stuff) and frees up
+// the 10-slot inventory cap for items the player actually carries.
+var coinValues = map[string]int{
+	"coin_single":     1,
+	"coins_small_pile": 5,
+	"coin_pouch":      10,
+	"gem_emerald":     50,
+	"gem_ruby":        75,
+	"gem_diamond":    100,
+}
+
 // DefaultMaxSlots — D20. Hard cap at 10 slots. Each item (including
 // coin piles + equipped weapon slots NOT counted; equipped is in a
 // separate Extras["equipped"] map) takes one slot. pickup rejects
@@ -186,6 +209,23 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 		res.Reason = "target_too_far"
 		return res
 	}
+	// Coins + gems auto-convert to gold. They never enter inventory.
+	// The kind is extracted from the item's sprite (the spawn pipeline
+	// always sets sprite="item:<kind>"); fall back to the id parse
+	// for legacy items that were spawned without an explicit sprite.
+	kind := monetaryKindOf(item, p.Target)
+	if value, ok := coinValues[kind]; ok {
+		svc, _ := w.GetService("money").(MoneyGranter)
+		if svc == nil {
+			res.Reason = "money_service_missing"
+			return res
+		}
+		svc.Grant(w, e.ID(), value, "pickup_coin")
+		w.RemoveEntity(p.Target)
+		w.QueueEvent(ItemPicked{Picker: e.ID(), Item: p.Target})
+		res.Accepted = true
+		return res
+	}
 	inv := extrasStrSlice(e, "inventory")
 	if len(inv) >= DefaultMaxSlots {
 		res.Reason = "inventory_full"
@@ -200,6 +240,26 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 	w.QueueEvent(ItemPicked{Picker: e.ID(), Item: p.Target})
 	res.Accepted = true
 	return res
+}
+
+// monetaryKindOf — extract the canonical item kind for the coin
+// table lookup. Priority: sprite extra (set by spawn pipelines, e.g.
+// "item:coin_pouch") then the id parse (for items whose sprite extra
+// was never set).
+func monetaryKindOf(item syscore.Entity, fallbackID string) string {
+	if s, ok := item.GetExtra("sprite"); ok {
+		if str, ok := s.(string); ok && len(str) > 5 && str[:5] == "item:" {
+			k := str[5:]
+			for i := 0; i < len(k); i++ {
+				if k[i] == '#' {
+					k = k[:i]
+					break
+				}
+			}
+			return k
+		}
+	}
+	return itemKindFromID(fallbackID)
 }
 
 func (s *System) handleDrop(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {

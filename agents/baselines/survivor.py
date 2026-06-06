@@ -26,6 +26,7 @@ from ._common import (
     ArchetypeBot,
     has_weapon_equipped,
     is_food,
+    is_money,
     item_kind,
     nearest,
     random_walk,
@@ -100,13 +101,35 @@ class Survivor(ArchetypeBot):
             self.state = "IDLE"
             return None
 
-        # IDLE: random walk ~50% of the time.
+        # IDLE: money is the primary objective for the "normal
+        # character" (survivor). When not hungry / fleeing, head for
+        # the nearest visible coin or gem and pick it up. The engine
+        # auto-converts monetary items to gold on pickup, so this
+        # directly grows our wealth — no inventory bookkeeping.
+        money_items = [it for it in obs.visible_items if is_money(it)]
+        if money_items:
+            target = nearest(money_items, here)
+            if max(abs(target.pos[0] - here[0]),
+                   abs(target.pos[1] - here[1])) <= 1:
+                return Pickup(target=target.entity_id)
+            return Move(target=list(step_toward(here, tuple(target.pos))))
+
+        # No money or food visible: wander occasionally so we
+        # explore + discover new spawns.
         if self.rng.random() < 0.5:
             return random_walk(self, here)
         return None
 
     def transition_note(self):
-        slots = {"goal": "stay alive", "plan": f"state={self.state}"}
+        # Default goal is gold accumulation; survival pressure
+        # temporarily preempts it.
+        if self.state in ("HUNGRY", "EATING", "DESPERATE"):
+            goal = "find food"
+        elif self.state == "FLEEING":
+            goal = "stay alive"
+        else:
+            goal = "accumulate gold"
+        slots = {"goal": goal, "plan": f"state={self.state}"}
         if self.state == "FLEEING":
             slots["emotion"] = "afraid"
         elif self.state == "DESPERATE":

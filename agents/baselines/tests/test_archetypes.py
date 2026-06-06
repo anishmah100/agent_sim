@@ -143,6 +143,29 @@ def test_survivor_desperate_when_starving_no_food():
     assert bot.state == "DESPERATE"
 
 
+def test_survivor_chases_visible_coins_when_idle():
+    bot = Survivor(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.1, "inventory": []},
+        items=[vit("coin-1", "item:coin_pouch", (13, 10))],
+    )
+    act = bot.decide(obs)
+    assert bot.state == "IDLE", bot.state
+    assert isinstance(act, Move) and tuple(act.target) == (11, 10), act
+
+
+def test_survivor_picks_up_adjacent_gem():
+    bot = Survivor(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.1, "inventory": []},
+        items=[vit("gem-1", "item:gem_emerald", (10, 11))],
+    )
+    act = bot.decide(obs)
+    assert isinstance(act, Pickup) and act.target == "gem-1", act
+
+
 # ----- Scavenger -----------------------------------------------------
 
 def test_scavenger_races_on_death_scream():

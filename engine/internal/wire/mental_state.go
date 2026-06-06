@@ -10,10 +10,14 @@ import (
 )
 
 // SocialPeersReader — D19. Just the subset of *world.World the mental
-// state handler needs to surface per-pair social counts. Kept as an
-// interface so tests can supply a fixture instead of a full world.
+// state handler needs to surface per-pair social counts AND per-entity
+// vitals snapshot. Kept as an interface so tests can supply a fixture
+// instead of a full world.
 type SocialPeersReader interface {
 	SocialPeersOf(entityID string) map[string]world.SocialCounts
+	// VitalsOf returns hp/hunger/gold/inventory/equipped for the inspector.
+	// Returns zero VitalsSnapshot when the entity is unknown.
+	VitalsOf(entityID string) world.VitalsSnapshot
 }
 
 // MentalStateHandler serves /api/v1/agent/<id>/mental_state — the
@@ -72,6 +76,7 @@ func MentalStateHandler(hist *historian.Historian, captureReasoning bool, social
 			if peers := social.SocialPeersOf(entityID); len(peers) > 0 {
 				body.Peers = peers
 			}
+			body.Vitals = social.VitalsOf(entityID)
 		}
 		if hist != nil {
 			body.Traces = collectTraces(hist, entityID, 20)
@@ -109,6 +114,9 @@ type mentalStateResponse struct {
 	// no interactions have been logged yet. Surfaced to the inspector's
 	// Relationships tab.
 	Peers map[string]world.SocialCounts `json:"peers"`
+	// Live vitals snapshot: hp, hunger, gold, inventory, equipped.
+	// Surfaced to the inspector's identity block + inventory display.
+	Vitals world.VitalsSnapshot `json:"vitals"`
 }
 
 type dialogueLine struct {

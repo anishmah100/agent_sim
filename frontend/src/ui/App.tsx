@@ -82,6 +82,7 @@ export function App() {
         traces: m.traces,
         capture_reasoning_enabled: m.capture_reasoning_enabled,
         peers: m.peers ?? {},
+        vitals: m.vitals,
       });
     }).catch(() => setMentalState(null));
   }
