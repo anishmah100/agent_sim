@@ -19,6 +19,22 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D24 — Society Pulse view: deferred until substrate runs
+
+Design the metrics dashboard + cast-as-graph + L3/L4 narrator
+panel AFTER we see actual experiment runs. Without empirical
+evidence of which signals matter, we'd over-design for imagined
+emergence and under-design for what actually happens.
+
+For v1: world canvas + Story Feed (D17) + inspector (D18) are the
+only UI surfaces. The Society Pulse toolbar button still exists
+but reveals a placeholder ("Coming after first experiments").
+
+**Why:** same logic as D23. Don't pay design cost on the
+visualization layer before we know what's worth visualizing. The
+hierarchy decision was: lock the substrate, run experiments,
+let the data show us what's needed.
+
 ### D23 — Reproducibility: deferred. Event log only for v1
 
 For v1: keep the existing JSONL event log; no bit-identical replay
