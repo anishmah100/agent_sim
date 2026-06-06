@@ -202,8 +202,11 @@ def summarize_events(events_path: Path, after_tick: int = 0) -> dict:
             counts[kind] = counts.get(kind, 0) + 1
             p = ev.get("payload") or {}
             if kind == "EntityDied":
-                kills.append({"victim": p.get("VictimID"),
-                              "killer": p.get("KillerID"),
+                # Historian emits EntityID + Killer (not VictimID +
+                # KillerID); see combat.go's EntityDied struct.
+                kills.append({"victim": p.get("EntityID") or p.get("VictimID"),
+                              "killer": p.get("Killer") or p.get("KillerID"),
+                              "cause":  p.get("Cause"),
                               "tick":   ev.get("tick")})
             elif kind == "TaskProposed":
                 cid = p.get("ID")

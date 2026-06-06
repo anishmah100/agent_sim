@@ -36,17 +36,23 @@ const (
 )
 
 // Spawnable — one of these is picked uniformly at random each
-// respawn tick. Sized so food is ~60% of spawns (matches the
-// "food more abundant" instruction), wealth ~30%, tools ~10%.
+// respawn tick. Sized so food is ~50% of spawns, wealth ~25%, tools
+// ~12%, weapons ~12%. The weapon slice lets armed archetypes
+// (killers) actually equip + deal real damage during a run; without
+// weapons in the world the killers would only ever do 4 dmg/sec
+// (unarmed) which is barely above hp regen, so kills wouldn't land
+// within demo-scale runs.
 var spawnable = []struct {
 	kind string
 }{
-	// Food (×6 entries = ~55% probability)
+	// Food (×6 = ~50% probability)
 	{"apple"}, {"apple"}, {"bread_loaf"}, {"cheese_wheel"}, {"fish_cooked"}, {"fish_raw"},
-	// Wealth (×3 = ~27%)
+	// Wealth (×3 = ~25%)
 	{"coin_single"}, {"coins_small_pile"}, {"gem_emerald"},
-	// Tools / misc (×2 = ~18%)
+	// Tools / misc (×2 = ~17%)
 	{"wood_log"}, {"bucket_water"},
+	// Weapons (×2 = ~17%)
+	{"dagger"}, {"sword_short"},
 }
 
 // Spawned — emitted on each successful spawn so the historian can

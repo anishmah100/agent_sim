@@ -10,10 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from agent_sim_sdk import Action, Attack, Move, Observation, Pickup
+from agent_sim_sdk import Action, Attack, Equip, Move, Observation, Pickup
 
 from ._common import (
     ArchetypeBot,
+    WEAPON_KINDS,
     chebyshev,
     has_weapon_equipped,
     item_kind,
@@ -71,6 +72,33 @@ class Killer(ArchetypeBot):
                 return Move(target=list(step_toward(here, tuple(target.pos))))
 
         if self.state == "HUNTING":
+            # If unarmed and there's a visible weapon, grab it first —
+            # unarmed kills take 25+ uninterrupted hits, but a sword
+            # short halves that. The killer prioritizes equipping
+            # before pursuing prey.
+            inv = list((s.extras or {}).get("inventory") or [])
+            unarmed = not (
+                (s.extras or {}).get("equipped", {}) or {}
+            ).get("weapon")
+            if unarmed:
+                # Inventory weapon already? Equip it.
+                weap_in_inv = next(
+                    (i for i in inv if isinstance(i, str)
+                     and any(k in i for k in WEAPON_KINDS)),
+                    None,
+                )
+                if weap_in_inv:
+                    return Equip(item=weap_in_inv, slot="weapon")
+                # Walk to a visible weapon item.
+                weap_items = [
+                    it for it in obs.visible_items
+                    if item_kind(it) in WEAPON_KINDS
+                ]
+                if weap_items:
+                    target = nearest(weap_items, here)
+                    if chebyshev(here, tuple(target.pos)) <= 1:
+                        return Pickup(target=target.entity_id)
+                    return Move(target=list(step_toward(here, tuple(target.pos))))
             choice = self._pick_target(obs.visible_entities, here)
             if choice is not None:
                 self.target_id = choice.entity_id
