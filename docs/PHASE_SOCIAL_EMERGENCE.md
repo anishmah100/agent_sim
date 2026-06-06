@@ -19,6 +19,28 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D20 — Inventory: hard cap at 10 slots, 1 slot per item
+
+Every agent's inventory has 10 slots. Stacks (coin piles) count as
+1 slot. Equipped slot is separate (1 weapon, doesn't count
+against inventory). Hitting the cap on pickup → reject with
+reason `inventory_full`.
+
+**Why:** with D6 (food types matter), D7 (scattered wealth), D10
+(full-drop on death), 10 slots forces agents to choose what to
+carry. Looting a corpse with 8 items + your own 5 → you must
+drop 3. Creates "go back to a stash" dynamics, "keep or take"
+decisions, and prevents trivial hoarding equilibria. Tight enough
+to be felt within a 30-min experiment.
+
+**How to apply:**
+- `pickup` verb checks slot count, rejects on full.
+- `drop` verb makes room.
+- Vendor sales happen in slot-space (selling = -1 slot, buying
+  = +1).
+- Optional v2 feature: a `stash` building where you can deposit
+  inventory beyond 10. Defer.
+
 ### D19 — Relationships tab: 3-layer stack (raw + declared + narrator)
 
 For each OTHER agent the focal agent has interacted with, show:
