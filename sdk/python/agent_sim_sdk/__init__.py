@@ -7,7 +7,7 @@ both) is set per connection.
 
 from .client import Agent, register_and_connect, register_agent, AgentCredentials
 from .models import (
-    Observation, SelfState, VisibleEntity, VisibleObject, AudibleEvent, WorldClock,
+    Observation, SelfState, VisibleEntity, VisibleObject, VisibleItem, AudibleEvent, WorldClock,
     Action, ActionBatch, ActionResult, ReasonCode, Pos, Facing,
     Move, Speak, Whisper, Shout, LookAt, Interact,
     Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
@@ -28,7 +28,8 @@ from .observation_render import (
 __all__ = [
     "Agent",
     "register_and_connect", "register_agent", "AgentCredentials",
-    "Observation",
+    "Observation", "SelfState", "VisibleEntity", "VisibleObject", "VisibleItem",
+    "AudibleEvent", "WorldClock",
     "Action", "ActionBatch", "ActionResult", "ReasonCode",
     "Pos",
     "Facing",

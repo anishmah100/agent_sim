@@ -1,0 +1,112 @@
+"""Scavenger archetype (D16). Profit from death without combat.
+
+Listens for `death_scream` audibles. On hearing one, races toward the
+scream's tile (rounded to ±5 by the engine's anonymity policy), loots
+whatever the corpse dropped, and retreats if an armed agent shows up.
+Never attacks.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+from agent_sim_sdk import Action, Move, Observation, Pickup
+
+from ._common import (
+    ArchetypeBot,
+    has_weapon_equipped,
+    item_kind,
+    nearest,
+    random_walk,
+    step_away,
+    step_toward,
+)
+
+
+@dataclass
+class Scavenger(ArchetypeBot):
+    archetype_name: str = "scavenger"
+    state: str = "IDLE"
+    # Most recent scream tile. Reset when LOOTING completes or a fresher
+    # scream supersedes.
+    target_pos: Optional[tuple[int, int]] = None
+    # Cadence throttle for IDLE moves: stay still ~3 of every 4 ticks.
+    _idle_tick: int = 0
+
+    def decide(self, obs: Observation) -> Optional[Action]:
+        s = obs.self
+        here = tuple(s.pos)
+
+        # Update target from the freshest death scream in the audible
+        # buffer. Engine anonymizes the position to a 5-tile cell so
+        # `target_pos` is intentionally approximate.
+        for ev in obs.audible:
+            if (ev.sound_kind or "") in ("death_scream", "kill_witnessed"):
+                self.target_pos = tuple(ev.from_pos)
+                self.state = "RACING"
+
+        # Threat scan applies once we're loitering at a corpse.
+        threats = [e for e in obs.visible_entities if has_weapon_equipped(e)]
+
+        if self.state == "RACING":
+            if self.target_pos is None:
+                self.state = "IDLE"
+            else:
+                d = max(
+                    abs(self.target_pos[0] - here[0]),
+                    abs(self.target_pos[1] - here[1]),
+                )
+                if d <= 2:
+                    self.state = "LOOTING"
+                else:
+                    return Move(target=list(step_toward(here, self.target_pos)))
+
+        if self.state == "LOOTING":
+            if threats:
+                self.state = "RETREATING"
+            else:
+                items = list(obs.visible_items)
+                if not items:
+                    self.state = "IDLE"
+                    self.target_pos = None
+                else:
+                    target = self._pick_loot_target(items)
+                    if max(
+                        abs(target.pos[0] - here[0]),
+                        abs(target.pos[1] - here[1]),
+                    ) <= 1:
+                        return Pickup(target=target.entity_id)
+                    return Move(target=list(step_toward(here, tuple(target.pos))))
+
+        if self.state == "RETREATING":
+            if not threats:
+                self.state = "IDLE"
+                self.target_pos = None
+            else:
+                t = nearest(threats, here)
+                return Move(target=list(step_away(here, tuple(t.pos))))
+
+        # IDLE: low-cadence random walk.
+        self._idle_tick = (self._idle_tick + 1) % 4
+        if self._idle_tick == 0:
+            return random_walk(self, here)
+        return None
+
+    @staticmethod
+    def _pick_loot_target(items):
+        """Priority: gold piles > weapons > anything else. The sprite
+        carries the kind (item:coin_pouch, item:sword_short, ...)."""
+        def score(it):
+            k = item_kind(it)
+            if "coin" in k or "gold" in k:
+                return 3
+            if k in ("dagger", "sword_short", "sword_long", "axe", "hammer", "club_wood", "bow", "crossbow"):
+                return 2
+            return 1
+        return max(items, key=score)
+
+    def transition_note(self):
+        slots = {"goal": "loot dropped items", "plan": f"state={self.state}"}
+        if self.state == "RACING" and self.target_pos:
+            slots["beliefs"] = f"death near {self.target_pos}"
+        return None, slots
