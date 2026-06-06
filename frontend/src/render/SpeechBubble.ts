@@ -21,6 +21,13 @@ interface ActiveBubble {
 }
 
 const LIFETIME_MS = 4000;        // bubble visible for 4 s (fade in 200 ms, hold 3600 ms, fade out 200 ms)
+// Bubble copy limits. The full text always reaches the historian +
+// inspector; the bubble is a glance-friendly heads-up. Past
+// ~60 chars on a single line, agents' speech gets unreadable on the
+// minimap-zoom level. Wrap inside the bubble for medium length, hard-
+// truncate with "…" past MAX so the bubble never spans the screen.
+const MAX_BUBBLE_CHARS = 60;
+const BUBBLE_WRAP_PX  = 220;     // wrap width (text px BEFORE scale.set(0.4))
 const FADE_IN_MS = 200;
 const FADE_OUT_MS = 400;
 const STACK_SPACING_PX = 14;     // vertical gap between stacked bubbles
@@ -118,7 +125,13 @@ export class SpeechBubbleLayer {
   }
 
   private spawn(ev: AudibleEvent): void {
-    const text = (ev.text ?? "").slice(0, 80);  // cap at 80 chars
+    // Truncate at MAX_BUBBLE_CHARS — anything longer gets ellipsized.
+    // The full text is still in the historian + inspector; the bubble
+    // is a heads-up display, not the canonical record.
+    const raw = ev.text ?? "";
+    const text = raw.length > MAX_BUBBLE_CHARS
+      ? raw.slice(0, MAX_BUBBLE_CHARS - 1).trimEnd() + "…"
+      : raw;
     const bubble = this.makeBubble(text, ev.kind);
     this.container.addChild(bubble);
     this.active.push({
@@ -143,6 +156,12 @@ export class SpeechBubbleLayer {
         fontWeight: kind === "shout" ? "700" : "500",
         fill: kind === "shout" ? 0xe43b44 : 0x181425,
         align: "center",
+        // Multi-line wrap so the bubble grows DOWN, not just out.
+        // BUBBLE_WRAP_PX is the unscaled px width; the bubble's
+        // visual width after scale.set(0.4) is BUBBLE_WRAP_PX * 0.4.
+        wordWrap: true,
+        wordWrapWidth: BUBBLE_WRAP_PX,
+        breakWords: true,
       },
       resolution: 3,
     });

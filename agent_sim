@@ -1,0 +1,263 @@
+#!/usr/bin/env bash
+# agent_sim — single-command launcher for the engine + frontend + NPC
+# supervisor + optional Qwen LLM agents. Subcommands:
+#
+#   agent_sim start           start engine + frontend (default)
+#   agent_sim stop            kill engine + frontend + NPCs + LLM agents
+#   agent_sim restart         stop, then start
+#   agent_sim status          show what's running + tick + URL
+#   agent_sim agents [N]      spawn N Qwen LLM agents (default 3) — assumes engine is up
+#   agent_sim help            this message
+#
+# The engine + frontend run in the background and survive your shell
+# exiting. PIDs are tracked in .runlog/pids/ so subsequent stop works
+# cleanly. Logs live under .runlog/.
+#
+# Every observable engine feature is enabled by default — capture-
+# reasoning, snapshot persistence, generous register rate, larger
+# event ring — so the UI's panels show real data without you having
+# to know which flag drives what.
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PIDDIR=".runlog/pids"
+mkdir -p .runlog "$PIDDIR"
+
+ENGINE_ADDR="${ENGINE_ADDR:-127.0.0.1:8080}"
+BUNDLE="${BUNDLE:-worlds/eldoria}"
+EVENT_LOG="${EVENT_LOG:-.runlog/events.jsonl}"
+NPC_CONFIG="${NPC_CONFIG:-}"
+SNAP_DIR="${SNAP_DIR:-.runlog/snapshots}"
+SNAP_EVERY="${SNAP_EVERY:-60s}"
+CORS_ALLOW="${CORS_ALLOW:-http://127.0.0.1:5173,http://localhost:5173}"
+JWT_SECRET="${JWT_SECRET:-}"
+QWEN_URL="${QWEN_URL:-http://127.0.0.1:8782/v1}"
+
+# ── helpers ──────────────────────────────────────────────────────────
+
+is_alive() {
+  # is_alive <pidfile> — true if the PID in the file exists.
+  local pf="$1"
+  [[ -f "$pf" ]] && kill -0 "$(cat "$pf")" 2>/dev/null
+}
+
+kill_pidfile() {
+  # kill_pidfile <pidfile> <label> — kill the process tree under the PID
+  # and remove the pidfile. Safe if the PID is already gone.
+  local pf="$1" label="$2"
+  if is_alive "$pf"; then
+    local pid; pid=$(cat "$pf")
+    # Kill the whole process group so child processes (vite, npm) die too.
+    pkill -P "$pid" 2>/dev/null || true
+    kill "$pid" 2>/dev/null || true
+    # Wait briefly, then SIGKILL anything that survived.
+    for _ in 1 2 3 4 5; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.3
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -9 "$pid" 2>/dev/null || true
+      pkill -9 -P "$pid" 2>/dev/null || true
+    fi
+    echo "  stopped $label (pid $pid)"
+  fi
+  rm -f "$pf"
+}
+
+wait_for_url() {
+  # wait_for_url <url> <timeout_s>
+  local url="$1" deadline="$2"
+  local t=0
+  until curl -sf -m 2 "$url" >/dev/null 2>&1; do
+    sleep 0.3
+    t=$((t + 1))
+    if (( t * 3 > deadline * 10 )); then
+      echo "  timed out waiting for $url" >&2
+      return 1
+    fi
+  done
+}
+
+# ── subcommands ──────────────────────────────────────────────────────
+
+cmd_start() {
+  if is_alive "$PIDDIR/engine.pid" && is_alive "$PIDDIR/frontend.pid"; then
+    echo "==> already running. agent_sim status for details."
+    cmd_status
+    return 0
+  fi
+  echo "==> building engine"
+  ( cd engine && go build -o ../.runlog/engine ./cmd/engine )
+
+  # NPC supervisor config — bundle's bundled config unless overridden.
+  local npc_flag=""
+  if command -v python3 >/dev/null 2>&1; then
+    if [[ -n "$NPC_CONFIG" ]]; then
+      npc_flag="-npc-config $NPC_CONFIG"
+      echo "==> NPC supervisor: $NPC_CONFIG (override)"
+    else
+      echo "==> NPC supervisor: bundle's bundled config (if any)"
+    fi
+  else
+    echo "==> NPC supervisor: disabled (python3 not on PATH)"
+  fi
+
+  echo "==> starting engine on $ENGINE_ADDR (logs: .runlog/engine.log)"
+  # All observable features ON by default.
+  nohup .runlog/engine \
+    -addr "$ENGINE_ADDR" \
+    -bundle "$BUNDLE" \
+    -event-log "$EVENT_LOG" \
+    -snapshot-dir "$SNAP_DIR" \
+    -snapshot-every "$SNAP_EVERY" \
+    -cors-allow "$CORS_ALLOW" \
+    -jwt-secret "$JWT_SECRET" \
+    -capture-reasoning \
+    -register-rate 100 \
+    -register-burst 100 \
+    -event-ring 8192 \
+    $npc_flag \
+    > .runlog/engine.log 2>&1 &
+  echo $! > "$PIDDIR/engine.pid"
+
+  wait_for_url "http://$ENGINE_ADDR/api/v1/world/info" 15 || {
+    echo "==> engine failed to start, see .runlog/engine.log"
+    return 1
+  }
+
+  echo "==> starting frontend (logs: .runlog/frontend.log)"
+  nohup bash -c "cd frontend && npm run dev" > .runlog/frontend.log 2>&1 &
+  echo $! > "$PIDDIR/frontend.pid"
+
+  wait_for_url "http://127.0.0.1:5173/" 20 || {
+    echo "==> frontend failed to start, see .runlog/frontend.log"
+    return 1
+  }
+
+  echo
+  echo "agent_sim is up."
+  echo "  engine:   http://$ENGINE_ADDR"
+  echo "  frontend: http://127.0.0.1:5173"
+  echo "  agents:   ./agent_sim agents [N]   (spawn N Qwen LLM agents)"
+  echo "  stop:     ./agent_sim stop"
+}
+
+cmd_stop() {
+  echo "==> stopping agent_sim"
+  # Stop agents first so they exit cleanly, then frontend, then engine.
+  if [[ -d "$PIDDIR" ]]; then
+    for pf in "$PIDDIR"/qwen_*.pid; do
+      [[ -e "$pf" ]] || continue
+      kill_pidfile "$pf" "qwen $(basename "$pf" .pid | sed 's/^qwen_//')"
+    done
+    kill_pidfile "$PIDDIR/frontend.pid" "frontend"
+    kill_pidfile "$PIDDIR/engine.pid" "engine"
+  fi
+  # Belt-and-suspenders: cull orphan vite + heuristic_bot procs from
+  # earlier runs that weren't tracked. Match precisely so we don't
+  # kill unrelated user processes.
+  pkill -f ".runlog/engine -addr $ENGINE_ADDR" 2>/dev/null || true
+  pkill -f "vite.*--port 5173|vite.*5173" 2>/dev/null || true
+  pkill -f "examples/heuristic_bot.py --server http://$ENGINE_ADDR" 2>/dev/null || true
+  echo "==> stopped"
+}
+
+cmd_status() {
+  local engine_alive="no" frontend_alive="no" qwen_count=0
+  is_alive "$PIDDIR/engine.pid" && engine_alive="yes (pid $(cat $PIDDIR/engine.pid))"
+  is_alive "$PIDDIR/frontend.pid" && frontend_alive="yes (pid $(cat $PIDDIR/frontend.pid))"
+  for pf in "$PIDDIR"/qwen_*.pid; do
+    [[ -e "$pf" ]] || continue
+    if is_alive "$pf"; then
+      qwen_count=$((qwen_count + 1))
+    fi
+  done
+  echo "engine:   $engine_alive"
+  echo "frontend: $frontend_alive"
+  echo "qwen agents: $qwen_count alive"
+  if [[ "$engine_alive" != "no" ]]; then
+    local info
+    info=$(curl -sf -m 2 "http://$ENGINE_ADDR/api/v1/world/info" 2>/dev/null || true)
+    if [[ -n "$info" ]]; then
+      echo "  world: $(echo "$info" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(f"{d.get(\"world\")} tick={d.get(\"tick\")} uptime={d.get(\"uptime_s\"):.0f}s")' 2>/dev/null)"
+    fi
+    echo "  http://$ENGINE_ADDR  ·  http://127.0.0.1:5173"
+  fi
+}
+
+cmd_agents() {
+  local n="${1:-3}"
+  if ! is_alive "$PIDDIR/engine.pid"; then
+    echo "==> engine not running. start it first: ./agent_sim start" >&2
+    return 1
+  fi
+  if ! curl -sf -m 2 "$QWEN_URL/models" >/dev/null 2>&1; then
+    echo "==> Qwen llama-server not reachable at $QWEN_URL." >&2
+    echo "    Start it: ./llama.cpp/build/bin/llama-server \\" >&2
+    echo "        -m models/Qwen3.6-27B-Q4_K_M.gguf -t 32 \\" >&2
+    echo "        --reasoning-budget 0 --port 8782" >&2
+    return 2
+  fi
+  echo "==> spawning $n Qwen LLM agent(s)"
+  local personas=(
+    "merchant:trainer:An apple merchant from Frostvale looking for trade partners."
+    "guard:trainer:Town guard quick to question strangers, polite but firm."
+    "traveler:trainer:A wanderer collecting tales from every village they pass through."
+    "thief:trainer:Down-on-luck pickpocket looking for easy gold."
+    "smith:trainer:Blacksmith drumming up custom hammer business."
+  )
+  for ((i = 0; i < n && i < ${#personas[@]}; i++)); do
+    IFS=':' read -r name arch bio <<< "${personas[$i]}"
+    local log=".runlog/qwen_$name.log"
+    nohup python -m examples.qwen_agent.main \
+      --server "http://$ENGINE_ADDR" \
+      --token dev \
+      --name "$name" \
+      --archetype "$arch" \
+      --bio "$bio" \
+      --runtime-seconds 86400 \
+      > "$log" 2>&1 &
+    echo $! > "$PIDDIR/qwen_$name.pid"
+    echo "  spawned $name (pid $!, log $log)"
+  done
+  echo "==> agents launching. Watch http://127.0.0.1:5173 → click \"agents\" to find them."
+}
+
+cmd_help() {
+  cat <<'EOF'
+agent_sim — engine + frontend + agents control script
+
+Usage:
+  ./agent_sim                start engine + frontend (alias for start)
+  ./agent_sim start          start engine + frontend + NPC supervisor
+  ./agent_sim stop           stop everything spawned by this script
+  ./agent_sim restart        stop, then start
+  ./agent_sim status         show what's running
+  ./agent_sim agents [N]     spawn N Qwen LLM agents (default 3)
+  ./agent_sim help           this message
+
+Env overrides (any):
+  ENGINE_ADDR     default 127.0.0.1:8080
+  BUNDLE          default worlds/eldoria
+  EVENT_LOG       default .runlog/events.jsonl
+  NPC_CONFIG      default (use bundle's bundled config)
+  SNAP_DIR        default .runlog/snapshots
+  SNAP_EVERY      default 60s
+  CORS_ALLOW      default localhost:5173 + 127.0.0.1:5173
+  JWT_SECRET      default empty (dev — no auth required)
+  QWEN_URL        default http://127.0.0.1:8782/v1
+EOF
+}
+
+# ── dispatcher ───────────────────────────────────────────────────────
+
+case "${1:-start}" in
+  start)   cmd_start ;;
+  stop)    cmd_stop ;;
+  restart) cmd_stop; cmd_start ;;
+  status)  cmd_status ;;
+  agents)  shift || true; cmd_agents "${1:-3}" ;;
+  help|-h|--help) cmd_help ;;
+  *) echo "unknown subcommand: $1" >&2; cmd_help; exit 2 ;;
+esac
