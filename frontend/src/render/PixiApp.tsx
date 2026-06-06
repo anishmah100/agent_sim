@@ -45,6 +45,11 @@ export interface PixiHandle {
   setSelectedEntity(id: string | null): void;
   onClick(handler: (ev: ClickEvent) => void): () => void;
   ingestAudible(events: AudibleEvent[]): void;
+  /** Editor — repaint one tile to a new glyph. Returns previous glyph
+   *  for optimistic-update revert, or undefined if out of bounds. */
+  setTileGlyph(tileX: number, tileY: number, glyph: string): string | undefined;
+  /** Editor — read the current glyph at (x,y). undefined if unloaded. */
+  getTileGlyph(tileX: number, tileY: number): string | undefined;
   /** Returns the current viewport rectangle in TILE coords, clipped
    *  to world bounds. Used by the minimap to draw a "what's visible
    *  now" indicator. Null if no world has loaded yet. */
@@ -257,6 +262,34 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
         const i = clickHandlers.indexOf(handler);
         if (i >= 0) clickHandlers.splice(i, 1);
       };
+    },
+
+    setTileGlyph(tileX, tileY, glyph) {
+      if (!currentWorld) return undefined;
+      const legend = currentWorld.tiles_legend;
+      const kind = legend[glyph];
+      if (kind === undefined) return undefined;
+      // Find the previous glyph by scanning the legend for the
+      // current kind (kinds aren't 1-1 with glyphs, but the
+      // closest-match prev is enough for revert UX).
+      const prevKind = tilemap.getTileKind(tileX, tileY);
+      const prevGlyph = prevKind
+        ? Object.keys(legend).find((g) => legend[g] === prevKind)
+        : undefined;
+      const before = tilemap.setTileKind(tileX, tileY, kind);
+      if (before === null) return undefined;
+      // Trigger an immediate refresh so the new chunk is visible
+      // without waiting for the next pan/zoom.
+      tilemap.refreshVisible(viewport.getVisibleBounds());
+      return prevGlyph;
+    },
+
+    getTileGlyph(tileX, tileY) {
+      if (!currentWorld) return undefined;
+      const kind = tilemap.getTileKind(tileX, tileY);
+      if (kind === null) return undefined;
+      const legend = currentWorld.tiles_legend;
+      return Object.keys(legend).find((g) => legend[g] === kind);
     },
 
     ingestAudible(events) {

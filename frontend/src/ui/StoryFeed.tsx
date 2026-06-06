@@ -22,6 +22,9 @@ interface HistoryEvent {
 
 interface StoryFeedProps {
   entityId: string | null;
+  /** When true, the editor panel is taking the right edge — shift
+   *  the story feed left so they don't overlap. */
+  shiftLeft?: boolean;
 }
 
 function shortId(id: unknown): string {
@@ -126,7 +129,10 @@ export function StoryFeed(props: StoryFeedProps) {
       style={{
         position: "absolute",
         bottom: "16px",
-        right: "16px",
+        // Editor panel takes the right 260px when open; shift story
+        // 276px left so they don't overlap. Controlled by parent via
+        // shiftLeft prop.
+        right: props.shiftLeft ? "276px" : "16px",
         width: "300px",
         "max-height": "260px",
         background: "rgba(24, 20, 37, 0.92)",

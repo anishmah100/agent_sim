@@ -16,12 +16,22 @@ export interface EditorProps {
   open: boolean;
   onToggle: (open: boolean) => void;
   tilesLegend: Record<string, string> | null;
+  tool: EditorTool;
+  onToolChange: (t: EditorTool) => void;
+  selectedGlyph: string | null;
+  onSelectedGlyphChange: (g: string | null) => void;
   onSave?: () => void;
 }
 
 export function Editor(props: EditorProps) {
-  const [tool, setTool] = createSignal<EditorTool>("paint");
-  const [selectedGlyph, setSelectedGlyph] = createSignal<string | null>(null);
+  // Tool + selected glyph are controlled by the parent so the canvas
+  // click handler can read them. Old local state is gone.
+  const tool = () => props.tool;
+  const setTool = (t: EditorTool) => props.onToolChange(t);
+  const selectedGlyph = () => props.selectedGlyph;
+  const setSelectedGlyph = (g: string | null) => props.onSelectedGlyphChange(g);
+  // Cached so the Show below still has a stable value.
+  void createSignal;
 
   onMount(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -75,8 +85,8 @@ export function Editor(props: EditorProps) {
         </div>
 
         <div style={{ opacity: "0.7", "font-size": "11px" }}>
-          Dev-mode preview. Cmd+E toggles. Tile paint persists to disk
-          via /api/v1/world/edit in WORLD-4.
+          Pick a tile glyph, then click anywhere on the world to paint.
+          Cmd+E toggles. Erase paints grass.
         </div>
 
         {/* Tool selector */}

@@ -183,6 +183,23 @@ type World struct {
 	// rasterizer to pick the right tile texture. Same shape as walkable.
 	tileKindGrid [][]string
 
+	// Per-tile source glyph as it appears in world.json's `tiles` field.
+	// Kept separately from tileKindGrid because the editor needs to
+	// write back the exact glyph the world uses (e.g. ".", "#", "~"),
+	// and TilesLegend maps glyph→kind one-way. Mutable: the editor
+	// updates tileChars[y][x] then SetTile() recomputes walkable +
+	// vision + kind so the world responds immediately. Same shape as
+	// walkable.
+	tileChars [][]byte
+
+	// Per-glyph kind lookup so SetTile can recompute kind from a new
+	// glyph without re-parsing world.json.
+	tilesLegend map[string]string
+
+	// Source path the world was loaded from. PersistTileEdits writes a
+	// sidecar overlay file next to it so a restart sees the edits.
+	sourcePath string
+
 	// Decoration list as loaded (read-only after init).
 	decorations []DecorationRef
 
@@ -218,6 +235,14 @@ type World struct {
 	onBuildingEntered func(entityID, building string, tick uint64)
 	onBuildingExited  func(entityID, building string, tick uint64)
 }
+
+// LockWrite / UnlockWrite expose the world's write lock to callers
+// outside the package (the wire layer, primarily). Used by the tile
+// editor handler so it can SetTile under the proper lock without
+// having to route every mutation through an adapter. Tick takes the
+// same lock — a paint operation is serialized with ticks.
+func (w *World) LockWrite()   { w.mu.Lock() }
+func (w *World) UnlockWrite() { w.mu.Unlock() }
 
 // SetOnActionAccepted installs the historian hook for accepted actions.
 // Call once after scenario install, before Tick() begins.
@@ -364,9 +389,13 @@ func Load(path string) (*World, error) {
 	}
 	w.visionBlocks = make([][]bool, fw.HeightTiles)
 	w.tileKindGrid = make([][]string, fw.HeightTiles)
+	w.tileChars = make([][]byte, fw.HeightTiles)
+	w.tilesLegend = fw.TilesLegend
+	w.sourcePath = path
 	for y := 0; y < fw.HeightTiles; y++ {
 		w.visionBlocks[y] = make([]bool, fw.WidthTiles)
 		w.tileKindGrid[y] = make([]string, fw.WidthTiles)
+		w.tileChars[y] = make([]byte, fw.WidthTiles)
 	}
 
 	// Build walkability map from the tile legend.
@@ -379,10 +408,12 @@ func Load(path string) (*World, error) {
 		}
 		for x := 0; x < w.WidthTiles; x++ {
 			var kind string
+			var ch byte = ' '
 			if x < len(row) {
-				ch := string(row[x])
-				kind = fw.TilesLegend[ch]
+				ch = row[x]
+				kind = fw.TilesLegend[string(ch)]
 			}
+			w.tileChars[y][x] = ch
 			w.walkable[y][x] = walkableKinds[kind]
 			w.tileKindGrid[y][x] = kind
 			// Walls block vision. Water/void don't (you can see across).
@@ -397,6 +428,18 @@ func Load(path string) (*World, error) {
 	// our sheet is solid scenery. Bushes/flowers/groundcover get
 	// walkable=true at placement time in the world generator.
 	//
+	// Replay any user tile edits from the sidecar overlay BEFORE
+	// applying decorations. Editor paints land on the base grid;
+	// decorations (trees / buildings) are positioned by the world
+	// generator and shouldn't be overwritten by tile painting.
+	// Errors here are non-fatal: a corrupt overlay just gets ignored
+	// so the world still boots.
+	if err := w.ApplyTileEditsOverlay(); err != nil {
+		// Log but don't fail. Caller can see the error via the
+		// engine's stderr; the world is still usable.
+		fmt.Fprintf(os.Stderr, "world: tile edits overlay: %v\n", err)
+	}
+
 	// For decorations TALLER than 1.5 tiles (mostly trees), we also
 	// block the tile north of the footprint — the canopy renders into
 	// that tile and a character walking through it would visually be

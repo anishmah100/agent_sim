@@ -247,6 +247,7 @@ func main() {
 	mux.HandleFunc("/api/v1/world/affordances", wire.AffordanceManifestHandler(host))
 	mux.HandleFunc("/api/v1/world/rulebook.json", wire.RulebookHandler(w, bundle, host, tickRate))
 	mux.HandleFunc("/api/v1/world/history", historian.Handler(hist))
+	mux.HandleFunc("/api/v1/world/edit", wire.TileEditHandler(w))
 	// AGENT-A7 inspector → mental_state endpoint. Path includes the
 	// entity id; the handler parses it out.
 	mux.HandleFunc("/api/v1/agent/", wire.MentalStateHandler(hist, *flagCaptureReasoning))

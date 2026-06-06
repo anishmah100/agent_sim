@@ -15,7 +15,7 @@ export interface WorldInfo {
   uptime_s: number;
 }
 
-const ENGINE_URL = import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
+export const ENGINE_URL = import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
 
 export async function fetchWorldInfo(): Promise<WorldInfo> {
   const r = await fetch(`${ENGINE_URL}/api/v1/world/info`);

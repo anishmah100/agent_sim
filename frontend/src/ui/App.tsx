@@ -47,6 +47,12 @@ export function App() {
   const [liveEntities, setLiveEntities] = createSignal<EntityState[]>([]);
   const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
   const [editorOpen, setEditorOpen] = createSignal(false);
+  // Editor state hoisted up so the canvas click handler can read it.
+  // When paint+glyph is set and editorOpen, a click paints instead of
+  // inspecting. Default tool=paint so opening the editor + clicking a
+  // glyph is enough to start working.
+  const [editorTool, setEditorTool] = createSignal<"select" | "paint" | "erase">("paint");
+  const [editorGlyph, setEditorGlyph] = createSignal<string | null>(null);
   const [tilesLegend, setTilesLegend] = createSignal<Record<string, TileKind> | null>(null);
   const [mentalState, setMentalState] = createSignal<MentalState | null>(null);
 
@@ -103,8 +109,30 @@ export function App() {
       setWorldLoadError((e as Error).message);
     }
 
-    // Click → inspect.
+    // Click → inspect, OR paint when the editor is open with a glyph.
     pixiHandle.onClick((ev) => {
+      // Editor paint takes precedence over inspect: when the editor is
+      // active and a glyph is selected, clicking the canvas paints that
+      // tile instead of selecting an entity. Without this branch the
+      // editor's "click to paint" surface never wired up — Phase
+      // WORLD-3 shipped the panel, this branch is Phase WORLD-4's
+      // missing piece.
+      if (editorOpen() && editorTool() === "paint" && editorGlyph()) {
+        paintTileAt(ev.tileX, ev.tileY, editorGlyph()!);
+        return;
+      }
+      if (editorOpen() && editorTool() === "erase") {
+        // Erase paints the default walkable glyph the world declares.
+        // For Eldoria that's "g" → grass. Fall back to the first
+        // walkable glyph in the legend if "g" is missing.
+        const legend = tilesLegend();
+        const defaultGlyph =
+          (legend && legend["g"] !== undefined) ? "g"
+          : Object.keys(legend ?? {}).find((k) => legend?.[k] === "grass")
+          ?? Object.keys(legend ?? {})[0];
+        if (defaultGlyph) paintTileAt(ev.tileX, ev.tileY, defaultGlyph);
+        return;
+      }
       if (ev.entity) {
         setSelectedId(ev.entity.entity_id);
         setSelectedSnapshot(ev.entity);
@@ -114,6 +142,34 @@ export function App() {
         closeInspector();
       }
     });
+
+    // paintTileAt — POST to /api/v1/world/edit + optimistically repaint
+    // the Pixi tilemap so the user sees the change instantly. Reverts
+    // on engine reject. Pixi.setTileGlyph is exposed via the handle.
+    async function paintTileAt(tileX: number, tileY: number, glyph: string) {
+      if (tileX < 0 || tileY < 0) return;
+      const prev = pixiHandle?.getTileGlyph?.(tileX, tileY);
+      pixiHandle?.setTileGlyph?.(tileX, tileY, glyph);
+      try {
+        const { ENGINE_URL } = await import("../net/api");
+        const r = await fetch(
+          `${ENGINE_URL}/api/v1/world/edit`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: tileX, y: tileY, glyph }),
+          },
+        );
+        if (!r.ok) {
+          if (prev !== undefined) pixiHandle?.setTileGlyph?.(tileX, tileY, prev);
+          const body = await r.json().catch(() => ({}));
+          console.warn(`edit rejected: ${body.reason ?? r.status}`);
+        }
+      } catch (e) {
+        if (prev !== undefined) pixiHandle?.setTileGlyph?.(tileX, tileY, prev);
+        console.warn(`edit failed: ${(e as Error).message}`);
+      }
+    }
 
     // ESC closes the inspector.
     const onKey = (e: KeyboardEvent) => {
@@ -350,10 +406,15 @@ export function App() {
         open={editorOpen()}
         onToggle={setEditorOpen}
         tilesLegend={tilesLegend()}
-        onSave={() => {
-          // eslint-disable-next-line no-console
-          console.warn("Editor save: persistence lands in Phase WORLD-4");
-        }}
+        tool={editorTool()}
+        onToolChange={setEditorTool}
+        selectedGlyph={editorGlyph()}
+        onSelectedGlyphChange={setEditorGlyph}
+        // Save is a noop in this version — every paint persists
+        // immediately via /api/v1/world/edit, so the user doesn't need
+        // an explicit "save". Left in the UI so the button isn't
+        // suddenly absent; clicking just flashes confirmation.
+        onSave={() => { /* paints already persisted per-stroke */ }}
       />
 
       {leaderboardsOpen() && (
@@ -406,7 +467,7 @@ export function App() {
         getViewportTileRect={() => pixiHandle?.getViewportTileRect() ?? null}
       />
 
-      <StoryFeed entityId={selectedId()} />
+      <StoryFeed entityId={selectedId()} shiftLeft={editorOpen()} />
 
       <JoinAgent open={joinOpen()} onClose={() => setJoinOpen(false)} />
       <Onboarding />
