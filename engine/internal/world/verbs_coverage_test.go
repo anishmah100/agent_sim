@@ -406,3 +406,39 @@ func TestUnknownVerb_Rejected(t *testing.T) {
 		t.Fatalf("unknown verb should report unknown_verb:florp; got %q", res.Reason)
 	}
 }
+
+// === D1 — verb targets are entity_id, never display name ===
+// Audit conclusion: the engine already resolves targets exclusively
+// via direct entity_id map lookup. No display-name fallback exists in
+// any verb handler (audited: whisper, pay, attack, give, trade,
+// interact, lock, unlock, claim_ownership, transfer_ownership,
+// pickup, equip, loot, chop, mine). These tests pin the behavior so
+// any future regression that adds display-name resolution fails the
+// build.
+
+func TestD1_Whisper_AcceptsEntityID_RejectsDisplayName(t *testing.T) {
+	vc := newVCTest(t)
+	// In the test fixture, B's display_name is "B" and entity_id is "b".
+	// Place them adjacent so range is not the failure mode here.
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	ok := vc.submit("a", "whisper", `{"target":"b","text":"psst"}`)
+	if !ok.Accepted {
+		t.Fatalf("whisper to entity_id should succeed; got %+v", ok)
+	}
+	nm := vc.submit("a", "whisper", `{"target":"B","text":"psst"}`)
+	if nm.Accepted {
+		t.Fatal("whisper to display_name 'B' must be rejected (D1)")
+	}
+	if nm.Reason != "unknown_target" {
+		t.Fatalf("expected reason unknown_target for display-name target; got %q", nm.Reason)
+	}
+}
+
+func TestD1_Pay_RejectsDisplayName(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	nm := vc.submit("a", "pay", `{"target":"B","amount":5}`)
+	if nm.Accepted {
+		t.Fatal("pay to display_name 'B' must be rejected (D1)")
+	}
+}

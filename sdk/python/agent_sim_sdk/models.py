@@ -6,11 +6,21 @@ visual-regression test layer that loads recorded observations off disk.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, NewType, Optional, Union
 
 from pydantic import BaseModel, Field
 
 Pos = tuple[int, int]
+
+# D1 — every action verb that names another agent uses the entity_id
+# as the target, NEVER the display name. Display names can collide
+# (two agents both named "John") and an LLM hallucinating a name
+# should fail loudly, not silently hit the wrong target. EntityID is
+# a NewType over str — purely cosmetic at runtime but signals intent
+# to IDEs, type checkers, and bot authors. Engine handlers resolve
+# targets by direct entity_id map lookup; if the id isn't found, the
+# action is rejected with reason="unknown_target".
+EntityID = NewType("EntityID", str)
 
 
 class Facing(str, Enum):
@@ -142,8 +152,12 @@ class Speak(_Action):
 
 
 class Whisper(_Action):
+    """Whisper a message to a specific agent (1-tile adjacency required).
+    ``target`` is the recipient's ``entity_id`` from
+    ``observation.visible_entities[i].entity_id`` — NEVER a display
+    name. See D1 in PHASE_SOCIAL_EMERGENCE.md."""
     verb: Literal["whisper"] = "whisper"
-    target: str
+    target: EntityID
     text: str
 
 
