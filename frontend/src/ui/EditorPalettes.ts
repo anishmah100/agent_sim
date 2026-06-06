@@ -25,10 +25,14 @@ export const BUILDING_PALETTE: PaletteEntry[] = [
   { sprite: "bld:town_hall",  label: "Town hall",   height_tiles: 4, footprint_w: 6, footprint_h: 2, walkable: false },
   { sprite: "bld:watchtower", label: "Watchtower",  height_tiles: 5, footprint_w: 2, footprint_h: 2, walkable: false },
   { sprite: "bld:well",       label: "Well",        height_tiles: 1.5, footprint_w: 1, footprint_h: 1, walkable: false },
-  // Stalls — single-tile footprint, low height (open-air market goods)
-  { sprite: "bld:stall_red_bread_open",   label: "Stall — bread",  height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
-  { sprite: "bld:stall_blue_fruit_open",  label: "Stall — fruit",  height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
-  { sprite: "bld:stall_green_meat_open",  label: "Stall — meat",   height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
+  // Stalls — single-tile footprint, low height (open-air market goods).
+  // Sprite ids match the actual filenames under v2_market_stall/.
+  { sprite: "bld:stall_red_bread_open",     label: "Stall — bread",  height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
+  { sprite: "bld:stall_blue_fish_open",     label: "Stall — fish",   height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
+  { sprite: "bld:stall_green_veg_open",     label: "Stall — veg",    height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
+  { sprite: "bld:stall_gold_cheese_open",   label: "Stall — cheese", height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
+  { sprite: "bld:stall_purple_cloth_open",  label: "Stall — cloth",  height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
+  { sprite: "bld:stall_brown_smith_open",   label: "Stall — smith",  height_tiles: 2, footprint_w: 2, footprint_h: 1, walkable: false },
 ];
 
 // Items — pulled from the v2_items_master_v2 sheet via the sprite

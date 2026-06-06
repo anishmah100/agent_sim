@@ -139,17 +139,19 @@ func (w *World) TilesLegendMap() map[string]string {
 	return out
 }
 
-// DecorationEdit is the on-disk + on-wire shape for a decoration
-// add. Persisted to `<bundle>/decoration_edits.json` alongside the
-// tile_edits sidecar so editor placements survive engine restart.
+// DecorationEdit is the on-disk + on-wire shape for an editor
+// placement OR removal. Persisted to `<bundle>/decoration_edits.json`
+// alongside the tile_edits sidecar so editor changes survive engine
+// restart.
 //
-// Only "add" is supported. Removal would require an id; decorations
-// don't have stable ids in the bundle, so editor users can re-paint
-// over an unwanted decoration with a smaller / walkable one instead.
+// Op = "add" (default) inserts the decoration; Op = "remove" deletes
+// the topmost decoration whose footprint contains (X, Y). Removal
+// records use only Op + X + Y; the other fields are ignored.
 type DecorationEdit struct {
+	Op          string  `json:"op,omitempty"` // "" or "add" | "remove"
 	X           int     `json:"x"`
 	Y           int     `json:"y"`
-	Sprite      string  `json:"sprite"`
+	Sprite      string  `json:"sprite,omitempty"`
 	HeightTiles float64 `json:"height_tiles,omitempty"`
 	FootprintW  int     `json:"footprint_w,omitempty"`
 	FootprintH  int     `json:"footprint_h,omitempty"`
@@ -159,7 +161,11 @@ type DecorationEdit struct {
 // AddDecoration places a new decoration at (X, Y) with the given
 // sprite + footprint. Updates walkable/vision/buildingDoors to match
 // so the engine treats the new building / item just like a baked-in
-// one. Caller must hold the world write lock.
+// one. Rejects placements whose blocking footprint overlaps an
+// existing non-walkable decoration's footprint (i.e. you can't drop
+// a cottage on top of another cottage). Walkable items can stack
+// anywhere — they don't claim tiles.
+// Caller must hold the world write lock.
 func (w *World) AddDecoration(e DecorationEdit) error {
 	if e.X < 0 || e.Y < 0 || e.X >= w.WidthTiles || e.Y >= w.HeightTiles {
 		return fmt.Errorf("out_of_bounds:(%d,%d)", e.X, e.Y)
@@ -174,6 +180,37 @@ func (w *World) AddDecoration(e DecorationEdit) error {
 	fpH := e.FootprintH
 	if fpH < 1 {
 		fpH = 1
+	}
+	// Overlap check for blocking placements. Build the set of tiles
+	// this footprint claims, then look for any existing non-walkable
+	// decoration whose footprint intersects.
+	if !e.Walkable {
+		for dy := 0; dy < fpH; dy++ {
+			for dx := 0; dx < fpW; dx++ {
+				nx := e.X + dx
+				ny := e.Y - dy
+				if nx < 0 || nx >= w.WidthTiles || ny < 0 || ny >= w.HeightTiles {
+					continue
+				}
+				for _, d := range w.decorations {
+					if d.Walkable {
+						continue
+					}
+					dfpW := d.FootprintW
+					if dfpW < 1 {
+						dfpW = 1
+					}
+					dfpH := d.FootprintH
+					if dfpH < 1 {
+						dfpH = 1
+					}
+					if nx >= d.X && nx < d.X+dfpW && ny <= d.Y && ny > d.Y-dfpH {
+						return fmt.Errorf("collision:(%d,%d) blocked by %s @ (%d,%d)",
+							nx, ny, d.Sprite, d.X, d.Y)
+					}
+				}
+			}
+		}
 	}
 	w.decorations = append(w.decorations, DecorationRef{
 		X: e.X, Y: e.Y, Sprite: e.Sprite,
@@ -237,9 +274,105 @@ func (w *World) AddDecoration(e DecorationEdit) error {
 	return nil
 }
 
+// RemoveDecorationAt deletes the decoration covering (x, y) that the
+// user most likely meant to click — the LARGEST footprint that
+// contains the tile, breaking ties by latest-added. That maps cleanly
+// to "click on a visible cottage, get the cottage" even when a tiny
+// walkable item is dropped on top of it. Restores walkability +
+// vision for the tiles that decoration claimed. Returns the removed
+// decoration ref. Caller must hold the world write lock.
+func (w *World) RemoveDecorationAt(x, y int) (DecorationRef, error) {
+	if x < 0 || y < 0 || x >= w.WidthTiles || y >= w.HeightTiles {
+		return DecorationRef{}, fmt.Errorf("out_of_bounds:(%d,%d)", x, y)
+	}
+	// Find the largest-footprint match; tie-break with latest-added.
+	bestIdx := -1
+	bestArea := -1
+	for i := len(w.decorations) - 1; i >= 0; i-- {
+		d := w.decorations[i]
+		fpW := d.FootprintW
+		if fpW < 1 {
+			fpW = 1
+		}
+		fpH := d.FootprintH
+		if fpH < 1 {
+			fpH = 1
+		}
+		if !(x >= d.X && x < d.X+fpW && y <= d.Y && y > d.Y-fpH) {
+			continue
+		}
+		area := fpW * fpH
+		if area > bestArea {
+			bestArea = area
+			bestIdx = i
+		}
+	}
+	if bestIdx < 0 {
+		return DecorationRef{}, fmt.Errorf("no_decoration_at:(%d,%d)", x, y)
+	}
+	d := w.decorations[bestIdx]
+	fpW := d.FootprintW
+	if fpW < 1 {
+		fpW = 1
+	}
+	fpH := d.FootprintH
+	if fpH < 1 {
+		fpH = 1
+	}
+	w.decorations = append(w.decorations[:bestIdx], w.decorations[bestIdx+1:]...)
+	// Restore walkability / vision for this slab. Reset to the
+	// underlying tile's base walkability — if another decoration
+	// covers the same tile, a subsequent add will re-block it.
+	if !d.Walkable {
+		for dy := 0; dy < fpH; dy++ {
+			for dx := 0; dx < fpW; dx++ {
+				nx := d.X + dx
+				ny := d.Y - dy
+				if nx < 0 || nx >= w.WidthTiles || ny < 0 || ny >= w.HeightTiles {
+					continue
+				}
+				kind := w.tileKindGrid[ny][nx]
+				w.walkable[ny][nx] = walkableKinds[kind]
+				w.visionBlocks[ny][nx] = (kind == "wall")
+			}
+		}
+		// Also clear extra rows the visual envelope covered.
+		if d.HeightTiles >= 1.5 {
+			extra := int(d.HeightTiles) - fpH
+			if d.HeightTiles-float64(int(d.HeightTiles)) > 1e-9 {
+				extra++
+			}
+			if extra < 1 {
+				extra = 1
+			}
+			for k := 1; k <= extra; k++ {
+				ny := d.Y - fpH - (k - 1)
+				if ny < 0 {
+					continue
+				}
+				for dx := 0; dx < fpW; dx++ {
+					nx := d.X + dx
+					if nx >= 0 && nx < w.WidthTiles {
+						kind := w.tileKindGrid[ny][nx]
+						w.walkable[ny][nx] = walkableKinds[kind]
+					}
+				}
+			}
+		}
+	}
+	// If this was a building, drop its door registration.
+	if fpW >= 2 && strings.HasPrefix(d.Sprite, "bld:") {
+		doorX := d.X + fpW/2
+		doorY := d.Y + 1
+		delete(w.buildingDoors, Tile{doorX, doorY})
+	}
+	return d, nil
+}
+
 // ApplyDecorationEditsOverlay replays any persisted decoration_edits.json
 // on top of the base bundle's decorations. Called after Load so editor
-// placements survive engine restarts. Idempotent.
+// placements survive engine restarts. Op="" or "add" inserts;
+// Op="remove" deletes. Idempotent.
 func (w *World) ApplyDecorationEditsOverlay() error {
 	path := decoOverlayPath(w.sourcePath)
 	data, err := os.ReadFile(path)
@@ -256,8 +389,11 @@ func (w *World) ApplyDecorationEditsOverlay() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, e := range edits {
-		if err := w.AddDecoration(e); err != nil {
-			continue
+		switch e.Op {
+		case "remove":
+			_, _ = w.RemoveDecorationAt(e.X, e.Y)
+		default:
+			_ = w.AddDecoration(e)
 		}
 	}
 	return nil

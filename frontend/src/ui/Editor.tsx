@@ -179,16 +179,42 @@ export function Editor(props: EditorProps) {
 
         {/* Decoration-mode body — buildings + items share the same UI */}
         <Show when={category() !== "tile"}>
-          <PalettePicker
-            entries={category() === "building" ? BUILDING_PALETTE : ITEM_PALETTE}
-            selected={selectedDeco()}
-            onSelect={setSelectedDeco}
-            label={category() === "building" ? "Buildings" : "Items"}
-          />
-          <div style={{ opacity: "0.5", "font-size": "11px" }}>
-            Click the world to drop. Selected:{" "}
-            <code>{selectedDeco()?.label ?? "(none)"}</code>
+          <div>
+            <div style={{ opacity: "0.7", "margin-bottom": "4px" }}>Mode</div>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <For each={["paint", "erase"] as EditorTool[]}>
+                {(t) => (
+                  <button
+                    type="button"
+                    onClick={() => setTool(t)}
+                    style={toolBtnStyle(tool() === t)}
+                    data-testid={`tool-${t}`}
+                    title={t === "paint" ? "Click to place" : "Click to remove"}
+                  >
+                    {t === "paint" ? "place" : "remove"}
+                  </button>
+                )}
+              </For>
+            </div>
           </div>
+          <Show when={tool() === "paint"}>
+            <PalettePicker
+              entries={category() === "building" ? BUILDING_PALETTE : ITEM_PALETTE}
+              selected={selectedDeco()}
+              onSelect={setSelectedDeco}
+              label={category() === "building" ? "Buildings" : "Items"}
+            />
+            <div style={{ opacity: "0.5", "font-size": "11px" }}>
+              Click the world to drop. Selected:{" "}
+              <code>{selectedDeco()?.label ?? "(none)"}</code>
+            </div>
+          </Show>
+          <Show when={tool() === "erase"}>
+            <div style={{ opacity: "0.6", "font-size": "12px", "line-height": "1.4" }}>
+              Click a placed {category()} on the world to remove it.
+              The topmost match at that tile gets deleted.
+            </div>
+          </Show>
         </Show>
       </div>
     </Show>

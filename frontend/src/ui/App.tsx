@@ -144,7 +144,11 @@ export function App() {
         if (defaultGlyph) paintTileAt(ev.tileX, ev.tileY, defaultGlyph);
         return;
       }
-      if (editorOpen() && editorCategory() !== "tile" && editorDeco()) {
+      if (editorOpen() && editorCategory() !== "tile" && editorTool() === "erase") {
+        removeDecorationAt(ev.tileX, ev.tileY);
+        return;
+      }
+      if (editorOpen() && editorCategory() !== "tile" && editorTool() === "paint" && editorDeco()) {
         // Decoration drop — POSTs the engine then optimistically renders.
         dropDecorationAt(ev.tileX, ev.tileY, editorDeco()!);
         return;
@@ -158,6 +162,34 @@ export function App() {
         closeInspector();
       }
     });
+
+    // removeDecorationAt — engine deletes the topmost decoration at
+    // (tileX, tileY) and we mirror locally for instant feedback. Same
+    // overlay path as dropDecorationAt; the engine encodes the removal
+    // with op=remove so a restart still cleans up.
+    async function removeDecorationAt(tileX: number, tileY: number) {
+      if (tileX < 0 || tileY < 0) return;
+      // Optimistic local removal.
+      const removed = pixiHandle?.removeDecorationAt(tileX, tileY) ?? false;
+      try {
+        const { ENGINE_URL } = await import("../net/api");
+        const r = await fetch(
+          `${ENGINE_URL}/api/v1/world/edit_deco`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ op: "remove", x: tileX, y: tileY }),
+          },
+        );
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          console.warn(`deco remove rejected: ${body.reason ?? r.status}`);
+        }
+      } catch (e) {
+        console.warn(`deco remove failed: ${(e as Error).message}`);
+      }
+      void removed;
+    }
 
     // dropDecorationAt — POST to /api/v1/world/edit_deco + optimistically
     // render the new sprite locally. Real-time: the engine adds the

@@ -58,6 +58,10 @@ export interface PixiHandle {
    *  caller is responsible for POSTing to /api/v1/world/edit_deco
    *  for persistence; this method only updates the local view. */
   addDecoration(spec: import("./Decoration").DecorationSpec): Promise<void>;
+  /** Editor — remove the topmost decoration whose footprint contains
+   *  (tileX, tileY) from the local view. Returns true if something
+   *  was removed. The caller persists via POST. */
+  removeDecorationAt(tileX: number, tileY: number): boolean;
   ingestAudible(events: AudibleEvent[]): void;
   /** Editor — repaint one tile to a new glyph. Returns previous glyph
    *  for optimistic-update revert, or undefined if out of bounds. */
@@ -297,6 +301,9 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
     async addDecoration(spec) {
       await decorations.addOne(spec);
+    },
+    removeDecorationAt(tileX, tileY) {
+      return decorations.removeAt(tileX, tileY);
     },
 
     setTileGlyph(tileX, tileY, glyph) {

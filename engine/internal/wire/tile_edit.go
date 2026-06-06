@@ -95,8 +95,14 @@ func DecorationEditHandler(w *world.World) http.HandlerFunc {
 				editResp{OK: false, Reason: "bad_json"})
 			return
 		}
+		var err error
 		w.LockWrite()
-		err := w.AddDecoration(body)
+		switch body.Op {
+		case "remove":
+			_, err = w.RemoveDecorationAt(body.X, body.Y)
+		default:
+			err = w.AddDecoration(body)
+		}
 		w.UnlockWrite()
 		if err != nil {
 			respondEdit(rw, http.StatusBadRequest,

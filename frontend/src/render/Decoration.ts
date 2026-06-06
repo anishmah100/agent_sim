@@ -121,6 +121,57 @@ export class DecorationLayer {
     };
   }
 
+  /** Remove the decoration covering (x, y) the user most likely meant
+   *  to click — the LARGEST footprint match, tie-break by latest-added.
+   *  Mirrors the engine's RemoveDecorationAt so optimistic removal and
+   *  the engine response stay in sync. */
+  removeAt(x: number, y: number): boolean {
+    let bestIdx = -1;
+    let bestArea = -1;
+    for (let i = this.specs.length - 1; i >= 0; i--) {
+      const s = this.specs[i];
+      const fpW = s.footprint_w ?? 1;
+      const fpH = s.footprint_h ?? 1;
+      if (!(x >= s.x && x < s.x + fpW && y <= s.y && y > s.y - fpH)) continue;
+      const area = fpW * fpH;
+      if (area > bestArea) {
+        bestArea = area;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0) return false;
+    const i = bestIdx;
+    this.specs.splice(i, 1);
+    // Destroy the live sprite if it's currently materialized.
+    const live = this.liveSprites.get(i);
+    if (live) {
+      live.destroy({ children: true });
+      this.liveSprites.delete(i);
+    }
+    // Rebuild the bucket index from scratch — splice shifted every
+    // later index, so the old map is invalid. Cheap (n bucket
+    // operations vs. n^2 individual fixups).
+    this.bucketIndex.clear();
+    for (let j = 0; j < this.specs.length; j++) {
+      const sp = this.specs[j];
+      const bx = Math.floor(sp.x / DecorationLayer.BUCKET);
+      const by = Math.floor(sp.y / DecorationLayer.BUCKET);
+      const key = `${bx},${by}`;
+      let arr = this.bucketIndex.get(key);
+      if (!arr) { arr = []; this.bucketIndex.set(key, arr); }
+      arr.push(j);
+    }
+    // Re-key liveSprites under their new indices too.
+    const oldLive = new Map(this.liveSprites);
+    this.liveSprites.clear();
+    for (const [oldIdx, sprite] of oldLive) {
+      const newIdx = oldIdx > i ? oldIdx - 1 : oldIdx;
+      this.liveSprites.set(newIdx, sprite);
+    }
+    this.hasVis = false;
+    return true;
+  }
+
   /** Add a single decoration after the initial load — used by the
    *  editor to optimistically render a placement before the engine
    *  round-trip completes. Loads the texture if needed, then registers
