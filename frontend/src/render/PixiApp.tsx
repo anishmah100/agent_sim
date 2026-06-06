@@ -43,6 +43,11 @@ export interface PixiHandle {
   centerOn(tileX: number, tileY: number): void;
   fitToWorld(): void;
   setSelectedEntity(id: string | null): void;
+  /** Debug bridge for visual probes. Returns whether the named
+   *  entity's sprite container is currently visible (false when the
+   *  entity is inside a building). Null when the entity is not
+   *  tracked by the EntityLayer yet. */
+  entitySpriteVisible(id: string): boolean | null;
   onClick(handler: (ev: ClickEvent) => void): () => void;
   /** Pointer-enter on a non-vegetation decoration. The InfoPanel
    *  appears for as long as the pointer stays on the sprite. */
@@ -150,6 +155,8 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   if (import.meta.env.DEV) {
     (window as unknown as { __interior?: InteriorLayer }).__interior = interior;
     (window as unknown as { __viewport?: typeof viewport }).__viewport = viewport;
+    // __pixiHandle (with entitySpriteVisible) is set by App.tsx after
+    // mountPixiApp returns — that's the one tests should use.
   }
 
   // Click handler — installed once. App-level listeners register
@@ -293,6 +300,10 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
     setSelectedEntity(id: string | null) {
       entities.setSelected(id);
+    },
+
+    entitySpriteVisible(id: string): boolean | null {
+      return entities.spriteVisible(id);
     },
 
     onClick(handler) {

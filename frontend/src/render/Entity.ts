@@ -232,6 +232,16 @@ export class EntityLayer {
     return Array.from(this.items.values()).map((re) => ({ ...re.state }));
   }
 
+  // Debug bridge: report whether the entity's sprite container is
+  // currently visible. Used by the building visual probe to assert the
+  // "hide while inside_building" rule. Returns null if the entity has
+  // not been tracked yet.
+  spriteVisible(id: string): boolean | null {
+    const re = this.items.get(id);
+    if (!re) return null;
+    return re.container.visible !== false;
+  }
+
   setSelected(id: string | null): void {
     this.selectedId = id;
     if (id === null) {
