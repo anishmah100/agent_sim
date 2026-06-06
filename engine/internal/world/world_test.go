@@ -165,3 +165,93 @@ func TestObservationBuilder(t *testing.T) {
 		t.Fatal("A's observation should include B")
 	}
 }
+
+// TestObservation_VisibleItems_D8 — item entities surface in
+// visible_items, NOT visible_entities. Out-of-vision items and items
+// inside buildings are excluded.
+func TestObservation_VisibleItems_D8(t *testing.T) {
+	w := loadTestWorld(t)
+	// Place an item near A: apple at (2,1) — distance 1 from A at (1,1).
+	w.entities["apple1"] = &Entity{
+		EntityID:    "apple1",
+		Archetype:   "item",
+		DisplayName: "apple",
+		LogicalTile: Tile{2, 1},
+		Facing:      FacingS,
+		Extras:      map[string]any{"sprite": "item:apple"},
+	}
+	// Place a coin pile farther: distance 6 from A but still in vision.
+	w.entities["coins1"] = &Entity{
+		EntityID:    "coins1",
+		Archetype:   "item",
+		LogicalTile: Tile{7, 1},
+		Facing:      FacingS,
+		Extras:      map[string]any{"sprite": "item:coins_small_pile", "quantity": 10},
+	}
+	// Place an item far away (out of vision radius 12 from A).
+	w.entities["faraway"] = &Entity{
+		EntityID:    "faraway",
+		Archetype:   "item",
+		LogicalTile: Tile{1, 5},
+		Facing:      FacingS,
+		Extras:      map[string]any{"sprite": "item:wood_log"},
+	}
+	// All test world is small (10x6) so even 'faraway' is in radius 12
+	// — to actually test out-of-vision we need an item beyond vision.
+	// Override the radius for this test to 3 so coins1 (distance 6)
+	// and faraway are excluded.
+	opts := defaultObsOpts()
+	opts.Radius = 3
+	obs := w.BuildObservation(w.entities["a"], 1, &opts)
+	if obs == nil {
+		t.Fatal("nil observation")
+	}
+	// apple1 must be in visible_items.
+	var apple *VisibleItemState
+	for i := range obs.VisibleItems {
+		if obs.VisibleItems[i].EntityID == "apple1" {
+			apple = &obs.VisibleItems[i]
+		}
+	}
+	if apple == nil {
+		t.Fatalf("expected apple1 in visible_items, got %v", obs.VisibleItems)
+	}
+	if apple.Sprite != "item:apple" {
+		t.Errorf("expected sprite item:apple, got %q", apple.Sprite)
+	}
+	if apple.Label != "apple" {
+		t.Errorf("expected label apple, got %q", apple.Label)
+	}
+	if apple.Quantity != 1 {
+		t.Errorf("expected default quantity 1, got %d", apple.Quantity)
+	}
+	// coins1 and faraway must NOT appear (out of radius 3).
+	for _, vi := range obs.VisibleItems {
+		if vi.EntityID == "coins1" || vi.EntityID == "faraway" {
+			t.Errorf("did not expect %s in visible_items at radius 3, got %v",
+				vi.EntityID, obs.VisibleItems)
+		}
+	}
+	// Items must NOT appear in visible_entities (D8 split is the
+	// fundamental contract).
+	for _, ve := range obs.VisibleEntities {
+		if ve.EntityID == "apple1" {
+			t.Error("apple1 leaked into visible_entities; should be visible_items only")
+		}
+	}
+	// Now widen radius to 12 — coins1 must surface with quantity=10.
+	opts.Radius = 12
+	obs = w.BuildObservation(w.entities["a"], 2, &opts)
+	var coins *VisibleItemState
+	for i := range obs.VisibleItems {
+		if obs.VisibleItems[i].EntityID == "coins1" {
+			coins = &obs.VisibleItems[i]
+		}
+	}
+	if coins == nil {
+		t.Fatalf("expected coins1 in visible_items at radius 12, got %v", obs.VisibleItems)
+	}
+	if coins.Quantity != 10 {
+		t.Errorf("expected quantity 10, got %d", coins.Quantity)
+	}
+}

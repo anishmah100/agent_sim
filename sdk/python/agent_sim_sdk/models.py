@@ -57,6 +57,20 @@ class VisibleObject(BaseModel):
     state_summary: dict[str, Any] = Field(default_factory=dict)
 
 
+class VisibleItem(BaseModel):
+    """D8 — a pickup-able item entity within the agent's vision radius +
+    line of sight. Different from VisibleObject because items support
+    the `pickup` verb (whereas decorations only support interact-
+    affordance). The sprite carries the kind (e.g. ``"item:apple"``).
+    Quantity defaults to 1 for non-stackable items, higher for stacks
+    like coin piles."""
+    entity_id: str
+    sprite: str
+    pos: Pos
+    quantity: int = 1
+    label: Optional[str] = None
+
+
 class AudibleEvent(BaseModel):
     event_id: str
     kind: Literal["speech", "shout", "whisper", "sound"]
@@ -97,6 +111,9 @@ class Observation(BaseModel):
     self: SelfState
     visible_entities: list[VisibleEntity] = Field(default_factory=list)
     visible_objects: list[VisibleObject] = Field(default_factory=list)
+    # D8 — pickup-able items in vision + LOS. Empty when no items in
+    # range; engine returns items as entities of archetype="item".
+    visible_items: list[VisibleItem] = Field(default_factory=list)
     audible: list[AudibleEvent] = Field(default_factory=list)
     recent_self_results: list[dict[str, Any]] = Field(default_factory=list)
     known_map_summary: Optional[KnownMap] = None

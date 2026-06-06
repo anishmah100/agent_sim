@@ -72,6 +72,26 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 		if !w.SeesEntity(e, other, o.Radius) {
 			continue
 		}
+		// D8 — items split off into visible_items, not visible_entities.
+		// Different consumer affordance (pickup, not negotiate).
+		if other.Archetype == "item" {
+			sprite, _ := other.Extras["sprite"].(string)
+			if sprite == "" {
+				sprite = "item:" + other.EntityID
+			}
+			qty := 1
+			if q, ok := other.Extras["quantity"].(int); ok && q > 0 {
+				qty = q
+			}
+			obs.VisibleItems = append(obs.VisibleItems, VisibleItemState{
+				EntityID: other.EntityID,
+				Sprite:   sprite,
+				Pos:      other.LogicalTile,
+				Quantity: qty,
+				Label:    other.DisplayName,
+			})
+			continue
+		}
 		obs.VisibleEntities = append(obs.VisibleEntities, VisibleEntityState{
 			EntityID:      other.EntityID,
 			ApparentLabel: apparentLabel(other),
@@ -104,6 +124,11 @@ type Observation struct {
 	Self              SelfState             `json:"self"`
 	VisibleEntities   []VisibleEntityState  `json:"visible_entities"`
 	VisibleObjects    []VisibleObjectState  `json:"visible_objects"`
+	// D8 — items on the ground within vision + LOS. Populated from
+	// entities with Archetype="item". Different field from VisibleObjects
+	// because items are pickup-able (you can pickup verb them) whereas
+	// VisibleObjects (doors/decorations) only support interact afford.
+	VisibleItems      []VisibleItemState    `json:"visible_items,omitempty"`
 	Audible           []AudibleEvent        `json:"audible"`
 	RecentSelfResults []ActionResult        `json:"recent_self_results,omitempty"`
 	KnownMap          *KnownMapSummary      `json:"known_map_summary,omitempty"`
@@ -157,6 +182,19 @@ type VisibleObjectState struct {
 	Pos          Tile                   `json:"pos"`
 	Affordances  []string               `json:"affordances,omitempty"`
 	StateSummary map[string]interface{} `json:"state_summary,omitempty"`
+}
+
+// VisibleItemState — an item-archetype entity in vision + LOS. Items
+// are pickup-able via the `pickup` verb. `Sprite` carries the kind
+// (e.g. "item:apple"); `Quantity` defaults to 1 for non-stackable
+// items, higher for stacks like coin piles. `Label` is the human-
+// readable name if available.
+type VisibleItemState struct {
+	EntityID string `json:"entity_id"`
+	Sprite   string `json:"sprite"`
+	Pos      Tile   `json:"pos"`
+	Quantity int    `json:"quantity,omitempty"`
+	Label    string `json:"label,omitempty"`
 }
 
 type WorldClockState struct {
