@@ -817,6 +817,16 @@ func (w *World) Snapshot() WorldSnapshot {
 	ents := make([]*Entity, 0, len(w.entities))
 	for _, e := range w.entities {
 		cp := *e
+		// Deep-copy Extras. Without this, `cp.Extras` is still the
+		// live map pointer; the viewer hub serializes this snapshot
+		// AFTER we drop the read lock here, so Tick can be writing
+		// into the live entity's Extras while encoding/json iterates
+		// it (Entity.MarshalJSON in world.go ranges over e.Extras).
+		// That's the same class of bug we fixed in publishSnapshot()
+		// for the per-agent observation path — but every snapshot
+		// consumer (viewer, /world/info, persist) needed the same
+		// guard. Engine crashed mid-render in the live UI without it.
+		cp.Extras = copyExtras(e.Extras)
 		ents = append(ents, &cp)
 	}
 	return WorldSnapshot{
