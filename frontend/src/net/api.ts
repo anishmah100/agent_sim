@@ -32,8 +32,21 @@ export interface MentalStateResponse {
     top_goal: string;
     last_reflection: string;
     goal_stack_size: number;
+    // D14 — recommended slots (may be empty strings when no
+    // matching MentalNote has landed).
+    plan?: string;
+    beliefs?: string;
+    emotion?: string;
   };
   traces: Array<{ tick: number; action_id: string; verb: string; reasoning: string }>;
+  // D19 — per-pair social interaction counters keyed by peer entity_id.
+  peers?: Record<string, {
+    trade:    number;
+    whisper:  number;
+    pay:      number;
+    attack:   number;
+    contract: number;
+  }>;
 }
 
 export async function fetchMentalState(entityID: string): Promise<MentalStateResponse> {

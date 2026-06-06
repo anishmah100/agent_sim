@@ -27,6 +27,21 @@ export interface MindSnapshot {
   top_goal: string | null;
   last_reflection: string | null;
   goal_stack_size: number;
+  // D14 — recommended slots. Each is the latest non-empty value
+  // from the agent's MentalNote ring buffer.
+  plan?: string | null;
+  beliefs?: string | null;
+  emotion?: string | null;
+}
+
+// D19 — per-pair social interaction counters surfaced from the
+// engine's social ledger. Used by the Relationships tab.
+export interface SocialCounts {
+  trade: number;
+  whisper: number;
+  pay: number;
+  attack: number;
+  contract: number;
 }
 
 export interface TraceLine {
@@ -41,9 +56,11 @@ export interface MentalState {
   mind: MindSnapshot;
   traces: TraceLine[];
   capture_reasoning_enabled: boolean;
+  // D19 — per-pair counters keyed by the *other* agent's entity_id.
+  peers?: Record<string, SocialCounts>;
 }
 
-type Tab = "speech" | "mind" | "trace";
+type Tab = "speech" | "mind" | "trace" | "relationships";
 
 export function Inspector(props: {
   entity: EntityState | null;
@@ -142,6 +159,9 @@ export function Inspector(props: {
           <TabBtn current={tab()} value="mind" onClick={() => setTab("mind")}
                   label="Mind" enabled={mindVisible()}
                   disabledHint="share_planner=false" />
+          <TabBtn current={tab()} value="relationships"
+                  onClick={() => setTab("relationships")}
+                  label="Relationships" enabled />
           <TabBtn current={tab()} value="trace" onClick={() => setTab("trace")}
                   label="Trace" enabled={traceVisible()}
                   disabledHint={
@@ -160,6 +180,12 @@ export function Inspector(props: {
         </Show>
         <Show when={tab() === "trace" && traceVisible()}>
           <TraceTab traces={props.mentalState!.traces} />
+        </Show>
+        <Show when={tab() === "relationships"}>
+          <RelationshipsTab
+            peers={props.mentalState?.peers ?? {}}
+            selfId={props.entity?.entity_id ?? ""}
+          />
         </Show>
       </div>
     </Show>
@@ -244,6 +270,10 @@ function MindTab(props: { mind: MindSnapshot }) {
   const reflection = () => props.mind.last_reflection && props.mind.last_reflection.length > 0
     ? props.mind.last_reflection
     : "(no reflection yet — agent hasn't reflected, or share_reasoning=false)";
+  // D14 slots: render only the ones that carry text.
+  const plan      = () => props.mind.plan      && props.mind.plan.length      > 0 ? props.mind.plan      : null;
+  const beliefs   = () => props.mind.beliefs   && props.mind.beliefs.length   > 0 ? props.mind.beliefs   : null;
+  const emotion   = () => props.mind.emotion   && props.mind.emotion.length   > 0 ? props.mind.emotion   : null;
   return (
     <div data-testid="mind-tab" style={{ display: "grid", "row-gap": "10px" }}>
       <div>
@@ -255,6 +285,30 @@ function MindTab(props: { mind: MindSnapshot }) {
           {props.mind.goal_stack_size} goal(s) in stack
         </div>
       </div>
+      <Show when={plan()}>
+        <div>
+          <div style={{ color: "#8b9bb4", "margin-bottom": "2px" }}>Plan</div>
+          <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
+            {plan()}
+          </div>
+        </div>
+      </Show>
+      <Show when={beliefs()}>
+        <div>
+          <div style={{ color: "#8b9bb4", "margin-bottom": "2px" }}>Beliefs</div>
+          <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
+            {beliefs()}
+          </div>
+        </div>
+      </Show>
+      <Show when={emotion()}>
+        <div>
+          <div style={{ color: "#8b9bb4", "margin-bottom": "2px" }}>Emotion</div>
+          <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
+            {emotion()}
+          </div>
+        </div>
+      </Show>
       <div>
         <div style={{ color: "#8b9bb4", "margin-bottom": "2px" }}>Last reflection</div>
         <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
@@ -263,6 +317,96 @@ function MindTab(props: { mind: MindSnapshot }) {
       </div>
     </div>
   );
+}
+
+// D19 — Relationships tab. Renders the per-pair interaction counters
+// surfaced by /api/v1/agent/<id>/mental_state.peers. Sorts peers by
+// total interaction count desc so the strongest ties show first.
+function RelationshipsTab(props: {
+  peers: Record<string, SocialCounts>;
+  selfId: string;
+}) {
+  const rows = createMemo(() => {
+    const entries = Object.entries(props.peers).map(([peer, c]) => {
+      const total = c.trade + c.whisper + c.pay + c.attack + c.contract;
+      return { peer, c, total };
+    });
+    entries.sort((a, b) => b.total - a.total);
+    return entries;
+  });
+  return (
+    <Show
+      when={rows().length > 0}
+      fallback={
+        <div style={emptyStyle()}>
+          No social interactions logged yet.
+          <div style={{ "font-size": "10px", "margin-top": "6px",
+                        color: "#5a6988" }}>
+            Counters bump when this agent trades, whispers, pays, attacks,
+            or proposes / completes a contract with another agent.
+          </div>
+        </div>
+      }
+    >
+      <div data-testid="relationships-tab"
+           style={{ display: "grid", "row-gap": "8px" }}>
+        <div style={{ display: "grid",
+                      "grid-template-columns": "1fr repeat(5, 36px)",
+                      gap: "4px", "font-size": "10px",
+                      color: "#8b9bb4",
+                      "border-bottom": "1px solid #3a4466",
+                      "padding-bottom": "4px" }}>
+          <span>peer</span>
+          <span style={{ "text-align": "right", color: relColor("trade") }}>trd</span>
+          <span style={{ "text-align": "right", color: relColor("whisper") }}>wsp</span>
+          <span style={{ "text-align": "right", color: relColor("pay") }}>pay</span>
+          <span style={{ "text-align": "right", color: relColor("attack") }}>atk</span>
+          <span style={{ "text-align": "right", color: relColor("contract") }}>ctr</span>
+        </div>
+        <For each={rows()}>
+          {(row) => (
+            <div style={{ display: "grid",
+                          "grid-template-columns": "1fr repeat(5, 36px)",
+                          gap: "4px",
+                          "font-family": "ui-monospace, monospace",
+                          "font-size": "12px",
+                          "align-items": "center" }}>
+              <span title={row.peer}
+                    style={{ overflow: "hidden",
+                             "text-overflow": "ellipsis",
+                             "white-space": "nowrap" }}>
+                {row.peer}
+              </span>
+              <Cell n={row.c.trade}    color={relColor("trade")} />
+              <Cell n={row.c.whisper}  color={relColor("whisper")} />
+              <Cell n={row.c.pay}      color={relColor("pay")} />
+              <Cell n={row.c.attack}   color={relColor("attack")} />
+              <Cell n={row.c.contract} color={relColor("contract")} />
+            </div>
+          )}
+        </For>
+      </div>
+    </Show>
+  );
+}
+
+function Cell(p: { n: number; color: string }) {
+  return (
+    <span style={{ "text-align": "right",
+                   color: p.n > 0 ? p.color : "#3a4466" }}>
+      {p.n}
+    </span>
+  );
+}
+
+function relColor(kind: keyof SocialCounts): string {
+  switch (kind) {
+    case "trade":    return "#facc15";  // gold
+    case "whisper":  return "#a78bfa";  // purple
+    case "pay":      return "#34d399";  // green
+    case "attack":   return "#f87171";  // red
+    case "contract": return "#60a5fa";  // blue
+  }
 }
 
 function TraceTab(props: { traces: TraceLine[] }) {
