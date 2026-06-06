@@ -19,6 +19,39 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D21 — Weapons: damage bonus + reach distance
+
+Equipped weapon modifies combat:
+- **Unarmed**: 4 damage, reach 1 (adjacent only).
+- **Dagger**: +6 damage (10 total), reach 1, fastest action.
+- **Sword (short)**: +8 damage (12), reach 1.
+- **Sword (long)**: +12 damage (16), reach 1.
+- **Axe**: +14 damage (18), reach 1, slow.
+- **Club**: +2 damage (6), reach 1.
+- **Bow**: +6 damage (10), reach 3-6 (ranged), needs LOS, slow.
+- **Crossbow**: +10 damage (14), reach 3-6, slow reload.
+- **Hammer**: +8 damage (12), reach 1.
+
+(Exact numbers tunable in rulebook; calibrated to base HP 100.)
+
+**Why:** ranged weapons add tactical positioning — bows enable
+ambush + retreat-and-shoot dynamics that don't exist in
+melee-only worlds. Different niches mean weapon choice is
+context-dependent (bow if you're a sniper, dagger if you want
+hidden close-range, axe if you brawl). Combined with D9's
+equipped-weapon visibility, picking a weapon is also a public
+signal of strategy.
+
+**How to apply:**
+- `attack(target)` verb checks distance against the equipped
+  weapon's reach. Reject if out of range (`out_of_range`).
+- Engine's existing `attack_damage` tuning becomes per-weapon
+  via rulebook items[].props.damage.
+- Bow / crossbow require LOS (line of sight; walls block).
+- "Slow" weapons (bow, crossbow, axe) cost more action queue
+  budget — implementation: add cooldown ticks before next attack
+  is accepted. Tunable.
+
 ### D20 — Inventory: hard cap at 10 slots, 1 slot per item
 
 Every agent's inventory has 10 slots. Stacks (coin piles) count as
