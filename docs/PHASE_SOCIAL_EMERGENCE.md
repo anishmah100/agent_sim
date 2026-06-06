@@ -19,6 +19,57 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D2 — Adopt the 5 literature-converging design recommendations
+
+Full literature snapshot: `docs/research/SOCIAL_EMERGENCE_LITERATURE.md`.
+
+The deep-research workflow surfaced five mutually-compatible
+recommendations from converging primary sources. Adopted as the
+methodological floor of this phase:
+
+1. **Held-out evaluation scenarios behind a veil of ignorance** —
+   agents are trained / tuned on one scenario set; emergence is
+   measured on a held-out set the agent author never sees. Concordia
+   2024 demonstrated this prevents co-design exploitation AND exposed
+   real overfitting (dev-phase > eval-phase). Without this, results
+   aren't citable.
+2. **Tunable mechanism-design knobs grounded in Nowak's analytic rules.**
+   The world exposes `w` (repeat-encounter probability via spawn /
+   density / lifespan), `q` (gossip-channel reach / persistence), and
+   spatial locality as first-class dials. We can run identical
+   agents at different knob settings and predict the cooperation
+   direction. Falsifiable.
+3. **Quantitative non-circular emergence metrics.** No LLM-as-judge
+   for primary scoring (it's methodologically circular per Larooij &
+   Törnberg 2025, 22 of 35 surveyed studies fall into this trap).
+   Use cluster coefficients, wealth Gini, defection rates, gossip
+   half-life, contract honor-rates. LLM-judge is supplementary
+   narrative at most.
+4. **Frozen-bot background populations for zero-shot generalization
+   tests.** Borrow Melting Pot's pattern — a library of frozen
+   scripted bots forms the "environment" against which focal agents
+   are evaluated. Different background populations → different test
+   scenarios.
+5. **Modular substrate-vs-author decomposition (CRSEC-style).**
+   Substrate exposes: Spreading channels (observation + comm) and
+   Compliance hooks (action verbs). Agent author owns: Representation
+   (mental state encoding) and Evaluation (norm inference). Today's
+   architecture already follows this for norms; extend the same line
+   to social mechanics.
+
+**Why:** these five are the only ones supported by converging primary
+sources (Concordia, Nowak, Larooij/Törnberg, Melting Pot, CRSEC). They
+address documented failure modes in prior benchmarks.
+
+**How to apply:**
+- The world's tuning schema gets new knobs: `w_encounter`,
+  `q_gossip_reach`, `gossip_decay_ticks`, `spatial_locality_k`.
+- Frozen-bot library lives under `agents/baselines/` — each bot is
+  pinned to a commit + recorded behavior trace.
+- Metrics computed offline from event logs (already JSONL-backed),
+  not via LLM at evaluation time.
+- Hold out at least 2 of 5 scenarios from any agent author's training.
+
 ### D1 — Verb targets are entity_id, never display name
 
 All SDK action verbs that name another agent (whisper, pay, attack,
