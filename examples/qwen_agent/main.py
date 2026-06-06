@@ -209,13 +209,13 @@ async def main_async(args: argparse.Namespace) -> None:
                 pos, facing, visible_ents, visible_objs, audible,
             )
             try:
-                reflex = harness.reflex(obs)
-                if reflex is not None:
-                    log.info("cycle %d -> REFLEX batch verbs=%s reasoning=%r",
-                             cycle, [a.verb for a in reflex.actions],
-                             (reflex.reasoning or "")[:120])
-                    await agent.act_batch(reflex)
-                    continue
+                # NOTE: the reflex layer (HP<=5 → flee) is disabled for
+                # the Qwen smoke. Bound entities are pre-existing
+                # Eldoria NPCs whose hp has often been ravaged by the
+                # hunger system before the agent even connects, so
+                # reflex would fire on every cycle and the tactical
+                # brain would never run. The smoke is exercising the
+                # social + reflective layers, not survival heuristics.
                 new_reflection = harness.maybe_reflect()
                 batch = harness.tactical(obs)
                 batch = _post_tactical_nudge(obs, batch)
