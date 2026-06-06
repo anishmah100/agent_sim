@@ -332,11 +332,15 @@ type fileDecoration struct {
 }
 
 type fileEntity struct {
-	EntityID    string `json:"entity_id"`
-	Archetype   string `json:"archetype"`
-	Pos         [2]int `json:"pos"`
-	Facing      Facing `json:"facing"`
-	DisplayName string `json:"display_name"`
+	EntityID    string         `json:"entity_id"`
+	Archetype   string         `json:"archetype"`
+	Pos         [2]int         `json:"pos"`
+	Facing      Facing         `json:"facing"`
+	DisplayName string         `json:"display_name"`
+	// Extras lets world.json declare item entities with a sprite +
+	// quantity (e.g., scattered wealth from D7). Optional. Any keys
+	// land directly into entity.Extras.
+	Extras      map[string]any `json:"extras,omitempty"`
 }
 
 // objectArchetypes mirrors the closed set in
@@ -547,10 +551,16 @@ func Load(path string) (*World, error) {
 			LogicalTile:  tile,
 			WalkFromTile: tile,
 			WalkProgress: 1,
+			Extras:       fe.Extras,
 		}
 		e.recomputeRenderPos()
 		w.entities[fe.EntityID] = e
-		w.occupants[tile] = fe.EntityID
+		// Item entities don't claim tile occupancy (D7 + D8 — many items
+		// can share a tile; agents walk over them and pick them up).
+		// Agent-archetype entities still claim their tile.
+		if fe.Archetype != "item" {
+			w.occupants[tile] = fe.EntityID
+		}
 	}
 
 	// Replay any editor-placed decorations on top of the base bundle
