@@ -93,9 +93,9 @@ var defaultCategories = map[string]Category{
 }
 
 func main() {
-	artRoot := flag.String("art", "art", "art root directory")
-	out := flag.String("out", "art/manifests/sprites.json", "output catalog path")
-	overrides := flag.String("overrides", "art/manifests/sprites.overrides.json", "hand-tuned overrides file (merged over auto-detected)")
+	artRoot := flag.String("art", "worlds/eldoria/art", "art root directory")
+	out := flag.String("out", "worlds/eldoria/art/manifests/sprites.json", "output catalog path")
+	overrides := flag.String("overrides", "worlds/eldoria/art/manifests/sprites.overrides.json", "hand-tuned overrides file (merged over auto-detected)")
 	flag.Parse()
 
 	cat := &Catalog{

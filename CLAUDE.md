@@ -29,9 +29,8 @@ To stop everything: `./agent_sim stop`. PIDs are tracked under `.runlog/pids/`.
 | `frontend/` | TypeScript + PixiJS + Solid viewer. Live rendering, day/night, minimap, agent picker, world editor, mental-state inspector. |
 | `sdk/python/` | The agent SDK — typed actions, async observation iterator, `register_and_connect`. |
 | `sdk/typescript/` | Mirror skeleton for browser-based agents (early). |
-| `worlds/<name>/` | Self-contained world bundle: `world.json` + `bundle.toml` + `npcs.json` + `design/`. `eldoria/` is the 1500×1500 default. |
+| `worlds/<name>/` | Self-contained world bundle: `world.json` + `bundle.toml` + `npcs.json` + `design/` + `art/`. `eldoria/` is the 1500×1500 default. Each world owns its sprite art under `worlds/<name>/art/{manifests,processed,style.json}` — engine serves it at `/art/`. |
 | `examples/` | Runnable agents — `qwen_agent/` (4-layer Qwen brain), `claude_agent/` (Claude harness, currently stubbed), `heuristic_bot.py` (rule-based). |
-| `art/` | Sprite art served to the frontend. `manifests/` is the sprite catalog; `processed/` is what the renderer loads; `style.json` is the global anchor. Raw / rejected / legacy are gitignored. |
 | `tools/` | Dev tooling — `dev-scripts/` (smokes + scorers), `exp/` (experiment CLI), `journal/`, `judge/`, `loop/`, `metrics/`, `issue_jwt.py`. |
 | `docs/` | Current architecture + plan docs. Start with `docs/ARCHITECTURE.md`, `docs/AGENT_API.md`, `docs/VERB_REFERENCE.md`. |
 | `experiments/` | Output from the experiment framework — per-run scratchpads. |

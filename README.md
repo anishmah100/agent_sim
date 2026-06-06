@@ -47,8 +47,7 @@ For the Qwen agents, the local llama-server has to be reachable at `http://127.0
 | `frontend/` | TypeScript + PixiJS + Solid viewer. HD-2D rendering, day/night, minimap, agent picker, world editor, inspector. |
 | `sdk/python/` | Python SDK with typed actions, async observation iterator, and `register_and_connect()` convenience. |
 | `sdk/typescript/` | TS SDK skeleton (mirror of python, for browser-based agents later). |
-| `worlds/<name>/` | Self-contained world bundles. Each holds `world.json` + `bundle.toml` + `npcs.json` + `design/`. `worlds/eldoria/` is the 1500×1500 default; `dev_test/`, `dev_wilderness/`, `soak_1000x1000/` are fixtures. Select with `BUNDLE=…`. |
-| `art/` | Sprite art served to the frontend. `manifests/` is the sprite catalog; `processed/` is what the renderer loads; `style.json` is the global style anchor. Raw generations + intermediates are gitignored under `art/raw/`, `art/rejected/`, `art/_legacy/`. |
+| `worlds/<name>/` | Self-contained world bundles. Each holds `world.json` + `bundle.toml` + `npcs.json` + `design/` + `art/` (manifests, processed sprites, style anchor). `worlds/eldoria/` is the 1500×1500 default; `dev_test/`, `dev_wilderness/`, `soak_1000x1000/` are fixtures. Select with `BUNDLE=…`. Engine serves `worlds/<bundle>/art/` at `/art/`. |
 | `examples/` | Runnable agent examples — `qwen_agent/` (4-layer brain on Qwen3.6-27B), `claude_agent/` (4-layer brain stubbed for Claude), `heuristic_bot.py` (rule-based, no LLM). |
 | `tools/` | Developer tooling — `dev-scripts/` (UI smoke, editor E2E, A9 scorer, substrate exerciser, qwen smoke driver), `exp/`, `journal/`, `judge/`, `loop/`, `metrics/`, `issue_jwt.py`, `backup.sh`. |
 | `deploy/` | Fly.io deploy story for the engine. |

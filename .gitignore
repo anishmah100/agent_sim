@@ -45,15 +45,13 @@ Thumbs.db
 .runlog/
 
 # ── Art — raw generations + intermediates + legacy archive ──────────
-# Only commit approved processed sprites + manifests. The art/
-# directory should never grow beyond the current footprint of:
-#   art/manifests/   ← sprite catalog + per-sheet manifests
-#   art/processed/   ← derived sprites the renderer loads
-#   art/style.json   ← global style anchor
-art/raw/
-art/rejected/
-art/_legacy/
-art/__pycache__/
+# Each world bundle owns its art under worlds/<bundle>/art/. Only
+# commit approved manifests/, processed/, and style.json. Raw
+# generations, rejects, and legacy archives stay local.
+worlds/*/art/raw/
+worlds/*/art/rejected/
+worlds/*/art/_legacy/
+worlds/*/art/__pycache__/
 
 # ── World runtime ────────────────────────────────────────────────────
 worlds/snapshots/*.bin

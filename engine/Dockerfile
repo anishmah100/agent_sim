@@ -13,11 +13,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=build /out/agent_sim_engine /usr/local/bin/agent_sim_engine
 
-# Worlds + art baked into the image so the engine boots standalone.
-# Each world is a self-contained bundle under /worlds/<name>/.
+# Worlds (with their art) baked into the image so the engine boots
+# standalone. Each world is a self-contained bundle under
+# /worlds/<name>/ — art lives at /worlds/<name>/art/.
 # Override BUNDLE env to switch maps.
 COPY worlds /worlds
-COPY art/processed /art/processed
 
 EXPOSE 8080
 

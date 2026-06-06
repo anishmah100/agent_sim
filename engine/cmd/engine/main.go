@@ -312,12 +312,18 @@ func main() {
 		})
 	}
 
-	// art/ is sibling-of-worlds in the repo. Convention: repo_root/art
-	// and repo_root/worlds. Compute repo root from world flag.
-	repoRoot := filepath.Dir(worldsDir)
-	artDir := filepath.Join(repoRoot, "art")
+	// Art lives inside the bundle: worlds/<bundle>/art/. Each world
+	// owns its visual assets (manifests + processed sprites + style
+	// anchor), so swapping bundles swaps the look-and-feel cleanly
+	// without a shared top-level art/ directory full of unrelated
+	// assets bleeding across worlds.
+	//
+	// bundleArtDir resolution:
+	//   - bundle mode: worlds/<bundle>/art/
+	//   - legacy single-file mode: same dir as world.json + /art
+	bundleArtDir := filepath.Join(filepath.Dir(worldSrc), "art")
 	mux.Handle("/art/", http.StripPrefix("/art/",
-		corsHandler(http.FileServer(http.Dir(artDir)))))
+		corsHandler(http.FileServer(http.Dir(bundleArtDir)))))
 
 	srv := &http.Server{
 		Addr:              *flagAddr,
