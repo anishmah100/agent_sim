@@ -47,7 +47,7 @@ the Fly deploy story in `deploy/`, and the onboarding + agent-join UI in
 
 ### SDK
 - [x] Python SDK README rewritten — quickstart, verb reference table, observation shape, auth notes.
-- [x] Hierarchical agent example documented (`examples/hierarchical_agent.py`).
+- [x] Hierarchical agent example documented (`examples/qwen_agent/main.py`).
 - [x] LLM provider flexibility — `LLM_URL`, `LLM_MODEL`, `LLM_API_KEY` env vars; works with any OpenAI-compat backend (Qwen/llama.cpp, OpenAI, vLLM, Ollama).
 - [x] `Pathfinder` shipped in SDK — A* over the static walkability grid + dynamic blocker updates per observation. 7/7 unit tests + integration validated against the live engine.
 - [x] LLM brain expanded for adversarial / emergent behavior — `intimidate`, `steal`, `deceptive_task`, `revenge`, `ally` goal kinds with `say` field for in-character speech; persona-driven decisions verified producing in-character threats ("Brakk: 'Die and give me your gold'"; Vard: "'Your arm broke. Now your neck does.'").
@@ -86,7 +86,7 @@ the Fly deploy story in `deploy/`, and the onboarding + agent-join UI in
 
 ## Recommended launch order
 
-1. **Local smoke**: `./start.sh`, click "join as agent" in the UI, verify the modal flow shows credentials + WS first-observation success. (E2E covers this — run after dev server is up.)
+1. **Local smoke**: `./agent_sim start`, click "join as agent" in the UI, verify the modal flow shows credentials + WS first-observation success. (E2E covers this — run after dev server is up.)
 2. **`fly deploy`** from `deploy/README.md`. Verify `/healthz`, `/api/v1/world/info`, `/metrics`.
 3. **Persistent-volume verify**: write a snapshot, redeploy, confirm restore.
 4. **JWT smoke**: register an agent with an unsigned token → expect 401. Register with a valid token → expect 200.
@@ -96,7 +96,7 @@ the Fly deploy story in `deploy/`, and the onboarding + agent-join UI in
 
 ## Quality bar reminders (durable)
 
-- HeartGold-tier visuals — see `docs/ANTI_MESS_PLAN.md`.
+- HeartGold-tier visuals — see `docs/ARCHITECTURE.md`.
 - Engine stays dumb; scenarios stay smart — `docs/ARCHITECTURE.md` §2.
 - One process per world — multi-tenant per-process out of scope.
 - Sprite handling: one at a time, manual inspection, no folder-glob scripts (re-affirmed multiple times during the v2 art cleanup).

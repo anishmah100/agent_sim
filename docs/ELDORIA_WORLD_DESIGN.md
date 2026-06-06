@@ -149,4 +149,4 @@ Tier 0:  Stonemoor       (360, 200)   Coldbrook    (130, 320)
 Audit invariant: every settlement coord must sit on a non-water tile,
 verified by the `worlds/eldoria/design/audit_eldoria.py` script (or the
 in-line Python in the CLAUDE history under
-`docs/CLEANUP_PLAN.md`).
+`docs/ARCHITECTURE.md`).

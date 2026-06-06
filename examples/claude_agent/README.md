@@ -32,7 +32,7 @@ swapping a stub for the real Anthropic client is a one-line change.
 
 ## Why feature-flag the API
 
-Per the locked decisions (see `PROGRESS.md` row 1) the user is holding
+Per the locked decisions the user is holding
 off on the API key until the Qwen path is verified to produce
 interesting behavior end-to-end. The harness ships so it can be
 inspected, reviewed, and tested against the stub.

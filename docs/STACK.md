@@ -78,7 +78,7 @@ Considered, rejected:
 | **Go** | post-v1 | For users who want raw performance. |
 
 Example bots we ship:
-- `examples/hello_qwen.py` — local llama.cpp, no API key needed.
+- `examples/qwen_agent/` — local llama.cpp, no API key needed.
 - `examples/hello_anthropic.py` — Anthropic Claude SDK, key from env.
 - `examples/heuristic_bot.py` — rule-based, no LLM, useful for population fillers.
 

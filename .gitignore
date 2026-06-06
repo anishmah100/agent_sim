@@ -1,4 +1,4 @@
-# Build outputs
+# ── Build outputs ────────────────────────────────────────────────────
 node_modules/
 dist/
 build/
@@ -6,48 +6,60 @@ build/
 *.so
 vendor/
 
-# Python
+# Go binaries (rebuilt by `./agent_sim start`)
+engine/engine
+engine/genart_manifest
+engine/jsonl2sqlite
+engine/genworld_pretty
+engine/cmd/*/main.test
+
+# ── Python ───────────────────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
 
-# IDE
+# ── Editor / IDE ─────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *~
 
-# Env / secrets
+# ── Env / secrets ────────────────────────────────────────────────────
 .env
 .env.local
 *.pem
 *.key
 
-# OS
+# ── OS junk ──────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Logs / runtime
+# ── Logs / runtime ───────────────────────────────────────────────────
 *.log
 /tmp/
 /data/
 *.sqlite
 *.sqlite-journal
 
-# Art intake — only commit approved frames + atlases, not raw generations
+# ── Local run artifacts from ./agent_sim ─────────────────────────────
+.runlog/
+
+# ── Art — raw generations + intermediates + legacy archive ──────────
+# Only commit approved processed sprites + manifests. The art/
+# directory should never grow beyond the current footprint of:
+#   art/manifests/   ← sprite catalog + per-sheet manifests
+#   art/processed/   ← derived sprites the renderer loads
+#   art/style.json   ← global style anchor
 art/raw/
 art/rejected/
+art/_legacy/
+art/__pycache__/
 
-# World snapshot files — keep schema but not state dumps
+# ── World runtime ────────────────────────────────────────────────────
 worlds/snapshots/*.bin
+# Live editor scratch — re-applied on every engine boot via the
+# tile-edits overlay; shouldn't pollute git history.
+worlds/*/tile_edits.json
 
-# Claude Code session metadata
+# ── Claude Code session metadata ─────────────────────────────────────
 .claude/
-
-# Local run artifacts from ./start.sh
-.runlog/
-engine/genart_manifest
-
-# Build artifacts (binaries from go run/test)
-engine/jsonl2sqlite
-engine/cmd/*/main.test

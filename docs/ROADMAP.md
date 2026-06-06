@@ -97,9 +97,9 @@ Goal: an agent connects, registers, receives obs, submits actions. Example bots 
 - **In-Go rasterizer**: renders a per-agent N×N tile crop into PNG/WebP at observation time. Reads from the shared art atlas (same file the frontend uses).
 - **Default crop size locked**: experiment with 5×5, 7×7, 11×11; pick by which reads best in a multimodal LLM at minimum token cost. Document in docs/OBSERVATION_MODEL.md.
 - Example: `examples/heuristic_bot.py` — rule-based wanderer (structured).
-- Example: `examples/hello_qwen.py` — local llama.cpp Qwen (structured).
+- Example: `examples/qwen_agent/` — local llama.cpp Qwen (structured).
 - Example: `examples/hello_anthropic.py` — Anthropic Claude (structured).
-- Example: `examples/hello_claude_vision.py` — Anthropic Claude with vision, requests `mode: both`, demos spatial reasoning from the image crop.
+- Example: `examples/claude_agent/` — Anthropic Claude with vision, requests `mode: both`, demos spatial reasoning from the image crop.
 - Test all four running simultaneously against the engine.
 
 **Gate:**

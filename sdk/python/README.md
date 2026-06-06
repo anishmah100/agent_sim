@@ -121,7 +121,7 @@ The `extras` dict on `self` is the FULL set (inventory, contracts, etc.). On `vi
 
 ## Hierarchical agent reference
 
-See `examples/hierarchical_agent.py` for a production-grade pattern:
+See `examples/qwen_agent/main.py` for a production-grade pattern:
 - Slow LLM brain ticks every 8s, sets a high-level `Goal`.
 - Fast deterministic controller ticks every cadence_ms (default 600ms), executes one primitive Action based on the current goal.
 

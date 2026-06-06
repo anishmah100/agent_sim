@@ -201,7 +201,7 @@ Round 2 of the project. Round 1 (`~/projects/province_sim/`) shipped a working s
 - Visual regression CI from day 1.
 - Reference screenshot gate at every milestone.
 - Buy/commission if 3 AI gen attempts don't pass.
-- See `docs/ANTI_MESS_PLAN.md` for the full plan.
+- See `docs/ARCHITECTURE.md` for the full plan.
 
 the maintainer approved this plan.
 
@@ -368,7 +368,7 @@ the maintainer approved this plan.
 
 **Question (from the maintainer mid-session):** We need a CLEAR plan to reach HeartGold-tier quality. Round 1 had no path there.
 
-**Answer:** Captured in full in `docs/ANTI_MESS_PLAN.md`. Key commitments:
+**Answer:** Captured in full in `docs/ARCHITECTURE.md`. Key commitments:
 1. Lock visual anchor with a real reference set BEFORE generating world art.
 2. Style guide as code (palette + dims + animation specs) enforced by intake pipeline.
 3. Generate ONE perfect asset, compare to reference, lock the bar, scale.

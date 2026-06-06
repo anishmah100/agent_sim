@@ -1,94 +1,100 @@
 # agent_sim
 
-A persistent, browser-based 2D tile-RPG world where AI agents (and eventually humans) walk around, talk, fight, and pursue goals. Users sign up, attach a custom agent, and check in to watch their agent interact with others.
+A persistent, browser-based 2D tile-RPG world where AI agents walk around, talk, fight, and pursue goals. Users sign up, attach a custom agent, and check in to watch their agent interact with others.
 
-**This file is the entry point for a fresh Claude Code session.** Read this first, then `docs/` for depth.
-
----
-
-## ⚡ ACTIVE: June 2026 v2 push (24 phases)
-
-A long-running autonomous execution is in flight. Before doing ANY work
-in this repo, read:
-
-1. **`PROGRESS.md`** — live phase tracker + 11 locked decisions (do NOT re-litigate)
-2. **`RESUME_LOG.md`** — append-only per-phase log; tells you exactly where the
-   previous session was if it crashed mid-phase
-3. **`docs/WORLD_SYSTEM_PLAN.md`** + **`docs/EXPERIMENT_SYSTEM_PLAN.md`** +
-   **`docs/AGENT_ARCHITECTURE_PLAN.md`** — the three locked plan docs (24 phases)
-
-If `PROGRESS.md` says a phase is `[in_progress]` and you don't see a matching
-commit in `git log`, your job is to finish that phase (or roll it back),
-update PROGRESS.md + RESUME_LOG.md, commit, push, then proceed to the next
-phase. **Always commit + push after each phase.** The user might lose wifi
-at any time and a future session needs to be able to resume cleanly from
-the remote.
+**This file is the entry point for a fresh Claude Code session.** Read this first, then jump into `docs/` for depth on whatever you're touching.
 
 ---
 
-## What this project is
+## TL;DR — what to do in a fresh session
 
-A polished, top-down tile-based MMORPG world running in the browser, populated by autonomous agents. The viral hook: **"my agent is living its life in the simulation."** Users provide a persona + a backend (their own LLM endpoint); we run their character in the world.
+```sh
+./agent_sim start            # build + boot engine + frontend
+./agent_sim status           # confirm it's up
+./agent_sim agents 3         # spawn 3 Qwen LLM agents (needs llama-server :8782)
+```
 
-Quality bar: **Pokémon HeartGold-tier visual polish.** No debug grids, no misaligned overlays, no half-finished widgets. We hit this bar via locked style guide + inherited libraries + a quality gate at every milestone. See `docs/ANTI_MESS_PLAN.md`.
+Open <http://127.0.0.1:5173>, click **agents** to find your LLM bots, **editor** to paint tiles, **rulebook** for the verb manifest.
 
-This is **round 2** of a project. Round 1 (`~/projects/province_sim/`) shipped a working substrate but never reached polish. The lessons from round 1 are baked into round 2 — see `docs/DECISIONS.md` for the full Q&A that drove these picks.
+To stop everything: `./agent_sim stop`. PIDs are tracked under `.runlog/pids/`.
 
-## Read these before you do anything
+---
 
-The most authoritative docs (Session 2 Q&A; supersedes earlier ones where they conflict):
+## Project shape
 
-| File | What it tells you |
-|---|---|
-| `docs/DECISIONS.md` | The Q&A sessions that produced the plan. **Session 2 (Q32-Q61) is the current source of truth** for architecture. Read this first. |
-| `docs/SYSTEM_ARCHITECTURE_V2.md` | The phased-pipeline + event-bus + composable-systems + spatial-index engine architecture. |
+| Path | What it owns |
+| --- | --- |
+| `agent_sim` | Single launcher: `start / stop / restart / status / agents [N] / help`. |
+| `engine/` | Go engine. 60 Hz tick, composable systems, snapshot persistence, WS protocol, HTTP API, security middleware. |
+| `frontend/` | TypeScript + PixiJS + Solid viewer. Live rendering, day/night, minimap, agent picker, world editor, mental-state inspector. |
+| `sdk/python/` | The agent SDK — typed actions, async observation iterator, `register_and_connect`. |
+| `sdk/typescript/` | Mirror skeleton for browser-based agents (early). |
+| `worlds/<name>/` | Self-contained world bundle: `world.json` + `bundle.toml` + `npcs.json` + `design/`. `eldoria/` is the 1500×1500 default. |
+| `examples/` | Runnable agents — `qwen_agent/` (4-layer Qwen brain), `claude_agent/` (Claude harness, currently stubbed), `heuristic_bot.py` (rule-based). |
+| `art/` | Sprite art served to the frontend. `manifests/` is the sprite catalog; `processed/` is what the renderer loads; `style.json` is the global anchor. Raw / rejected / legacy are gitignored. |
+| `tools/` | Dev tooling — `dev-scripts/` (smokes + scorers), `exp/` (experiment CLI), `journal/`, `judge/`, `loop/`, `metrics/`, `issue_jwt.py`. |
+| `docs/` | Current architecture + plan docs. Start with `docs/ARCHITECTURE.md`, `docs/AGENT_API.md`, `docs/VERB_REFERENCE.md`. |
+| `experiments/` | Output from the experiment framework — per-run scratchpads. |
+| `schemas/` | Wire protocol schemas (FlatBuffers). |
+| `deploy/` | Fly.io deploy story for the engine. |
+| `memory/` | Project memory file used across Claude Code sessions. |
+
+## Architectural principles (durable, don't violate)
+
+1. **Engine is dumb. Scenarios are smart.** Money / combat / vitality / property / construction / trade / loot — all in composable systems above the engine. The engine knows entities, positions, vision, hearing, ticks.
+2. **One server hosts one world.** Same binary, different `-bundle` flag = different world.
+3. **Agents are external clients.** They register over HTTP, connect over WS, receive observations, submit actions. The engine never imports agent code.
+4. **Each agent sets its own cadence.** Slow agents get less responsive observations; the world doesn't block on them. Speed-vs-smarts is the agent's tradeoff.
+5. **All context lives in this repo.** Plans, decisions, design rationale all in `docs/` or `memory/`. A fresh session in this directory must have full context.
+6. **Pick the right tool per layer.** Backend is Go, frontend is TS + Pixi + Solid, agents are Python, art tooling is Python — no stack-uniformity bias.
+
+## Regression gates
+
+Before declaring a substrate change shipped:
+
+```sh
+# Engine + SDK
+( cd engine && go test ./... )
+python -m pytest sdk/python/tests/
+
+# UI — stack must be up (./agent_sim start)
+node tools/dev-scripts/ui_smoke.mjs         # engine alive, WS open, world rendering
+node tools/dev-scripts/ui_editor_e2e.mjs    # click-to-paint round-trips to disk
+```
+
+The UI smokes are the gate that catches "scaffolded but not wired" bugs — earlier work shipped several UI panels that fetched hardcoded empty data; the smokes stop that.
+
+## Authoritative docs
+
+Most-current architecture references:
+
+| File | What it covers |
+| --- | --- |
+| `docs/ARCHITECTURE.md` | Engine + scenario layer model. |
+| `docs/SYSTEM_ARCHITECTURE_V2.md` | The phased-pipeline + event-bus + composable-systems architecture. |
 | `docs/AGENT_API.md` | The bot ↔ engine contract: HTTP register, WS observation/action, rejection vocabulary. |
-| `docs/AFFORDANCE_MANIFEST.md` | The single source of truth for what a world lets you do. Drives SDK validation + UI World Rulebook. |
-| `docs/CONSTRUCTION_PROCEDURAL.md` | The Townscaper-style procedural building system + fallback plan. |
+| `docs/AFFORDANCE_MANIFEST.md` | Single source of truth for what a world lets you do. Drives the SDK + UI rulebook. |
+| `docs/VERB_REFERENCE.md` | Per-verb description, accept/reject reasons, emitted events. |
+| `docs/OBSERVATION_MODEL.md` | What an agent sees each tick. |
+| `docs/WIRE_PROTOCOL.md` | WebSocket lifecycle. |
+| `docs/MOVEMENT_AND_COLLISION.md` | Walkability + decoration footprint rules. |
+| `docs/ELDORIA_WORLD_DESIGN.md` | The default world: layout, regions, NPC archetypes. |
+| `docs/AGENT_ARCHITECTURE_PLAN.md` | The 4-layer agent brain (persona / reflective / tactical / reflex). |
+| `docs/EXPERIMENT_SYSTEM_PLAN.md` | Iteration loop, scorer, judge. |
+| `docs/FRONTEND_RENDERING.md` | Chunked rendering, atlases, LOD. |
+| `docs/ART_PIPELINE.md`, `docs/ART_STYLE_GUIDE.md` | Sprite intake + palette anchor. |
+| `docs/DECISIONS.md` | The Q&A sessions that produced the architecture. |
+| `docs/VISION.md`, `docs/STACK.md`, `docs/ROADMAP.md` | Product framing + tech rationale + milestone sequence. |
+| `docs/RUNBOOKS.md` | Operational recipes (deploy, restore from snapshot, mint JWT). |
 
-Original Session 1 docs (still valid where Session 2 doesn't supersede):
+## Lessons baked in (don't relearn)
 
-| File | What it tells you |
-|---|---|
-| `docs/VISION.md` | The product: who logs in, what they see, what they do, why it goes viral |
-| `docs/STACK.md` | Every tech pick with rationale + license + alternative considered |
-| `docs/ANTI_MESS_PLAN.md` | How we avoid the polish debt that killed round 1 |
-| `docs/ART_STYLE_GUIDE.md` | World art: palette, tile dims, sprite specs, AI gen prompt patterns |
-| `docs/OBSERVATION_MODEL.md` | What an agent sees each tick (mostly superseded by AGENT_API.md) |
-| `docs/VERB_REFERENCE.md` | Base verb vocabulary (mostly superseded by AFFORDANCE_MANIFEST.md) |
-| `docs/WIRE_PROTOCOL.md` | WebSocket lifecycle (mostly superseded by AGENT_API.md) |
-| `docs/ROADMAP.md` | Sequence of milestones with screenshot/validation gates |
-| `docs/ARCHITECTURE.md` | Original 4-layer model (Session 2's SYSTEM_ARCHITECTURE_V2.md is the active one) |
-
-## Core principles (durable, do not violate)
-
-1. **Engine is dumb. Scenarios are smart.** Money, combat, vitality, weather, voting — none of that is in the engine. Engine knows entities, positions, vision, hearing, ticks. Scenarios layer on rules. See `docs/ARCHITECTURE.md` §2.
-2. **One server hosts one world.** Manhattan world is one process. Rome world is another. The same engine binary runs both with different config. Multi-tenant per-process is out of scope.
-3. **Agents are external clients.** They connect via WebSocket, register, receive observation pushes, submit actions. The engine never imports agent code.
-4. **Each agent sets its own tick rate up to 1Hz.** Slow agents get less responsive; the world doesn't block. Speed-vs-smarts is a player tradeoff.
-5. **Track everything in this repo.** All plans, decisions, memory, design rationale live in `docs/` or `memory/`. A fresh session in this directory must have full context. **No external memory required.**
-6. **HeartGold quality gate at every milestone.** Side-by-side reference comparison or we don't proceed. If 3 attempts can't hit the bar, we buy/commission the asset instead of iterating broken output.
-7. **Pick the right tool per layer.** No bias toward stack uniformity. Backend is Go, frontend is TS + PixiJS + Solid, art tooling is Python + ChatGPT, etc. — each chosen on its merits.
-
-## Current state
-
-**Status: launch-ready (pending user `fly deploy`).** Engine + frontend + SDK + deploy story are all in place. See `docs/LAUNCH_CHECKLIST.md` for the full punch list and remaining gates.
-
-Snapshot of what's live:
-
-- Engine: composable systems, snapshot persistence, soak harness, security middleware (CORS allowlist + HS256 JWT + per-IP rate limit), all green Go tests.
-- Frontend: HD-2D viewport, four hand-authored interior themes, day/night, story feed, minimap with viewport indicator, join-as-agent modal, first-visit onboarding.
-- SDK: Python register/connect/brain loop with full verb coverage in models.py.
-- Deploy: `deploy/fly.toml` + `engine/Dockerfile` + `deploy/README.md` runbook.
-- Content: **Eldoria** is the default world — 1500×1500 procedurally generated
-  fantasy continent with 21 settlements (1 royal capital + 5 regional kingdoms
-  + 15 satellite villages), road mesh, river system, ~250 NPCs across 13
-  archetypes, ~14k decorations. Generator: `engine/cmd/genworld_pretty/`.
-  Legacy worlds still available via `BUNDLE=worlds/dev_test ./start.sh`
-  (60×40 Oak Hollow) or `worlds/dev_wilderness` (200×120 wilderness).
-  See `docs/ELDORIA_WORLD_DESIGN.md`.
-
-Next user-driven gate: `fly deploy` from `deploy/README.md` and a friends-list soft launch.
+- **AI gen needs a quality gate at intake.** Palette-quantize + dim-check at intake. Rejects go back for regen or get replaced with bought assets. Raw / rejected / legacy stay gitignored.
+- **Don't write the renderer / camera / tilemap.** Use `@pixi/tilemap` + `pixi-viewport`.
+- **Click handling needs down→up distance, not cumulative movement.** Mouse jitter latches the wrong way otherwise.
+- **UI panels that read from the engine must actually fetch live data.** Hardcoded empty returns + gated-by-permanently-false flags = invisible features for the user. Run the UI smokes.
+- **Snapshot publish must deep-copy any reference type.** A shallow struct copy with shared maps is a Tick/Marshal race waiting to happen.
+- **Every observable engine feature is ON by default in `./agent_sim start`.** The user shouldn't have to know which flag drives which UI tab.
 
 ## How to start a fresh Claude Code session
 
@@ -97,17 +103,4 @@ cd ~/projects/agent_sim
 claude
 ```
 
-Then in your first message, say what you want to work on. Claude will read CLAUDE.md automatically; reference the doc files in `docs/` by name when you want depth on something specific.
-
-## Lessons from province_sim that bind round 2
-
-These were learned the hard way; don't relitigate them:
-
-- **AI gen needs a quality gate at intake.** Last time we accepted broken sprites and patched downstream. This time: palette-quantize + dim-check + halo-detect at intake. Rejects go back for regen or get replaced with bought assets.
-- **YAML maps are a mistake.** Use LDtk (visual map editor). Engineers don't author maps in text.
-- **Don't write the renderer / camera / tilemap.** Use `@pixi/tilemap` + `pixi-viewport`. We're not a game engine company.
-- **Hand-rolled DOM widgets always look hacky.** Use Kobalte (Solid UI primitives) with one pinned theme.
-- **Phaser's "every object is a GameObject" model leaks into your code.** PixiJS gives finer control with cleaner architecture.
-- **Day/night as a misaligned rectangle is unacceptable.** Use a proper `ColorMatrixFilter` on the world container — that's what game engines do.
-- **Click handling needs down→up distance, not cumulative movement.** Mouse jitter latches the wrong way otherwise. Logged in `docs/ANTI_MESS_PLAN.md` so we don't relearn this.
-- **Test before claiming "done."** Screenshot every UI change. Run the dev server. No "trust me it works" handoffs.
+Then say what you want to work on. Claude will read this file automatically; reference doc files in `docs/` by name when you want depth.

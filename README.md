@@ -1,6 +1,6 @@
 # agent_sim
 
-A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents. Users sign up, attach a custom agent (LLM or rules), and watch their character interact with others in real time.
+A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents. Users sign up, attach a custom agent (LLM or rule-based), and watch their character interact with others in real time.
 
 > The viral hook: **"my agent is living its life in the simulation."**
 
@@ -14,7 +14,8 @@ A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents.
 - A polished top-down tile world (HeartGold-tier visual bar) ticking at 60 Hz on the server.
 - A pluggable engine with composable systems (combat, money, inventory, property, resources, construction, trade, loot, verbal-quests) and a JSON action API.
 - A Python SDK so any LLM or rule-based agent can register, observe, and act in 30 lines.
-- Hand-authored interiors for buildings, a day/night cycle, speech bubbles, a story feed, a minimap with viewport indicator, and a join-as-agent UI for new users.
+- A live world editor (click-to-paint tiles), an agent picker (find any connected LLM by name), and a mental-state inspector (dialogue + reasoning trace + reflective notes per agent).
+- Hand-authored interiors for buildings, a day/night cycle, speech bubbles with wrap, a story feed, a minimap, and a join-as-agent UI.
 - A deploy story (Fly.io) with persistent snapshots, JWT auth, CORS allowlist, and per-IP rate limiting on the registration endpoint.
 
 ## Quickstart
@@ -22,24 +23,39 @@ A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents.
 ```sh
 git clone https://github.com/anishmah100/agent_sim.git
 cd agent_sim
-./start.sh
+./agent_sim start            # builds + starts engine + frontend
+./agent_sim agents 3         # spawn 3 Qwen LLM agents (needs llama-server on :8782)
+./agent_sim status           # what's running
+./agent_sim stop             # clean shutdown
 ```
 
-`start.sh` builds the engine binary, brings up the Vite dev server, and (optionally) spawns the configured NPC subprocesses. Open <http://127.0.0.1:5173> and click **"join as agent"** to attach your own bot.
+Open <http://127.0.0.1:5173>. Click **agents** in the toolbar to find your LLM bots, **editor** to paint tiles, or **join as agent** to attach a manual persona.
+
+For the Qwen agents, the local llama-server has to be reachable at `http://127.0.0.1:8782` (the default). One-liner:
+
+```sh
+./llama.cpp/build/bin/llama-server -m models/Qwen3.6-27B-Q4_K_M.gguf \
+    -t 32 --reasoning-budget 0 --port 8782
+```
 
 ## Repo layout
 
 | Path | What's there |
 | --- | --- |
+| `agent_sim` | Single launcher script. Run `./agent_sim help` for subcommands. |
 | `engine/` | Go engine — composable systems, WS protocol, HTTP API, snapshot persistence, security middleware, soak harness. |
-| `frontend/` | TypeScript + PixiJS + Solid viewer. HD-2D rendering, day/night, minimap, story feed, join-as-agent modal, onboarding overlay. |
+| `frontend/` | TypeScript + PixiJS + Solid viewer. HD-2D rendering, day/night, minimap, agent picker, world editor, inspector. |
 | `sdk/python/` | Python SDK with typed actions, async observation iterator, and `register_and_connect()` convenience. |
-| `worlds/<name>/` | Self-contained world bundles. Each holds `world.json` + `bundle.toml` (manifest) + `npcs.json` (optional NPC supervisor config) + `design/` (procedural generator). `worlds/eldoria/` is the 1500×1500 default; `worlds/dev_test/`, `worlds/dev_wilderness/`, `worlds/soak_1000x1000/` are smaller fixtures. Select with `BUNDLE=…`. |
-| `art/` | Source + processed sprite art. The `strip_*` scripts are the slice cleanup pipeline. |
-| `examples/` | Sample agents — `hierarchical_agent.py` (slow LLM brain + fast deterministic controller), `heuristic_bot.py` (no-LLM rule-based), `deploy_fly/` (Fly template for an always-on **bot**, not the engine). |
-| `deploy/` | Fly deploy story for the **engine**. See `deploy/README.md`. |
-| `docs/` | Architecture, decision logs, affordance manifest, launch checklist. Start with `docs/LAUNCH_CHECKLIST.md` and `CLAUDE.md`. |
-| `memory/` | Project memory + state notes used by Claude Code sessions. |
+| `sdk/typescript/` | TS SDK skeleton (mirror of python, for browser-based agents later). |
+| `worlds/<name>/` | Self-contained world bundles. Each holds `world.json` + `bundle.toml` + `npcs.json` + `design/`. `worlds/eldoria/` is the 1500×1500 default; `dev_test/`, `dev_wilderness/`, `soak_1000x1000/` are fixtures. Select with `BUNDLE=…`. |
+| `art/` | Sprite art served to the frontend. `manifests/` is the sprite catalog; `processed/` is what the renderer loads; `style.json` is the global style anchor. Raw generations + intermediates are gitignored under `art/raw/`, `art/rejected/`, `art/_legacy/`. |
+| `examples/` | Runnable agent examples — `qwen_agent/` (4-layer brain on Qwen3.6-27B), `claude_agent/` (4-layer brain stubbed for Claude), `heuristic_bot.py` (rule-based, no LLM). |
+| `tools/` | Developer tooling — `dev-scripts/` (UI smoke, editor E2E, A9 scorer, substrate exerciser, qwen smoke driver), `exp/`, `journal/`, `judge/`, `loop/`, `metrics/`, `issue_jwt.py`, `backup.sh`. |
+| `deploy/` | Fly.io deploy story for the engine. |
+| `docs/` | Current architecture + plan docs. Start with `docs/ARCHITECTURE.md` and `docs/VERB_REFERENCE.md`. |
+| `experiments/` | Per-run output from the experiment framework. |
+| `schemas/` | Wire protocol schemas (FlatBuffers). |
+| `memory/` | Project memory file used by Claude Code sessions. |
 
 ## Run an agent against a live world
 
@@ -81,6 +97,7 @@ See `sdk/python/README.md` for the full verb reference, observation shape, and t
    ┌──────────────────────────────────────────────────────────┐
    │  Browser (Solid + PixiJS)                                │
    │    viewer WS  ◀──┐                                       │
+   │    agent picker ─┤   inspector + editor in the same UI   │
    │    join modal ──┐│                                       │
    └─────────────────┘│                                       │
                       │                                       │
@@ -97,10 +114,26 @@ See `sdk/python/README.md` for the full verb reference, observation shape, and t
 
 Engine principles:
 1. **Engine is dumb. Scenarios are smart.** Combat / money / weather / voting all live in composable systems above the engine.
-2. **One server hosts one world.** Same binary, different config = different world.
+2. **One server hosts one world.** Same binary, different bundle = different world.
 3. **Agents are external clients.** They connect via WS; the engine never imports agent code.
 
 Full architecture: `docs/SYSTEM_ARCHITECTURE_V2.md`.
+
+## Regression gates
+
+Before declaring a substrate change shipped, run:
+
+```sh
+# Backend
+( cd engine && go test ./... )
+python -m pytest sdk/python/tests/
+
+# UI — requires the stack to be up via `./agent_sim start`
+node tools/dev-scripts/ui_smoke.mjs         # 6 assertions: engine + WS + render
+node tools/dev-scripts/ui_editor_e2e.mjs    # click-to-paint round-trips to disk
+```
+
+The UI smokes are the gate that catches "scaffolded but not wired" bugs.
 
 ## Deploy
 

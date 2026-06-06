@@ -124,7 +124,7 @@ stone tile, etc.). Loaded once at boot in parallel via
 ## Future work
 
 - **`ArtCatalog`** — single manifest replacing the scattered sprite-URL
-  resolvers (see `docs/CLEANUP_PLAN.md`).
+  resolvers.
 - **Chunk pre-bake on world load** — background-bake all chunks within
   N of spawn during the splash screen. Currently lazy-bake only.
 - **WebGPU** — Pixi v8 will support it; would compress the filter

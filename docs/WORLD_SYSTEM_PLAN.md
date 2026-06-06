@@ -359,7 +359,7 @@ intentional clean-ups).
 7. Port the NPC pools → `npcs.yaml`.
 8. Port engine/internal/scenario/fantasy_town/ → `worlds/eldoria/scenario/`.
 9. Update `engine/cmd/engine/main.go` to import the active world's
-   scenario by full Go import path. Update `start.sh` to pass
+   scenario by full Go import path. Update `./agent_sim start` to pass
    `-world worlds/eldoria/`.
 10. Run `cmd/genworld -world worlds/eldoria/`; visual diff the result
     against the previous tiles.json. Fix discrepancies.

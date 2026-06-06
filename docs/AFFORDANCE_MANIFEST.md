@@ -185,7 +185,7 @@ Audit process when adding a new building sprite:
    the dev browser — verify the interior opens and the hover-glow
    filter fires.
 
-When `ArtCatalog` lands (see `docs/CLEANUP_PLAN.md`), this allowlist
+When `ArtCatalog` lands, this allowlist
 becomes a property on the sprite entry (`enterable: true`,
 `interior_template: "cottage"`) and the hardcoded record in
 `Decoration.ts` is removed.
