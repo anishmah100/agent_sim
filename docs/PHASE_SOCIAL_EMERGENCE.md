@@ -19,6 +19,40 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D17 — UI: cinematic, world canvas is hero, drill-down on click
+
+Layout philosophy:
+- **World canvas dominates** the viewport. Pan + zoom + entity
+  rendering as the visual spine.
+- **Always-on Story Feed strip** along one edge (bottom or right).
+  Shows the L1+L2 narrator output (D15) as live play-by-play —
+  one or two lines at a time, scrolling.
+- **Inspector + secondary panels collapsed by default.** Click an
+  agent → inspector slides in. Toolbar buttons toggle metrics
+  pulse, society graph, etc.
+- **Drill-down hierarchy**: spectator > inspector > tab.
+
+**Why:** the user's "complex web of behaviors at a glance" goal
+plus the "compelling cinematic" framing both point at a clean
+world-first surface. Dense dashboards lose viewers. The Story Feed
+gives the high-signal moment-to-moment narrative; clicking an
+agent reveals the depth on demand.
+
+**How to apply:**
+- Keep current Pixi viewport as the canvas. Resize so it fills
+  more of the screen (current ratio leaves a lot of empty top bar).
+- Story Feed: anchored bottom-right, ~360px wide, ~120px tall.
+  Auto-scrolls. Filterable (only L1, L1+L2, or include L3+L4 as
+  they fire). Renders the narrator's text output verbatim.
+- Inspector: slide-in from right when an entity clicked. Tabs
+  (Speech / Mind / Inventory / Witnesses / Relationships) — D18
+  decides the exact set.
+- Toolbar buttons: Story Feed toggle, Society Pulse toggle, Editor,
+  Agents Picker.
+- Hover preview (D17 corollary): hovering an agent shows a small
+  card with archetype + LLM/rule-based badge + HP bucket (no
+  click required for at-a-glance read).
+
 ### D16 — Rule-based archetype set (final)
 
 **v1 cast (rule-based, frozen at commit SHA per D12):**
