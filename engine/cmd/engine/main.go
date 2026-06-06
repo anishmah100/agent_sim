@@ -278,9 +278,37 @@ func main() {
 	// 2. The agent rasterizer (Milestone 4) needs to read the same
 	//    files as the frontend so server-rendered crops match.
 	// CORS open in v0.
-	worldsDir, _ := filepath.Abs(filepath.Dir(*flagWorld))
+	//
+	// worldsDir resolution. When the engine boots via -bundle (the new
+	// path), flagWorld is empty and filepath.Dir("") returns "." —
+	// the static serve then pointed at CWD, and the frontend's
+	// GET /worlds/eldoria.json 404'd. Frontend shows entities as
+	// rectangles on a black canvas with "world load failed:
+	// Unexpected token '<', '<!doctype ...". Anchor worldsDir to
+	// the actual source file we loaded from instead.
+	worldsDir, _ := filepath.Abs(filepath.Dir(worldSrc))
+	if filepath.Base(worldsDir) == filepath.Base(*flagBundle) {
+		// Bundle layout is worlds/<bundle>/world.json. The frontend
+		// requests /worlds/<name>.json — strip one more level so
+		// /worlds/eldoria.json resolves to worlds/eldoria/world.json
+		// via the alias below, and unrelated bundles under worlds/
+		// still resolve correctly.
+		worldsDir = filepath.Dir(worldsDir)
+	}
 	mux.Handle("/worlds/", http.StripPrefix("/worlds/",
 		corsHandler(http.FileServer(http.Dir(worldsDir)))))
+
+	// Bundle-mode alias: the frontend asks for /worlds/<name>.json
+	// (legacy single-file naming). With -bundle the file is actually
+	// at worlds/<name>/world.json. Map the alias so the frontend
+	// doesn't need to know about bundles.
+	if *flagBundle != "" {
+		bundleName := filepath.Base(*flagBundle)
+		alias := "/worlds/" + bundleName + ".json"
+		mux.HandleFunc(alias, func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, worldSrc)
+		})
+	}
 
 	// art/ is sibling-of-worlds in the repo. Convention: repo_root/art
 	// and repo_root/worlds. Compute repo root from world flag.
