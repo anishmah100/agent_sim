@@ -19,6 +19,50 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D10 — Death: full drop + non-omniscient identification
+
+When an agent dies (combat or starvation):
+
+1. **All inventory + gold + equipped drops** at the corpse tile as
+   item entities (existing behavior).
+2. **A death scream emits** as an Audible event of kind
+   `death_scream`. Large radius (~30-40 tiles, much wider than
+   shout's 15). Position is approximate ("a scream from the
+   north-east, near the well") — identity of the dead is
+   anonymous to non-witnesses.
+3. **Witnesses get full info.** Any agent with line-of-sight to
+   the killing-tile during the attack receives a separate event
+   `kill_witnessed { killer: entity_id, victim: entity_id, at: [x,y] }`
+   added to their observation's audible array. This is the
+   substrate for reputation: knowledge of "who killed whom" only
+   flows through witnessing + gossip.
+4. **Gossip is agent-driven.** Witnesses can choose to spread the
+   info via speak/shout/whisper. They can also lie (frame someone
+   else, or stay silent). The substrate provides truth to the
+   witness; what they DO with it is the social game.
+
+**Why this shape:** maps exactly onto Nowak's indirect-reciprocity
+rule `q > c/b`. The probability `q` that reputation reaches the next
+agent is the gossip-propagation rate, which is now an emergent
+property of WHO witnessed + chooses to talk, not a substrate
+mechanic. Predation is profitable (full drop) but socially
+expensive *if there are witnesses*. Killing in alleys when no one
+looks → low reputation cost. Killing in the market → high cost.
+Detective dynamics, plausible deniability, frame-ups, conspiracies
+all become first-class emergence.
+
+**How to apply:**
+- New audible event kind: `death_scream`, broadcast radius ~35
+  tiles, position approximate (rounded to nearest 5-tile cell).
+- New audible event kind: `kill_witnessed`, only delivered to
+  agents whose vision contained both killer + victim at the attack
+  tick. Carries true killer + victim entity_ids.
+- No engine-side "killer tag" or reputation counter. Reputation
+  lives entirely in agent memory and dialogue.
+- Combat in interiors (inside_building) suppresses witness events
+  for agents outside that building (literal hidden murder). The
+  scream still fires but is muffled (smaller radius, ~10 tiles).
+
 ### D9 — Inventory opaque, equipped + body damage visible, hunger private
 
 Visible to other agents about you:
