@@ -18,7 +18,8 @@ from dataclasses import dataclass
 from typing import Optional, Protocol
 
 from agent_sim_sdk import (
-    ActionBatch, Move, Speak, Wait,
+    ActionBatch, Move, Speak, Shout, Whisper, LookAt, Pickup, Give, Pay,
+    Enter, Exit, Wait,
     Observation, render_layered_observation,
 )
 
@@ -157,12 +158,35 @@ class Harness:
 
 
 def _action_from_dict(d: dict):
-    """Best-effort: turn a {verb, ...} dict into a typed SDK Action.
-    Falls back to Wait on unknown shapes. Real harness would route
-    every supported verb here."""
+    """Turn a {verb, ...} dict (as produced by the LLM under tactical
+    grammar) into a typed SDK Action. Returns Wait on any verb we
+    don't know — that's a brain bug worth fixing, not a runtime
+    crash.
+
+    Earlier version only handled move/speak/wait, so every shout /
+    whisper / enter / pickup / pay the LLM emitted was silently
+    converted to Wait — agents looked stuck on three verbs even when
+    the grammar gave them more options. The A9 smoke surfaced this
+    only because no Speech / EnteredBuilding events ever fired."""
     verb = d.get("verb", "wait")
     if verb == "move":
         return Move(target=tuple(d.get("target", (0, 0))))
     if verb == "speak":
         return Speak(text=d.get("text", ""))
+    if verb == "shout":
+        return Shout(text=d.get("text", ""))
+    if verb == "whisper":
+        return Whisper(target=d.get("target", ""), text=d.get("text", ""))
+    if verb == "look_at":
+        return LookAt(target=d.get("target", ""))
+    if verb == "pickup":
+        return Pickup(target=d.get("target", ""))
+    if verb == "give":
+        return Give(target=d.get("target", ""), item=d.get("item", ""))
+    if verb == "pay":
+        return Pay(target=d.get("target", ""), amount=int(d.get("amount", 0)))
+    if verb == "enter":
+        return Enter(target=d.get("target", ""))
+    if verb == "exit":
+        return Exit()
     return Wait(ticks=d.get("ticks", 60))
