@@ -19,6 +19,30 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D12 — Population: configurable, start small (10-20), scale up
+
+Experiment YAML declares the population mix per run:
+- `focal_llm_agents: N` (under measurement)
+- `background_rule_bots: { vendor: N, guard: N, scavenger: N, ... }`
+
+Substrate-validation iterations: 10-20 agents total. Once verbs +
+UI are stable: scale to 30-50, eventually 100 (literature's
+society threshold).
+
+**Why:** small runs are cheap (Anthropic budget, debugging speed)
+and isolate problems. Large runs reveal scaling effects (gossip
+network density, market crowding). One config knob serves both.
+Maps onto literature recommendation 4 (frozen-bot background
+populations as the test environment).
+
+**How to apply:**
+- Experiment YAML supports per-archetype counts.
+- Engine spawn loop reads the config; rule-based archetypes are
+  pinned at a commit SHA so a "frozen background bot" is a real
+  reproducibility primitive.
+- Initial scenarios target ~12 total (e.g., 6 LLM focal + 6
+  rule-based mixed background). Expandable without code changes.
+
 ### D11 — Variable time speed: 4x dev iteration, 1x demo recording
 
 Engine ticks at 60 Hz. In-game-to-wall-clock time speed is a
