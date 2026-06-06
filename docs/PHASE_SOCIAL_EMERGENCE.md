@@ -19,6 +19,52 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D25 — Autonomous execution contract
+
+User-authorized autonomy envelope for ripping through the plan:
+
+**Allowed without asking:**
+- Refactor engine, edit world.json, redesign UI mid-flight.
+- Commit + push regular (non-force) to master freely.
+- Start/stop llama-server.
+- Spend Anthropic API credits **up to $25 total cap**.
+
+**Forbidden without explicit per-session ask:**
+- Force-push.
+- Branch deletion.
+- History rewrite (rebase --interactive, reset --hard on public refs).
+- Any destructive remote operation.
+- Exceeding the $25 Anthropic spend cap.
+
+**Commit hygiene:** every change is a NEW commit (never amend) so
+git revert is one-step recovery.
+
+**Anthropic spending:** monitor budget continuously. Ping the user
+proactively when we're at ~80% ($20 spent) so they can decide
+whether to top up.
+
+**Disagreement / surprise protocol:** if I find a D is wrong,
+impossible, or a flaw surfaces:
+- Block on THAT thread only; keep building parallel ones.
+- Send an AskUserQuestion (becomes a phone notification per user's
+  remote-control setup) with the options.
+- Don't wait synchronously — work on other threads until the user
+  replies.
+
+**Status updates:** SendUserFile with status=proactive after every
+major visible change (UI screenshots, experiment-run plots, etc.).
+Brief text messages at phase boundaries.
+
+**API key setup (for the maintainer):**
+Set `ANTHROPIC_API_KEY` in environment OR write to `.env` at repo
+root:
+```
+ANTHROPIC_API_KEY=sk-ant-api03-...
+```
+Already-wired callers: `tools/judge/judge.py`,
+`examples/claude_agent/main.py`. Add to `.env.local` (gitignored)
+to avoid committing.
+
 ### D24 — Society Pulse view: deferred until substrate runs
 
 Design the metrics dashboard + cast-as-graph + L3/L4 narrator
