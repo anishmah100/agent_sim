@@ -19,6 +19,27 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D16 — Rule-based archetype set (round 1)
+
+**Confirmed for v1:**
+- **Survivor**: wanders, hunger-driven feeding, runs from armed
+  threats, never attacks. Peaceful background, victim class.
+- **Killer**: actively hunts. Target priority: armed + apparently
+  wealthy (inferred from observed behavior or HP bucket). Pursue,
+  attack, loot. Forces LLM agents to think about safety + alliance.
+- **Manipulator** (user-added): rule-based "scheme" archetype.
+  Approaches an LLM agent, builds small trust signals (gift,
+  friendly speech), proposes a contract (propose_task with
+  favorable terms), then DEFECTS — never completes, sometimes
+  attacks when the target is committed. Exercises D13's soft-
+  contract substrate from the adversarial side. Hard to
+  implement as pure rule-based; will be a small FSM with scripted
+  speech templates.
+
+**Open** (to be decided in round 2): vendor, guard, scavenger,
+mercenary, chaotic. Vendor especially needs resolution because
+D6's vendor-food pathway depends on it.
+
 ### D15 — Live hierarchical narrator at four levels
 
 Continuous summarization runs alongside the engine. Four levels:
