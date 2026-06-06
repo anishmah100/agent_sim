@@ -224,6 +224,31 @@ user, or a screenshot shows the working state, or it's not verified.
 
 ---
 
+## Reference: legacy non-agent entities in Eldoria
+
+Audited 2026-06-06 via Explore agent. Findings:
+
+- **250 entities** declared statically in `worlds/eldoria/world.json`
+  (entries 536-554). All `PlayerControlled=false`. Archetypes: child
+  (38), woodcutter (36), drifter (30), baker (26), mason (25),
+  cloaked_wanderer (21), goblin (15), iron_guard (14), trainer_red
+  (12), trainer_lyra_blue (12), blacksmith_npc (9), wizard (8),
+  mayor (4).
+- **Engine autonomous loop** at `world.go:887-903` runs every tick for
+  every non-PlayerControlled entity. Two behaviors:
+  - Pick random wander target every ~120 ticks (2 sec). Smooth path.
+  - Pick random demo action (`attack`/`interact`/`hit`) every ~300
+    ticks (5 sec). **This contaminates any social-emergence study —
+    NPCs throw demo attacks at each other.**
+- **2 intentional SDK-connected bots** from `worlds/eldoria/npcs.json`
+  running `examples/heuristic_bot.py`. Keep.
+- **Unused archetypes**: no archetype declared in world.json is
+  unreferenced. V2 character sprites (lumberjack/smith/goblin) exist
+  in art catalog but aren't yet wired to any bot type — separate
+  question.
+
+The 250 wanderers must go before we can measure anything social.
+
 ## Reference: current agent observation + action model
 
 (Source-of-truth snapshot from the codebase audit on 2026-06-06. Updated
