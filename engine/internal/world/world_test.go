@@ -166,6 +166,75 @@ func TestObservationBuilder(t *testing.T) {
 	}
 }
 
+// TestObservation_ExtrasSummary_D9 — visible_entities[i].extras_summary
+// must surface hp_bucket + equipped_slot + equipped_sprite from the
+// observed entity, NOT inventory/gold/hunger (which stay private).
+func TestObservation_ExtrasSummary_D9(t *testing.T) {
+	w := loadTestWorld(t)
+	// Equip B with a sword and put them at full HP.
+	w.entities["b"].Extras = map[string]interface{}{
+		"hp":      100,
+		"max_hp":  100,
+		"gold":    250,    // private — must NOT leak
+		"hunger":  0.85,   // private — must NOT leak
+		"inventory": []interface{}{"item:apple#1", "item:bread_loaf#2"},
+		"equipped": map[string]interface{}{
+			"weapon": "item:sword_short#7",
+		},
+	}
+	obs := w.BuildObservationFor("a", 1, nil)
+	var b *VisibleEntityState
+	for i := range obs.VisibleEntities {
+		if obs.VisibleEntities[i].EntityID == "b" {
+			b = &obs.VisibleEntities[i]
+		}
+	}
+	if b == nil {
+		t.Fatal("B should be in A's visible_entities")
+	}
+	sum := b.ExtrasSummary
+	if sum == nil {
+		t.Fatal("B's extras_summary must be populated")
+	}
+	if sum["hp_bucket"] != "full" {
+		t.Errorf("expected hp_bucket=full, got %v", sum["hp_bucket"])
+	}
+	if sum["equipped_slot"] != "weapon" {
+		t.Errorf("expected equipped_slot=weapon, got %v", sum["equipped_slot"])
+	}
+	if sum["equipped_sprite"] != "item:sword_short" {
+		t.Errorf("expected equipped_sprite=item:sword_short, got %v", sum["equipped_sprite"])
+	}
+	// Private state must NOT appear.
+	for _, k := range []string{"gold", "hunger", "inventory"} {
+		if _, present := sum[k]; present {
+			t.Errorf("private key %s leaked into extras_summary: %v", k, sum)
+		}
+	}
+	// Now wound B (hp=50, max_hp=100 → wounded bucket) and check.
+	w.entities["b"].Extras["hp"] = 50
+	obs = w.BuildObservationFor("a", 2, nil)
+	for i := range obs.VisibleEntities {
+		if obs.VisibleEntities[i].EntityID == "b" {
+			b = &obs.VisibleEntities[i]
+		}
+	}
+	if b.ExtrasSummary["hp_bucket"] != "wounded" {
+		t.Errorf("expected hp_bucket=wounded at hp=50, got %v", b.ExtrasSummary["hp_bucket"])
+	}
+	// Dying (hp=20).
+	w.entities["b"].Extras["hp"] = 20
+	obs = w.BuildObservationFor("a", 3, nil)
+	for i := range obs.VisibleEntities {
+		if obs.VisibleEntities[i].EntityID == "b" {
+			b = &obs.VisibleEntities[i]
+		}
+	}
+	if b.ExtrasSummary["hp_bucket"] != "dying" {
+		t.Errorf("expected hp_bucket=dying at hp=20, got %v", b.ExtrasSummary["hp_bucket"])
+	}
+}
+
 // TestObservation_VisibleItems_D8 — item entities surface in
 // visible_items, NOT visible_entities. Out-of-vision items and items
 // inside buildings are excluded.

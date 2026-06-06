@@ -98,6 +98,7 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 			Pos:           other.LogicalTile,
 			Facing:        string(other.Facing),
 			Archetype:     other.Archetype,
+			ExtrasSummary: buildExtrasSummary(other),
 		})
 	}
 	for door, ref := range w.buildingDoors {
@@ -237,6 +238,101 @@ func apparentLabel(e *Entity) string {
 		return e.DisplayName
 	}
 	return e.Archetype
+}
+
+// buildExtrasSummary — D9. What other agents see about you.
+// Combat-relevant state is public; resource/economic state is private.
+// Concretely surfaces: equipped_slot, equipped_sprite (so threats are
+// readable at a glance), hp_bucket ("full"/"wounded"/"dying" — coarse
+// bins to avoid leaking exact HP). Does NOT surface inventory, gold,
+// hunger — those stay opaque so wealth + needs must be inferred from
+// behavior + dialogue.
+func buildExtrasSummary(e *Entity) map[string]interface{} {
+	if len(e.Extras) == 0 {
+		return nil
+	}
+	out := map[string]interface{}{}
+	// HP bucket: full (≥80%), wounded (30-80%), dying (<30%).
+	hp, hpOK := numericExtra(e.Extras, "hp")
+	maxHP, maxOK := numericExtra(e.Extras, "max_hp")
+	if hpOK && maxOK && maxHP > 0 {
+		frac := hp / maxHP
+		switch {
+		case frac >= 0.8:
+			out["hp_bucket"] = "full"
+		case frac >= 0.3:
+			out["hp_bucket"] = "wounded"
+		default:
+			out["hp_bucket"] = "dying"
+		}
+	}
+	// Equipped — surface the FIRST populated slot (typically "weapon"
+	// or "hand"). Carries slot name + sprite so threat assessment is
+	// possible at a glance ("they're wielding an axe").
+	if eq, ok := e.Extras["equipped"].(map[string]interface{}); ok {
+		for slot, raw := range eq {
+			itemID, _ := raw.(string)
+			if itemID == "" {
+				continue
+			}
+			out["equipped_slot"] = slot
+			out["equipped_sprite"] = spriteFromItemID(itemID)
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// numericExtra reads either an int, float64, or float32 from an
+// Extras key. Returns (value, ok).
+func numericExtra(extras map[string]interface{}, key string) (float64, bool) {
+	v, ok := extras[key]
+	if !ok {
+		return 0, false
+	}
+	switch x := v.(type) {
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	}
+	return 0, false
+}
+
+// spriteFromItemID maps an inventory/equipped item_id back to its
+// sprite. Convention: item ids are formatted as "item:<kind>#<seq>"
+// (e.g. "item:sword_short#42"). Strip the suffix to recover the
+// sprite. If the id has no colon at all, assume it IS the kind and
+// prefix with "item:".
+func spriteFromItemID(id string) string {
+	if id == "" {
+		return ""
+	}
+	// Strip "#suffix" if present.
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' {
+			id = id[:i]
+			break
+		}
+	}
+	if hasColon := func(s string) bool {
+		for i := 0; i < len(s); i++ {
+			if s[i] == ':' {
+				return true
+			}
+		}
+		return false
+	}(id); !hasColon {
+		return "item:" + id
+	}
+	return id
 }
 
 func tileKey(t Tile) string {
