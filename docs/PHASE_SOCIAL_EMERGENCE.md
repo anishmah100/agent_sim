@@ -262,10 +262,15 @@ Audited 2026-06-06 via Explore agent. Findings:
     NPCs throw demo attacks at each other.**
 - **2 intentional SDK-connected bots** from `worlds/eldoria/npcs.json`
   running `examples/heuristic_bot.py`. Keep.
-- **Unused archetypes**: no archetype declared in world.json is
-  unreferenced. V2 character sprites (lumberjack/smith/goblin) exist
-  in art catalog but aren't yet wired to any bot type — separate
-  question.
+- **Unused archetypes**: no archetype is unreferenced. The 13
+  character sprites that exist (baker, blacksmith_npc, child,
+  cloaked_wanderer, drifter, goblin, iron_guard, mason, mayor,
+  trainer_lyra_blue, trainer_red, wizard, woodcutter) are ALL used
+  in world.json's 250 entities. "lumberjack" is `woodcutter` (36
+  instances); "smith" is `blacksmith_npc` (9 instances). The rarer
+  archetypes (8 wizards, 4 mayors) are easy to miss in a 1500x1500
+  world. After D3 nukes the 250, the art remains — 13 fully-rigged
+  character types available to assign experiment roles to.
 
 The 250 wanderers must go before we can measure anything social.
 
