@@ -174,7 +174,12 @@ function TabBtn(p: {
   disabledHint?: string;
   onClick: () => void;
 }) {
-  const active = p.current === p.value;
+  // Bug fix: evaluating `const active = p.current === p.value` once at
+  // mount means the active style never updates when the user clicks
+  // another tab — `Speech` stayed yellow forever. Solid's reactivity
+  // only fires inside JSX expressions / function-valued props, so the
+  // style object's values now read p.current inline.
+  const active = () => p.current === p.value;
   return (
     <button
       type="button"
@@ -183,9 +188,9 @@ function TabBtn(p: {
       disabled={!p.enabled}
       title={p.enabled ? p.label : `${p.label} (gated: ${p.disabledHint ?? ""})`}
       style={{
-        background: active ? "#feae34" : "transparent",
-        color: active ? "#1f2238" : p.enabled ? "#ead4aa" : "#5a6988",
-        border: "1px solid " + (active ? "#feae34" : "#3a4466"),
+        background: active() ? "#feae34" : "transparent",
+        color: active() ? "#1f2238" : p.enabled ? "#ead4aa" : "#5a6988",
+        border: "1px solid " + (active() ? "#feae34" : "#3a4466"),
         "border-radius": "3px",
         padding: "4px 10px",
         cursor: p.enabled ? "pointer" : "not-allowed",
@@ -230,12 +235,21 @@ function SpeechTab(props: { lines: DialogueLine[] }) {
 }
 
 function MindTab(props: { mind: MindSnapshot }) {
+  // The engine returns "" (empty string) for unset fields, not null —
+  // so `value ?? fallback` evaluates to "" and renders nothing.
+  // Bug fix: explicit empty-string check.
+  const goal = () => props.mind.top_goal && props.mind.top_goal.length > 0
+    ? props.mind.top_goal
+    : "(no published goal — share_planner not wired)";
+  const reflection = () => props.mind.last_reflection && props.mind.last_reflection.length > 0
+    ? props.mind.last_reflection
+    : "(no reflection yet — agent hasn't reflected, or share_reasoning=false)";
   return (
     <div data-testid="mind-tab" style={{ display: "grid", "row-gap": "10px" }}>
       <div>
         <div style={{ color: "#8b9bb4", "margin-bottom": "2px" }}>Top goal</div>
-        <div style={{ "font-family": "ui-monospace, monospace" }}>
-          {props.mind.top_goal ?? "(none)"}
+        <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
+          {goal()}
         </div>
         <div style={{ color: "#5a6988", "font-size": "11px", "margin-top": "2px" }}>
           {props.mind.goal_stack_size} goal(s) in stack
@@ -243,8 +257,8 @@ function MindTab(props: { mind: MindSnapshot }) {
       </div>
       <div>
         <div style={{ color: "#8b9bb4", "margin-bottom": "2px" }}>Last reflection</div>
-        <div style={{ "font-family": "ui-monospace, monospace" }}>
-          {props.mind.last_reflection ?? "(none yet)"}
+        <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
+          {reflection()}
         </div>
       </div>
     </div>
@@ -253,20 +267,30 @@ function MindTab(props: { mind: MindSnapshot }) {
 
 function TraceTab(props: { traces: TraceLine[] }) {
   return (
-    <div data-testid="trace-tab" style={{ display: "grid", "row-gap": "8px" }}>
-      <For each={props.traces.slice(-10)}>
-        {(t) => (
-          <div>
-            <div style={{ "font-size": "11px", color: "#8b9bb4" }}>
-              t={t.tick} · verb=<code>{t.verb}</code>
+    <Show
+      when={props.traces.length > 0}
+      fallback={
+        <div style={emptyStyle()}>
+          No reasoning traces. Either this agent is heuristic (no LLM
+          to reason) or the agent connected with share_reasoning=false.
+        </div>
+      }
+    >
+      <div data-testid="trace-tab" style={{ display: "grid", "row-gap": "8px" }}>
+        <For each={props.traces.slice(-10)}>
+          {(t) => (
+            <div>
+              <div style={{ "font-size": "11px", color: "#8b9bb4" }}>
+                t={t.tick} · verb=<code>{t.verb}</code>
+              </div>
+              <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
+                {t.reasoning}
+              </div>
             </div>
-            <div style={{ "font-family": "ui-monospace, monospace" }}>
-              {t.reasoning}
-            </div>
-          </div>
-        )}
-      </For>
-    </div>
+          )}
+        </For>
+      </div>
+    </Show>
   );
 }
 

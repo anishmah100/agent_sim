@@ -446,6 +446,16 @@ export function App() {
           pixiHandle?.centerOn(a.pos[0], a.pos[1]);
           pixiHandle?.setSelectedEntity(a.entity_id);
           setSelectedId(a.entity_id);
+          // Seed the inspector with what the picker already knows so
+          // it opens immediately. The snapshot loop refines this with
+          // the live entity record once it arrives in the viewport.
+          setSelectedSnapshot({
+            entity_id: a.entity_id,
+            archetype: a.archetype ?? "unknown",
+            pos: a.pos,
+            facing: "S",
+            display_name: a.display_name ?? a.persona_name,
+          });
           // The mental-state inspector populates from the historian
           // — fire the same fetch the click-to-inspect path uses.
           fetchAndSetMentalState(a.entity_id);
