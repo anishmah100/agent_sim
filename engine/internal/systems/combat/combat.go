@@ -115,11 +115,20 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 		res.Reason = "not_a_target"
 		return res
 	}
-	if w.Chebyshev(e.Pos(), other.Pos()) > 1 {
-		res.Reason = "target_too_far"
+	// D21 — weapon damage + reach. Read attacker's equipped weapon, look
+	// up its damage + reach. Unarmed = base damage 4, reach 1.
+	wepDmg, wepReach := weaponStats(e)
+	dmg := wepDmg
+	if dmg == 0 {
+		// Fallback: legacy world tuning if the weapon table doesn't
+		// know this weapon. Keeps backwards compat for any rule-based
+		// scenario that relied on attack_damage.
+		dmg = w.TuningInt("attack_damage", DefaultAttackDamage)
+	}
+	if w.Chebyshev(e.Pos(), other.Pos()) > wepReach {
+		res.Reason = "out_of_range"
 		return res
 	}
-	dmg := w.TuningInt("attack_damage", DefaultAttackDamage)
 	defending, _ := other.GetExtra("defending")
 	if d, _ := defending.(bool); d {
 		// Tuned ratio (0..1). Default 0.5 matches the legacy "halve damage"
@@ -132,6 +141,71 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 	w.EmitSound(e.Pos(), "sword_clang")
 	res.Accepted = true
 	return res
+}
+
+// weaponStats — D21 starting calibration. Reads attacker's
+// extras["equipped"]["weapon"] (item id like "item:sword_short#42")
+// and looks up damage + reach. Returns (4, 1) for unarmed: base
+// 4 HP melee. Hardcoded table; will migrate to rulebook
+// ItemKindProp when that accessor lands.
+//
+// Reach is a Chebyshev tile radius. Bow/crossbow ranged weapons
+// have reach > 1; LOS check is NOT yet enforced (future P3 polish).
+func weaponStats(e syscore.Entity) (damage, reach int) {
+	const (
+		unarmedDmg   = 4
+		unarmedReach = 1
+	)
+	eqRaw, ok := e.GetExtra("equipped")
+	if !ok {
+		return unarmedDmg, unarmedReach
+	}
+	eq, ok := eqRaw.(map[string]any)
+	if !ok || len(eq) == 0 {
+		return unarmedDmg, unarmedReach
+	}
+	weaponRaw, ok := eq["weapon"]
+	if !ok {
+		return unarmedDmg, unarmedReach
+	}
+	wid, _ := weaponRaw.(string)
+	if wid == "" {
+		return unarmedDmg, unarmedReach
+	}
+	// Strip "item:" + "#suffix" to recover kind.
+	kind := wid
+	if len(kind) > 5 && kind[:5] == "item:" {
+		kind = kind[5:]
+	}
+	for i := 0; i < len(kind); i++ {
+		if kind[i] == '#' {
+			kind = kind[:i]
+			break
+		}
+	}
+	if w, ok := weaponTable[kind]; ok {
+		return w.damage, w.reach
+	}
+	return unarmedDmg, unarmedReach
+}
+
+type weaponStat struct {
+	damage int
+	reach  int
+}
+
+// weaponTable — D21 reference. Matches the ARCHETYPE_FSMS doc + the
+// rulebook item kinds. Damage is final HP loss before defend
+// multiplier. Reach is Chebyshev tiles.
+var weaponTable = map[string]weaponStat{
+	"dagger":       {damage: 10, reach: 1},
+	"sword_short":  {damage: 12, reach: 1},
+	"sword_long":   {damage: 16, reach: 1},
+	"axe":          {damage: 18, reach: 1},
+	"club_wood":    {damage: 6, reach: 1},
+	"hammer":       {damage: 12, reach: 1},
+	"bow":          {damage: 10, reach: 6},
+	"crossbow":     {damage: 14, reach: 6},
 }
 
 func (s *System) handleDefend(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {

@@ -407,6 +407,64 @@ func TestUnknownVerb_Rejected(t *testing.T) {
 	}
 }
 
+// === D21 — weapons damage + reach ===
+
+func TestD21_Attack_UnarmedDealsBaseDamage(t *testing.T) {
+	vc := newVCTest(t)
+	// Put B adjacent to A at full HP. A unarmed → 4 damage.
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	vc.world.entities["b"].Extras = map[string]interface{}{"hp": 100, "max_hp": 100}
+	vc.world.entities["a"].Extras = map[string]interface{}{}
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("unarmed attack adjacent should accept; got %q", res.Reason)
+	}
+	hp := vc.world.entities["b"].Extras["hp"].(int)
+	if hp != 96 {
+		t.Errorf("unarmed attack: B's HP want 96 (100-4), got %d", hp)
+	}
+}
+
+func TestD21_Attack_EquippedSwordDealsWeaponDamage(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	vc.world.entities["b"].Extras = map[string]interface{}{"hp": 100, "max_hp": 100}
+	// A wields a sword_short (12 damage per D21 table).
+	vc.world.entities["a"].Extras = map[string]interface{}{
+		"equipped": map[string]any{"weapon": "item:sword_short#1"},
+	}
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("sword attack should accept; got %q", res.Reason)
+	}
+	hp := vc.world.entities["b"].Extras["hp"].(int)
+	if hp != 88 {
+		t.Errorf("sword attack: B's HP want 88 (100-12), got %d", hp)
+	}
+}
+
+func TestD21_Attack_BowAtRangeAccepted_UnarmedAtRangeRejected(t *testing.T) {
+	vc := newVCTest(t)
+	// B is 4 tiles away — too far for melee (reach 1), in range for bow (reach 6).
+	vc.world.entities["b"].LogicalTile = Tile{5, 1}
+	vc.world.entities["b"].Extras = map[string]interface{}{"hp": 100, "max_hp": 100}
+	// Unarmed first — should reject out_of_range.
+	vc.world.entities["a"].Extras = map[string]interface{}{}
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if res.Accepted {
+		t.Fatal("unarmed at 4 tiles should reject; got accepted")
+	}
+	if res.Reason != "out_of_range" {
+		t.Errorf("unarmed at range: want reason=out_of_range, got %q", res.Reason)
+	}
+	// Now equip bow + retry.
+	vc.world.entities["a"].Extras["equipped"] = map[string]any{"weapon": "item:bow#1"}
+	res = vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("bow at 4 tiles should accept; got %q", res.Reason)
+	}
+}
+
 // === D8 prereq — drop spawns a pickup-able item entity ===
 
 func TestDrop_SpawnsItemEntity(t *testing.T) {
