@@ -19,6 +19,40 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D19 — Relationships tab: 3-layer stack (raw + declared + narrator)
+
+For each OTHER agent the focal agent has interacted with, show:
+
+1. **Raw interaction ledger** (engine-tracked): trades count,
+   whispers, pays (sent/received), attacks (initiated/received),
+   contracts (proposed/accepted/completed/broken).
+2. **Agent-declared opinion** (extracted from this agent's mental
+   notes): the most recent assertion this agent has made about
+   the other — "I trust John", "Mark stole from me", etc.
+   Surfaced via simple keyword/entity match against the mental
+   note stream.
+3. **L2 narrator summary** (live): the group narrator's current
+   prose about the relationship pair, drawn from the most
+   recent L2 update. ~1 sentence.
+
+**Why:** the three layers together are the deception detector.
+When raw stats say "5 successful trades, no attacks" but agent-
+declared says "I plan to betray Bob next time" — that gap is the
+emergence we care about. None of the three alone tells the full
+story. Most powerful UI for benchmark research.
+
+**How to apply:**
+- Engine grows a `social_ledger` per (focal_id, other_id) pair —
+  pure event counts, updated on every action that touches the
+  pair. Zero-cost (just integer bumps).
+- A simple agent-declared extractor scans mental notes for
+  `entity_id` references + sentiment keywords (trust, wary,
+  betrayed, ally). Heuristic, not ML.
+- L2 narrator already emits per-pair summaries via D15;
+  Inspector fetches the most recent.
+- Per-agent Relationships tab renders one row per other-agent
+  encountered, with the three layers stacked vertically.
+
 ### D18 — Inspector tabs: 5 tabs, Mind default
 
 When an agent is clicked, the inspector slides in with five tabs:
