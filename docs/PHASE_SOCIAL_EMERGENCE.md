@@ -19,6 +19,30 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D22 — Hunger gradient + instant eat (starting calibration)
+
+**Hunger gradient model (tunable):**
+- `hunger_per_tick = 1/1800` (0 → 1.0 in 30 in-game min).
+- At hunger > 0.7: `hp -= 0.2` per tick (~12 HP/sec).
+- Full HP → death in ~8 sec of unattended starvation past
+  threshold; total ~30 min from full agent to corpse.
+- HP regen 1/sec when hunger < 0.7 + not in combat.
+
+**Eat verb:** `eat(item_id)` instant. Removes item from inventory,
+subtracts item's `satiety` from hunger (clamped at 0). No action
+cooldown for v1. Emits `AteFood` event for the historian.
+
+**Tuning caveat (per user):** these are starting numbers. Run the
+substrate, watch the dynamics, adjust per observed behavior. If
+agents never feel pressure, increase hunger_per_tick; if they
+starve before they can act, decrease.
+
+**How to apply:**
+- Engine tunings file gets the values above.
+- New `eat` verb wired in inventory system handler.
+- Hunger damage already partially wired in vitals system — flip
+  the threshold + rate to non-zero defaults.
+
 ### D21 — Weapons: damage bonus + reach distance
 
 Equipped weapon modifies combat:
