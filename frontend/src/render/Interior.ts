@@ -357,10 +357,20 @@ const TEMPLATES: Record<string, InteriorTemplate> = {
   "bld:watchtower": COTTAGE,
 };
 
+export interface InteriorPropClickEvent {
+  /** Sprite id passed through SpriteInfo to populate the panel. The
+   *  prop layer uses `prop:<name>` ids consistently with the catalog. */
+  sprite: string;
+  /** Interior-tile coords inside the room. */
+  x: number;
+  y: number;
+}
+
 export class InteriorLayer {
   readonly container: Container;
   private exitHandlers: Array<() => void> = [];
   private upFloorHandlers: Array<() => void> = [];
+  private propInfoHandlers: Array<(ev: InteriorPropClickEvent) => void> = [];
 
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
@@ -398,6 +408,16 @@ export class InteriorLayer {
     return () => {
       const i = this.upFloorHandlers.indexOf(h);
       if (i >= 0) this.upFloorHandlers.splice(i, 1);
+    };
+  }
+
+  /** Fires whenever an interior prop is clicked — drives the InfoPanel
+   *  for furniture, workstations, lighting, etc. */
+  onPropInfo(h: (ev: InteriorPropClickEvent) => void): () => void {
+    this.propInfoHandlers.push(h);
+    return () => {
+      const i = this.propInfoHandlers.indexOf(h);
+      if (i >= 0) this.propInfoHandlers.splice(i, 1);
     };
   }
 
@@ -555,6 +575,22 @@ export class InteriorLayer {
       sp.height = targetH;
       sp.x = x * TILE_SIZE_PX;
       sp.y = (y + 1) * TILE_SIZE_PX - targetH;
+      // Hover + click → emit info event. The InfoPanel maps prop:<name>
+      // ids to descriptions and stat blocks via SpriteInfo.describeSprite.
+      sp.eventMode = "static";
+      sp.cursor = "pointer";
+      const hoverFilter = new OutlineFilter({
+        thickness: 1.5, color: 0xfff2a8, alpha: 0.85, knockout: false,
+      });
+      sp.on("pointerover", () => { sp.filters = [hoverFilter]; });
+      sp.on("pointerout", () => { sp.filters = []; });
+      sp.on("pointertap", (ev) => {
+        // Stop the click from bubbling to the tileBox / dim overlay
+        // and accidentally exiting the interior.
+        ev.stopPropagation();
+        const id = `prop:${meta.name}`;
+        for (const h of this.propInfoHandlers) h({ sprite: id, x, y });
+      });
       tileBox.addChild(sp);
     }
 

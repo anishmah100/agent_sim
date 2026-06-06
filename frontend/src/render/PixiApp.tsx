@@ -21,7 +21,7 @@ import { Application, Container } from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { TilemapLayer, type TileMapData } from "./Tilemap";
 import { EntityLayer, type EntityState } from "./Entity";
-import { DecorationLayer } from "./Decoration";
+import { DecorationLayer, type DecorationInfoEvent } from "./Decoration";
 import { InteriorLayer } from "./Interior";
 import { SpeechBubbleLayer } from "./SpeechBubble";
 import { DayNight } from "./DayNight";
@@ -44,6 +44,16 @@ export interface PixiHandle {
   fitToWorld(): void;
   setSelectedEntity(id: string | null): void;
   onClick(handler: (ev: ClickEvent) => void): () => void;
+  /** Subscribe to clicks on any non-vegetation decoration (buildings,
+   *  stalls, items, FX, props, construction stages). The Solid layer
+   *  uses this to drive the InfoPanel. */
+  onDecorationInfo(handler: (ev: DecorationInfoEvent) => void): () => void;
+  /** Open the interior view for an enterable building sprite. Exposed
+   *  so the InfoPanel's "Enter" button can trigger entry. */
+  openInterior(sprite: string): Promise<void>;
+  /** Subscribe to interior prop clicks. Same shape as decoration info,
+   *  but `x`/`y` are interior-tile coords inside the room. */
+  onInteriorPropInfo(handler: (ev: DecorationInfoEvent) => void): () => void;
   ingestAudible(events: AudibleEvent[]): void;
   /** Editor — repaint one tile to a new glyph. Returns previous glyph
    *  for optimistic-update revert, or undefined if out of bounds. */
@@ -102,11 +112,12 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
   // Interior overlay — fixed-position container on the stage (NOT in
   // the viewport) so it doesn't pan/zoom with the world.
+  //
+  // Building clicks DO NOT auto-enter the interior anymore — the Solid
+  // layer's InfoPanel handles that with an "Enter" button. PixiApp
+  // exposes openInterior(sprite) so App.tsx can trigger entry.
   const interior = new InteriorLayer(app);
   app.stage.addChild(interior.container);
-  decorations.onBuildingClick(async (ev) => {
-    await interior.show(ev.sprite);
-  });
   interior.onExit(() => interior.hide());
   if (import.meta.env.DEV) {
     (window as unknown as { __interior?: InteriorLayer }).__interior = interior;
@@ -262,6 +273,18 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
         const i = clickHandlers.indexOf(handler);
         if (i >= 0) clickHandlers.splice(i, 1);
       };
+    },
+
+    onDecorationInfo(handler) {
+      return decorations.onDecorationInfo(handler);
+    },
+
+    async openInterior(sprite: string) {
+      await interior.show(sprite);
+    },
+
+    onInteriorPropInfo(handler) {
+      return interior.onPropInfo(handler);
     },
 
     setTileGlyph(tileX, tileY, glyph) {

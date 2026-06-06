@@ -21,6 +21,8 @@ import { connectViewer, type ViewerClient } from "../net/ws";
 import type { TileMapData } from "../render/Tilemap";
 import type { EntityState } from "../render/Entity";
 import { Inspector } from "./Inspector";
+import { InfoPanel } from "./InfoPanel";
+import { describeSprite, type SpriteInfo } from "./SpriteInfo";
 import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
 import { HUD } from "./HUD";
@@ -57,6 +59,12 @@ export function App() {
   const [editorGlyph, setEditorGlyph] = createSignal<string | null>(null);
   const [tilesLegend, setTilesLegend] = createSignal<Record<string, TileKind> | null>(null);
   const [mentalState, setMentalState] = createSignal<MentalState | null>(null);
+  // InfoPanel state — populated when the user clicks any non-veg
+  // decoration on the overworld OR an interior prop. Holds enough to
+  // also offer an "Enter" button for enterable buildings.
+  const [info, setInfo] = createSignal<SpriteInfo | null>(null);
+  const [infoAt, setInfoAt] = createSignal<{ x: number; y: number } | null>(null);
+  const [infoSource, setInfoSource] = createSignal<"world" | "interior">("world");
 
   function fetchAndSetMentalState(entityID: string) {
     fetchMentalState(entityID).then((m: MentalStateResponse) => {
@@ -173,9 +181,24 @@ export function App() {
       }
     }
 
-    // ESC closes the inspector.
+    // Subscribe to decoration + interior-prop clicks. Both feed the
+    // same InfoPanel — the source flag tweaks the "Location" label.
+    const showInfoFor = (sprite: string, x: number, y: number, source: "world" | "interior") => {
+      const desc = describeSprite(sprite);
+      if (!desc) return; // veg / unrecognised → no panel
+      setInfo(desc);
+      setInfoAt({ x, y });
+      setInfoSource(source);
+    };
+    pixiHandle.onDecorationInfo((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "world"));
+    pixiHandle.onInteriorPropInfo((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "interior"));
+
+    // ESC closes the inspector AND any open info panel.
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeInspector();
+      if (e.key === "Escape") {
+        if (info()) setInfo(null);
+        closeInspector();
+      }
     };
     window.addEventListener("keydown", onKey);
     onCleanup(() => window.removeEventListener("keydown", onKey));
@@ -407,6 +430,21 @@ export function App() {
         entity={selectedSnapshot()}
         mentalState={mentalState() ?? undefined}
         onClose={closeInspector}
+      />
+
+      <InfoPanel
+        info={info()}
+        at={infoAt()}
+        source={infoSource()}
+        onClose={() => setInfo(null)}
+        onEnter={() => {
+          const i = info();
+          if (i && i.enterable && pixiHandle) {
+            void pixiHandle.openInterior(i.sprite);
+            // Keep the panel open while inside — the user can dismiss
+            // with × or ESC. The next inside-prop click swaps content.
+          }
+        }}
       />
 
       {hudOpen() && (

@@ -57,10 +57,21 @@ export interface BuildingClickEvent {
   y: number;
 }
 
+/** Emitted on click of any non-vegetation decoration (buildings,
+ *  stalls, items, FX, props, construction stages). Use this to drive
+ *  the InfoPanel — buildings keep firing the legacy BuildingClickEvent
+ *  in parallel so the interior-entry flow stays available. */
+export interface DecorationInfoEvent {
+  sprite: string;
+  x: number;
+  y: number;
+}
+
 export class DecorationLayer {
   readonly container: Container;
   private cache = new Map<string, Texture>();
   private clickHandlers: Array<(ev: BuildingClickEvent) => void> = [];
+  private infoHandlers: Array<(ev: DecorationInfoEvent) => void> = [];
 
   // Viewport culling state. We keep the spec list and a spatial bucket
   // so refreshVisible() can rapidly find decorations in the viewport.
@@ -86,6 +97,17 @@ export class DecorationLayer {
     return () => {
       const i = this.clickHandlers.indexOf(handler);
       if (i >= 0) this.clickHandlers.splice(i, 1);
+    };
+  }
+
+  /** Fires on click of any clickable decoration (everything except
+   *  veg:* — trees, rocks, boulders, mushrooms). The InfoPanel
+   *  subscribes through here. */
+  onDecorationInfo(handler: (ev: DecorationInfoEvent) => void): () => void {
+    this.infoHandlers.push(handler);
+    return () => {
+      const i = this.infoHandlers.indexOf(handler);
+      if (i >= 0) this.infoHandlers.splice(i, 1);
     };
   }
 
@@ -234,13 +256,17 @@ export class DecorationLayer {
     wrap.zIndex = spec.y;
     this.container.addChild(wrap);
 
-    // Click-to-enter is driven by the art catalog's `enterable` flag,
-    // which is set per-sprite in art/manifests/sprites.json. Drops the
-    // old hard-coded `enterableSprites` Record entirely. Adding a new
-    // enterable building = one manifest edit.
+    // Click handling — every decoration except vegetation (trees,
+    // rocks, mushrooms, boulders, stalagmites) is hoverable and
+    // clickable. Click emits an info event for the InfoPanel; if the
+    // catalog also flags it `enterable`, the legacy BuildingClickEvent
+    // fires too (the App can offer an "Enter" button instead of
+    // auto-entering).
     const cat = artCatalog();
-    const isBuilding = cat ? cat.enterable(spec.sprite) : LEGACY_ENTERABLE.has(spec.sprite);
-    if (isBuilding) {
+    const category = spec.sprite.split(":")[0];
+    const isClickable = category !== "veg";
+    const isEnterable = cat ? cat.enterable(spec.sprite) : LEGACY_ENTERABLE.has(spec.sprite);
+    if (isClickable) {
       sp.eventMode = "static";
       sp.cursor = "pointer";
       const hoverFilter = new OutlineFilter({
@@ -256,12 +282,20 @@ export class DecorationLayer {
         sp.filters = [];
       });
       sp.on("pointertap", () => {
-        const ev: BuildingClickEvent = {
+        const infoEv: DecorationInfoEvent = {
           sprite: spec.sprite,
           x: spec.x,
           y: spec.y,
         };
-        for (const h of this.clickHandlers) h(ev);
+        for (const h of this.infoHandlers) h(infoEv);
+        if (isEnterable) {
+          const ev: BuildingClickEvent = {
+            sprite: spec.sprite,
+            x: spec.x,
+            y: spec.y,
+          };
+          for (const h of this.clickHandlers) h(ev);
+        }
       });
     }
     return wrap;
