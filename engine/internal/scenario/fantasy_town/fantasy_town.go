@@ -22,6 +22,7 @@ import (
 	"github.com/anishmah100/agent_sim/engine/internal/systems/trade"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/verbalquests"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/vitals"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/respawn"
 	"github.com/anishmah100/agent_sim/engine/internal/world"
 )
 
@@ -49,6 +50,7 @@ func Install(w *world.World) *world.SystemHost {
 	host.Install(loot.New())
 	host.Install(quests.New())
 	host.Install(verbalquests.New())
+	host.Install(respawn.New())
 
 	host.InstallInto()
 	return host

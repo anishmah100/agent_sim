@@ -202,6 +202,14 @@ func main() {
 			Note:     note,
 		})
 	}
+	agents.OnMentalNote = func(entityID, text, tag string, slots map[string]string) {
+		hist.LogMentalNote(w.CurrentTick(), historian.MentalNote{
+			EntityID: entityID,
+			Text:     text,
+			Tag:      tag,
+			Slots:    slots,
+		})
+	}
 
 	// Security middleware — CORS allowlist + per-IP rate limit on
 	// /register + JWT verification on /register. Each is opt-in via flag.

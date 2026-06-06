@@ -196,6 +196,24 @@ class Eat(_Action):
     item: str
 
 
+class MentalNote(BaseModel):
+    """D14 — generic, architecture-agnostic mental-state record.
+    PRIVATE: never relayed to other agents; visible only to the
+    emitting agent + the researcher inspector. Bot author chooses
+    cadence (per-decision / per-minute / never).
+
+    Slots are RECOMMENDED, not required. Goal/plan/beliefs/emotion
+    are the canonical four; the inspector renders them prominently
+    when populated. Other keys are accepted but ignored by the UI.
+
+    Routed through the SDK as a session-meta message, not an
+    ActionBatch action (mental_note is a private channel, not a
+    world-affecting action). See ``Agent.note()`` for the helper."""
+    text: str
+    tag: Optional[str] = None
+    slots: Optional[dict[str, str]] = None
+
+
 class Equip(_Action):
     verb: Literal["equip"] = "equip"
     item: str

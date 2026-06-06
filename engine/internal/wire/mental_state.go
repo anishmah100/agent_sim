@@ -61,13 +61,23 @@ func MentalStateHandler(hist *historian.Historian, captureReasoning bool) http.H
 		}
 		if hist != nil {
 			body.Traces = collectTraces(hist, entityID, 20)
-			// Dialogue + mind are real data sourced from the historian
-			// ring buffer. Earlier versions hardcoded both to empty —
-			// the inspector showed "No recent dialogue" forever even
-			// when the agent had clearly spoken. Walk the ring once,
-			// collect every relevant kind in one pass.
 			body.Dialogue = collectDialogue(hist, entityID, 20)
 			body.Mind.LastReflection = collectLastReflection(hist, entityID)
+			// D14 — populate per-slot fields from MentalNote records.
+			// goal/plan/beliefs/emotion are independent latest-non-empty.
+			slots := collectMentalSlots(hist, entityID)
+			if v, ok := slots["goal"]; ok {
+				body.Mind.TopGoal = v
+			}
+			if v, ok := slots["plan"]; ok {
+				body.Mind.Plan = v
+			}
+			if v, ok := slots["beliefs"]; ok {
+				body.Mind.Beliefs = v
+			}
+			if v, ok := slots["emotion"]; ok {
+				body.Mind.Emotion = v
+			}
 		}
 		enc := json.NewEncoder(rw)
 		enc.SetIndent("", "  ")
@@ -96,6 +106,13 @@ type mindSnapshot struct {
 	LastReflection  string `json:"last_reflection"`
 	GoalStackSize   int    `json:"goal_stack_size"`
 	ShareReasoning  bool   `json:"share_reasoning,omitempty"`
+	// D14 — recommended slots from MentalNote. Each independently
+	// holds the latest non-empty value across the historian ring.
+	// Inspector renders these prominently at the top of the Mind
+	// tab when populated.
+	Plan    string `json:"plan,omitempty"`
+	Beliefs string `json:"beliefs,omitempty"`
+	Emotion string `json:"emotion,omitempty"`
 }
 
 type traceLine struct {
@@ -153,14 +170,27 @@ func collectDialogue(hist *historian.Historian, entityID string, limit int) []di
 	return out
 }
 
-// collectLastReflection — most recent ReflectiveNote for this entity.
-// Empty when share_reasoning is off (the layered opt-in upstream
-// prevents the historian from logging notes at all).
+// collectLastReflection — most recent ReflectiveNote OR MentalNote
+// for this entity. Falls through to ReflectiveNote for backwards
+// compat. Empty when share_reasoning is off (the layered opt-in
+// upstream prevents the historian from logging at all).
 func collectLastReflection(hist *historian.Historian, entityID string) string {
 	if hist == nil {
 		return ""
 	}
 	for _, rec := range hist.Recent(0, 2048) {
+		// D14 — prefer MentalNote when present; it's the new
+		// architecture-agnostic shape.
+		if rec.Kind == "MentalNote" {
+			var p struct {
+				EntityID string `json:"entity_id"`
+				Text     string `json:"text"`
+			}
+			if err := json.Unmarshal(rec.Payload, &p); err == nil &&
+				p.EntityID == entityID && p.Text != "" {
+				return p.Text
+			}
+		}
 		if rec.Kind != "ReflectiveNote" {
 			continue
 		}
@@ -177,6 +207,44 @@ func collectLastReflection(hist *historian.Historian, entityID string) string {
 		return p.Note
 	}
 	return ""
+}
+
+// collectMentalSlots — D14. Most recent populated slots {goal, plan,
+// beliefs, emotion} from this entity's MentalNote records. Each
+// slot independently keeps the LATEST non-empty value across the
+// ring. Empty map when no notes / opt-in off.
+func collectMentalSlots(hist *historian.Historian, entityID string) map[string]string {
+	out := map[string]string{}
+	if hist == nil {
+		return out
+	}
+	wanted := map[string]bool{
+		"goal": true, "plan": true, "beliefs": true, "emotion": true,
+	}
+	for _, rec := range hist.Recent(0, 2048) {
+		if rec.Kind != "MentalNote" {
+			continue
+		}
+		var p struct {
+			EntityID string            `json:"entity_id"`
+			Slots    map[string]string `json:"slots"`
+		}
+		if err := json.Unmarshal(rec.Payload, &p); err != nil {
+			continue
+		}
+		if p.EntityID != entityID || len(p.Slots) == 0 {
+			continue
+		}
+		for k, v := range p.Slots {
+			if !wanted[k] || v == "" {
+				continue
+			}
+			if _, already := out[k]; !already {
+				out[k] = v
+			}
+		}
+	}
+	return out
 }
 
 // collectTraces pulls the most recent N reasoning records for an

@@ -146,6 +146,39 @@ func (h *Historian) LogReasoning(currentTick uint64, t ReasoningTrace) {
 	})
 }
 
+// MentalNote — D14. Generic private mental-state record. Subsumes
+// ReasoningTrace (per-decision) and ReflectiveNote (slow-loop) into
+// one architecture-agnostic shape. Bot authors emit whenever they
+// want (per-action, per-minute, never — author's choice). The
+// optional Slots field is RECOMMENDED, not required — the UI
+// renders goal/plan/beliefs/emotion prominently when populated, but
+// any subset is accepted.
+type MentalNote struct {
+	EntityID string            `json:"entity_id"`
+	Text     string            `json:"text"`
+	Tag      string            `json:"tag,omitempty"`
+	Slots    map[string]string `json:"slots,omitempty"`
+}
+
+// LogMentalNote — symmetrical with LogReasoning / LogReflection.
+// Gated by the same layered opt-in upstream (share_reasoning +
+// experiment's capture_reasoning).
+func (h *Historian) LogMentalNote(currentTick uint64, n MentalNote) {
+	if h == nil {
+		return
+	}
+	if h.filter.Disabled != nil && h.filter.Disabled[CategoryReasoning] {
+		return
+	}
+	payload, _ := json.Marshal(n)
+	h.appendRecord(Record{
+		Tick:     currentTick,
+		Kind:     "MentalNote",
+		Category: CategoryReasoning,
+		Payload:  json.RawMessage(payload),
+	})
+}
+
 // ReflectiveNote is the slow-loop counterpart to ReasoningTrace.
 // Emitted by the brain's reflective layer (~once per minute) when it
 // updates goals or theory-of-mind. Stored under the same

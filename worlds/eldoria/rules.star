@@ -44,6 +44,18 @@ register_tuning("speak_radius",        8)
 register_tuning("shout_radius",        30)
 register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
 
+# World dynamism — periodic item respawn (P4 user feedback: food
+# was rare + items were statically fixed). Every respawn_interval
+# ticks, one item is spawned at a random walkable tile within
+# respawn_radius of (respawn_hub_x, respawn_hub_y), unless the
+# total item count exceeds respawn_cap. Default hub matches the
+# experiment hub from D5 (Crossroads market area).
+register_tuning("respawn_interval_ticks", 1800)   # 30 in-game sec @ 60Hz
+register_tuning("respawn_cap",            600)
+register_tuning("respawn_radius",         200)
+register_tuning("respawn_hub_x",          772)
+register_tuning("respawn_hub_y",          894)
+
 # ---- Stats ----
 # Per-entity stats this world tracks. The engine creates the extras
 # slots at spawn (defaulting to `default`) and clamps to [min, max] on

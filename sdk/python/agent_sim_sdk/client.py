@@ -221,6 +221,36 @@ class Agent:
             return
         await self._ws.send(json.dumps({"type": "reflection", "note": note}))
 
+    async def note(
+        self,
+        text: str,
+        tag: Optional[str] = None,
+        slots: Optional[dict[str, str]] = None,
+    ) -> None:
+        """D14 — emit a generic mental note. Private; never relayed to
+        other agents. The optional ``slots`` dict carries
+        goal/plan/beliefs/emotion (any subset; other keys ignored by
+        the inspector UI). Fire-and-forget; no ack. Subject to the
+        same layered opt-in as ``reflect()`` / per-action reasoning.
+
+        Example::
+
+            await agent.note(
+                "Heading to market",
+                slots={"goal": "buy bread", "plan": "approach baker stall"},
+            )
+        """
+        if not self._ws:
+            raise RuntimeError("not connected")
+        if not text:
+            return
+        payload: dict = {"type": "mental_note", "text": text}
+        if tag:
+            payload["tag"] = tag
+        if slots:
+            payload["slots"] = slots
+        await self._ws.send(json.dumps(payload))
+
     async def _read_loop(self) -> None:
         assert self._ws
         async for raw in self._ws:

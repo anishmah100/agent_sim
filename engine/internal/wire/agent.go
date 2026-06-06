@@ -52,6 +52,11 @@ type AgentHub struct {
 	// is identical to OnReasoning: needs both the engine flag and
 	// the per-agent share_reasoning toggle.
 	OnReflection func(entityID, note string)
+	// OnMentalNote — D14. Generic architecture-agnostic mental-state
+	// channel. Subsumes the legacy ReasoningTrace + ReflectiveNote
+	// shapes into one shape any bot can emit on its own cadence.
+	// Same layered opt-in (engine capture + per-agent share_reasoning).
+	OnMentalNote func(entityID, text, tag string, slots map[string]string)
 
 	mu       sync.Mutex
 	// agentSecret → agentRecord
@@ -503,6 +508,24 @@ func (c *agentConn) handleMessage(raw []byte) {
 			c.rec.ShareReasoning &&
 			c.hub.OnReflection != nil {
 			c.hub.OnReflection(c.rec.EntityID, p.Note)
+		}
+	case "mental_note":
+		// D14 — generic mental-state channel. text + optional tag +
+		// optional slots map ({goal, plan, beliefs, emotion} are the
+		// recommended keys, but any subset/none is accepted). Same
+		// layered opt-in as reflection.
+		var p struct {
+			Text  string            `json:"text"`
+			Tag   string            `json:"tag"`
+			Slots map[string]string `json:"slots"`
+		}
+		if err := json.Unmarshal(raw, &p); err != nil || p.Text == "" {
+			return
+		}
+		if c.hub.captureReasoning &&
+			c.rec.ShareReasoning &&
+			c.hub.OnMentalNote != nil {
+			c.hub.OnMentalNote(c.rec.EntityID, p.Text, p.Tag, p.Slots)
 		}
 	case "set_cadence":
 		var p struct{ IntervalMs int `json:"interval_ms"` }
