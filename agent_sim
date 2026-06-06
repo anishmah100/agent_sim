@@ -42,6 +42,15 @@ is_alive() {
   [[ -f "$pf" ]] && kill -0 "$(cat "$pf")" 2>/dev/null
 }
 
+is_frontend_alive() {
+  # is_frontend_alive — true if vite is actually serving on :5173.
+  # PID-only checks lie: `nohup bash -c "npm run dev" &` records the
+  # short-lived wrapper bash, which exits once npm takes over, leaving
+  # vite alive but the recorded PID dead. An HTTP probe to the dev
+  # server is the only reliable signal that the frontend is up.
+  curl -sf -m 1 -o /dev/null "http://127.0.0.1:5173/" 2>/dev/null
+}
+
 kill_pidfile() {
   # kill_pidfile <pidfile> <label> — kill the process tree under the PID
   # and remove the pidfile. Safe if the PID is already gone.
@@ -82,7 +91,7 @@ wait_for_url() {
 # ── subcommands ──────────────────────────────────────────────────────
 
 cmd_start() {
-  if is_alive "$PIDDIR/engine.pid" && is_alive "$PIDDIR/frontend.pid"; then
+  if is_alive "$PIDDIR/engine.pid" && is_frontend_alive; then
     echo "==> already running. agent_sim status for details."
     cmd_status
     return 0
@@ -127,7 +136,10 @@ cmd_start() {
   }
 
   echo "==> starting frontend (logs: .runlog/frontend.log)"
-  nohup bash -c "cd frontend && npm run dev" > .runlog/frontend.log 2>&1 &
+  # `exec npm` replaces the wrapper bash, so $! points at the npm
+  # process directly. Without exec, the wrapper exits after spawning
+  # npm and the recorded PID becomes stale (process gone, vite alive).
+  nohup bash -c "cd frontend && exec npm run dev" > .runlog/frontend.log 2>&1 &
   echo $! > "$PIDDIR/frontend.pid"
 
   wait_for_url "http://127.0.0.1:5173/" 20 || {
@@ -166,7 +178,9 @@ cmd_stop() {
 cmd_status() {
   local engine_alive="no" frontend_alive="no" qwen_count=0
   is_alive "$PIDDIR/engine.pid" && engine_alive="yes (pid $(cat $PIDDIR/engine.pid))"
-  is_alive "$PIDDIR/frontend.pid" && frontend_alive="yes (pid $(cat $PIDDIR/frontend.pid))"
+  if is_frontend_alive; then
+    frontend_alive="yes (serving :5173)"
+  fi
   for pf in "$PIDDIR"/qwen_*.pid; do
     [[ -e "$pf" ]] || continue
     if is_alive "$pf"; then
@@ -180,7 +194,18 @@ cmd_status() {
     local info
     info=$(curl -sf -m 2 "http://$ENGINE_ADDR/api/v1/world/info" 2>/dev/null || true)
     if [[ -n "$info" ]]; then
-      echo "  world: $(echo "$info" | python3 -c 'import json,sys;d=json.load(sys.stdin);print(f"{d.get(\"world\")} tick={d.get(\"tick\")} uptime={d.get(\"uptime_s\"):.0f}s")' 2>/dev/null)"
+      # The previous python -c line had \" escapes that bash inside
+      # $(…) ate, leaving python with a syntax error and 2>/dev/null
+      # hiding it — the "world:" line silently rendered empty. Use a
+      # heredoc-fed script so the python source is shell-literal.
+      local fmt
+      fmt=$(python3 - "$info" <<'PY' 2>/dev/null || true
+import json, sys
+d = json.loads(sys.argv[1])
+print(f"{d.get('world')} tick={d.get('tick')} uptime={d.get('uptime_s', 0):.0f}s")
+PY
+)
+      [[ -n "$fmt" ]] && echo "  world: $fmt"
     fi
     echo "  http://$ENGINE_ADDR  ·  http://127.0.0.1:5173"
   fi
