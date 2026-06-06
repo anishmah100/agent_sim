@@ -19,6 +19,58 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D5 — Experiment spawn is clustered, not scattered
+
+Agents start within a tight radius of an "experiment hub" tile,
+NOT scattered across the 1500×1500 map. The world stays big, but the
+play area at start is small enough that every agent will encounter
+every other within the first few minutes.
+
+**Why:** Nowak's analytic rule for direct reciprocity needs
+`w > c/b` — probability of repeat encounter must exceed cost/benefit
+ratio. A scattered spawn on Eldoria makes `w ≈ 0` and cooperation
+can't evolve; agents never meet again to retaliate or reciprocate.
+A clustered spawn forces high `w` from tick 1.
+
+**How to apply:**
+- Experiment config declares `spawn_hub_tile: [x, y]` and
+  `spawn_radius: N`. All agents drop within that disc, walkable
+  tiles only.
+- Default hub: the Crossroads market (~772, 894) — already has
+  buildings, vendors, the road junction. Cluster radius 15-20
+  tiles ≈ everyone in mutual vision from frame 1.
+- Agents can wander away over time (the map is open) but emergence
+  measurements start with clustered density.
+
+### D4 — Survival = HP + dominant hunger, ~30 in-game min to starve
+
+The bedrock survival pressure. Agents accumulate hunger every tick;
+above a threshold (~0.7), it starts dealing HP damage. A full agent
+without food dies in ~30 minutes of in-game time. Food is essential
+and recurring — drives the entire economy.
+
+**Why:** without ticking pressure there's no recurring reason to
+interact. HP-only worlds let agents hibernate; nothing forces them
+to engage with each other or the economy. Hunger creates demand →
+demand creates trade → trade creates negotiation → negotiation
+creates social structure. This is the substrate of all the verbs in
+the north star (backstabbing, contracts, coalitions, manipulation).
+
+**Why this pace specifically:** 30 in-game minutes is short enough
+that hunger is salient within a single experiment (~15-min real
+time, 2x time speed) but long enough that agents can plan, travel,
+negotiate without dying mid-conversation.
+
+**How to apply:**
+- Eldoria's tunings: `hunger_per_tick`, `hunger_damage_above`,
+  `hunger_damage_rate` are non-zero. Calibrated so a full agent
+  starves in ~1800 in-game ticks (30 min × 60 Hz).
+- Food items have `satiety` values (apple 0.25, bread 0.5 — match
+  current rulebook). Eating restores hunger.
+- New verb: `eat` with target=inventory item id. Currently absent.
+- Death from starvation triggers the same death pipeline as combat
+  death (inventory drops, EntityDied event).
+
 ### D3 — Nuke the 250 legacy wanderers + the engine demo-action loop
 
 Empty world is the default. Every entity in the world is either an
