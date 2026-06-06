@@ -61,6 +61,13 @@ func MentalStateHandler(hist *historian.Historian, captureReasoning bool) http.H
 		}
 		if hist != nil {
 			body.Traces = collectTraces(hist, entityID, 20)
+			// Dialogue + mind are real data sourced from the historian
+			// ring buffer. Earlier versions hardcoded both to empty —
+			// the inspector showed "No recent dialogue" forever even
+			// when the agent had clearly spoken. Walk the ring once,
+			// collect every relevant kind in one pass.
+			body.Dialogue = collectDialogue(hist, entityID, 20)
+			body.Mind.LastReflection = collectLastReflection(hist, entityID)
 		}
 		enc := json.NewEncoder(rw)
 		enc.SetIndent("", "  ")
@@ -96,6 +103,80 @@ type traceLine struct {
 	ActionID  string `json:"action_id"`
 	Verb      string `json:"verb"`
 	Reasoning string `json:"reasoning"`
+}
+
+// collectDialogue scans the historian for Speech/Whisper events the
+// agent emitted (Speaker == entityID) and returns the most recent N
+// in newest-first order.
+//
+// Earlier version of the handler returned []. Now sources from the
+// same ring buffer the smoke scorer uses.
+func collectDialogue(hist *historian.Historian, entityID string, limit int) []dialogueLine {
+	out := []dialogueLine{}
+	if hist == nil {
+		return out
+	}
+	for _, rec := range hist.Recent(0, 2048) {
+		if rec.Kind != "Speech" && rec.Kind != "Whisper" {
+			continue
+		}
+		var payload struct {
+			Speaker string `json:"Speaker"`
+			Text    string `json:"Text"`
+			Mode    string `json:"Mode"`
+			Target  string `json:"Target"`
+		}
+		if err := json.Unmarshal(rec.Payload, &payload); err != nil {
+			continue
+		}
+		if payload.Speaker != entityID {
+			continue
+		}
+		channel := payload.Mode
+		if channel == "" {
+			if rec.Kind == "Whisper" {
+				channel = "whisper"
+			} else {
+				channel = "speak"
+			}
+		}
+		out = append(out, dialogueLine{
+			Tick:    rec.Tick,
+			Speaker: payload.Speaker,
+			Channel: channel,
+			Text:    payload.Text,
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+// collectLastReflection — most recent ReflectiveNote for this entity.
+// Empty when share_reasoning is off (the layered opt-in upstream
+// prevents the historian from logging notes at all).
+func collectLastReflection(hist *historian.Historian, entityID string) string {
+	if hist == nil {
+		return ""
+	}
+	for _, rec := range hist.Recent(0, 2048) {
+		if rec.Kind != "ReflectiveNote" {
+			continue
+		}
+		var p struct {
+			EntityID string `json:"entity_id"`
+			Note     string `json:"note"`
+		}
+		if err := json.Unmarshal(rec.Payload, &p); err != nil {
+			continue
+		}
+		if p.EntityID != entityID {
+			continue
+		}
+		return p.Note
+	}
+	return ""
 }
 
 // collectTraces pulls the most recent N reasoning records for an

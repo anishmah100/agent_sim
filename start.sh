@@ -71,6 +71,12 @@ trap cleanup INT TERM
 
 echo "==> starting engine on $ENGINE_ADDR (logs: .runlog/engine.log)"
 # shellcheck disable=SC2086
+# Every observable engine feature ON by default — dev start should
+# expose every panel populated, every event logged, every trace
+# captured. Production deployments override the flags they need to
+# tighten (rate limits, CORS, JWT). The user explicitly asked for
+# "all features enabled" so they never hit another empty UI tab
+# because a flag was off.
 .runlog/engine \
   -addr "$ENGINE_ADDR" \
   -bundle "$BUNDLE" \
@@ -79,6 +85,10 @@ echo "==> starting engine on $ENGINE_ADDR (logs: .runlog/engine.log)"
   -snapshot-every "$SNAP_EVERY" \
   -cors-allow "$CORS_ALLOW" \
   -jwt-secret "$JWT_SECRET" \
+  -capture-reasoning \
+  -register-rate 100 \
+  -register-burst 100 \
+  -event-ring 8192 \
   $NPC_FLAG \
   > .runlog/engine.log 2>&1 &
 pids+=($!)

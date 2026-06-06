@@ -87,6 +87,17 @@ type agentInfo struct {
 	DisplayName string `json:"display_name,omitempty"`
 	Pos         [2]int `json:"pos"`
 	MsConnected int64  `json:"ms_connected"`
+	// IsLLM — heuristic-bot agents register with a known bio.
+	// Anything else is assumed LLM-driven.
+	IsLLM       bool   `json:"is_llm"`
+	// LastVerb — last action verb the agent submitted (any verb,
+	// accepted or not). Surfaces what the agent is currently
+	// trying to do; helps the user see at-a-glance that an agent
+	// is alive vs. stuck.
+	LastVerb    string `json:"last_verb,omitempty"`
+	// LastSpeech — most recent speech/shout/whisper text the
+	// agent emitted. Limited to a sensible length in the renderer.
+	LastSpeech  string `json:"last_speech,omitempty"`
 }
 
 type agentsListResp struct {

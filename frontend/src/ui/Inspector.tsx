@@ -53,10 +53,17 @@ export function Inspector(props: {
   const isOpen = createMemo(() => props.entity !== null);
   const [tab, setTab] = createSignal<Tab>("speech");
 
-  const mindVisible = createMemo(() => !!props.mentalState?.mind?.share_planner);
+  // Original gates required share_planner=true (never wired —
+  // hardcoded false in the engine handler comment) and traces non-
+  // empty. Both made the Mind + Trace tabs invisible in practice.
+  // Now visible whenever the engine has -capture-reasoning on; the
+  // tabs render their own "no data yet" inside if there's nothing.
+  const mindVisible = createMemo(() =>
+    !!props.mentalState?.capture_reasoning_enabled ||
+    !!props.mentalState?.mind?.last_reflection,
+  );
   const traceVisible = createMemo(() =>
-    !!(props.mentalState?.capture_reasoning_enabled &&
-       props.mentalState?.traces && props.mentalState.traces.length > 0)
+    !!props.mentalState?.capture_reasoning_enabled,
   );
 
   return (

@@ -83,6 +83,16 @@ type agentRecord struct {
 	// Zero before connect. Surfaced by /api/v1/agents so the picker UI
 	// can show recency.
 	ConnectedAt int64
+	// LastVerb — last action verb the agent submitted (any verb,
+	// accepted or not). Updated on every action frame so the picker
+	// shows what the agent is currently trying to do.
+	LastVerb    string
+	// LastSpeech — most recent speak/shout/whisper text the agent
+	// emitted. Updated when a speech-class action is received.
+	LastSpeech  string
+	// Guards LastVerb/LastSpeech across the handler + the picker
+	// snapshot read.
+	infoMu sync.Mutex
 
 	// ShareReasoning is the per-agent opt-in for capturing the
 	// `reasoning` trace attached to actions. Engine-level capture
@@ -437,6 +447,20 @@ func (c *agentConn) handleMessage(raw []byte) {
 			c.hub.OnReasoning != nil {
 			c.hub.OnReasoning(c.rec.EntityID, env.ActionID, env.Verb, env.Reasoning)
 		}
+		// Picker telemetry: track the latest verb + speech so the UI
+		// agent picker shows what the agent is currently doing.
+		c.rec.infoMu.Lock()
+		c.rec.LastVerb = env.Verb
+		switch env.Verb {
+		case "speak", "shout", "whisper":
+			var p struct {
+				Text string `json:"text"`
+			}
+			if json.Unmarshal(env.Raw, &p) == nil && p.Text != "" {
+				c.rec.LastSpeech = p.Text
+			}
+		}
+		c.rec.infoMu.Unlock()
 		res := c.hub.w.SubmitAction(c.rec.EntityID, &env)
 		// Diagnostic: log every rejection with the dispatcher's reason
 		// so the smoke + downstream analysis can see what verbs the
