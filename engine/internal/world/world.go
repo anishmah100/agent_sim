@@ -219,6 +219,14 @@ type World struct {
 	// consults verbHandlers and Tick() calls onTick.
 	verbHandlers map[string]func(*World, *Entity, *ActionEnvelope) ActionResult
 	onTick       func(*World, uint64)
+	// onSpawn fires whenever a NEW entity is added to the world at
+	// runtime (SpawnEntity, SpawnEntityFromSpec, SpawnAgentEntity).
+	// Without this, system seedSpawn hooks (combat.hp, money.gold,
+	// vitals.hunger, …) only run on the entities present at world
+	// load — runtime-spawned agents stayed at hp=0 forever, so the
+	// killer's attacks against a freshly-registered bot couldn't
+	// trigger EntityDied. Set by InstallScenario.
+	onSpawn func(*Entity)
 
 	// onActionAccepted fires after a verb returns Accepted=true.
 	// Used by SystemHost to emit an ActionAccepted historian event so
@@ -319,12 +327,22 @@ func (w *World) InstallScenario(verbs map[string]func(*World, *Entity, *ActionEn
 	w.mu.Lock()
 	w.verbHandlers = verbs
 	w.onTick = onTick
+	w.onSpawn = onSpawn
 	if onSpawn != nil {
 		for _, e := range w.entities {
 			onSpawn(e)
 		}
 	}
 	w.mu.Unlock()
+}
+
+// fireSpawnHook fires the scenario's onSpawn for a runtime-spawned
+// entity. Caller must hold the world write lock — seedSpawn callbacks
+// mutate Extras directly, no extra locking required.
+func (w *World) fireSpawnHook(e *Entity) {
+	if w.onSpawn != nil {
+		w.onSpawn(e)
+	}
 }
 
 func (w *World) scenarioHandler(verb string) func(*World, *Entity, *ActionEnvelope) ActionResult {

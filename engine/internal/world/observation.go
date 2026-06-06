@@ -457,11 +457,15 @@ func (w *World) RemoveEntity(id string) {
 }
 
 // SpawnEntity adds a new entity. Caller must hold the world lock.
+// Fires the scenario's onSpawn hook so system seedSpawn callbacks
+// (combat.hp, money.gold, vitals.hunger, …) initialize stats on
+// runtime-spawned entities the same way they do at world boot.
 func (w *World) SpawnEntity(e *Entity) {
 	if e.Extras == nil {
 		e.Extras = map[string]any{}
 	}
 	w.entities[e.EntityID] = e
+	w.fireSpawnHook(e)
 }
 
 // MutateExtra is a convenience for setting a single key without the

@@ -184,6 +184,12 @@ func (w *World) SpawnAgentEntity(archetype, displayName string) (string, error) 
 	}
 	w.entities[id] = e
 	w.occupants[pos] = id
+	// Run scenario spawn hooks so combat seeds hp, money seeds gold,
+	// vitals seeds hunger, etc. Without this, fresh bot bodies stay
+	// at hp=0 and can't be killed (the killer's attacks register but
+	// DealDamage's `died` check is `hp > 0 && newHP == 0` — false
+	// when hp was 0 to begin with).
+	w.fireSpawnHook(e)
 	return id, nil
 }
 

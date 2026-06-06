@@ -279,6 +279,17 @@ class Agent:
                         "recent_self_results"):
                 if payload.get(key) is None:
                     payload[key] = []
+            # Defensive: non-agent entities (items, decorations) may
+            # have empty `facing` because they have no orientation.
+            # The pydantic Facing enum only accepts N/S/E/W, so
+            # coerce empties to "S" before validation. Same for
+            # self.facing in case the engine ever sends an empty
+            # string for a body that hasn't been oriented yet.
+            for v in payload.get("visible_entities") or []:
+                if not v.get("facing"):
+                    v["facing"] = "S"
+            if isinstance(payload.get("self"), dict) and not payload["self"].get("facing"):
+                payload["self"]["facing"] = "S"
             try:
                 obs = _ObservationAdapter.validate_python(payload)
             except Exception as e:

@@ -84,20 +84,35 @@ def l2_prompt(cluster: set[str], events: list[dict]) -> str:
 
 
 def l3_prompt(events: list[dict], l2_excerpts: list[str]) -> str:
-    lines = ["Whole-society events since last L3 fire "
-             f"({len(events)} events). Cluster summaries this window:"]
-    for s in l2_excerpts[-6:]:
-        lines.append("- " + s)
-    lines.append("\nRecent salient events:")
+    lines = [f"Society-level summary. Raw events in window: {len(events)}."]
+    if l2_excerpts:
+        lines.append("Recent cluster summaries:")
+        for s in l2_excerpts[-6:]:
+            lines.append("- " + s)
+    else:
+        lines.append("(no L2 cluster summaries yet — agents have not "
+                     "formed interaction clusters in this window)")
     salient = [ev for ev in events if ev.get("kind") in (
         "EntityDied", "TaskProposed", "TaskAccepted", "TaskRejected",
-        "TaskCompleted", "Whisper", "ItemTransferred", "Spawned",
+        "TaskCompleted", "Whisper", "ItemTransferred", "MentalNote",
+        "DamageDealt",
     )]
-    for ev in salient[-20:]:
-        lines.append("  " + fmt_event(ev))
+    if salient:
+        lines.append("\nSalient events:")
+        for ev in salient[-20:]:
+            lines.append("  " + fmt_event(ev))
+    else:
+        # No salient events at all — fall back to a slice of the
+        # global stream so Claude has something concrete to summarize
+        # instead of a near-empty prompt.
+        lines.append("\nSample events from window (no contracts, "
+                     "deaths, or whispers occurred):")
+        for ev in events[-25:]:
+            lines.append("  " + fmt_event(ev))
     lines.append(
         "\nSummarize the state of this society: factions, conflicts, "
-        "ongoing deals, anything emergent. 3-5 sentences."
+        "ongoing deals, anything emergent. If the window is uneventful "
+        "say so plainly — do not invent drama. 3-5 sentences."
     )
     return "\n".join(lines)
 
