@@ -19,6 +19,33 @@ this file alone.
 (Decisions land here as we make them. Format: short title, the
 choice, and the *why* so future-us understands the tradeoff.)
 
+### D11 — Variable time speed: 4x dev iteration, 1x demo recording
+
+Engine ticks at 60 Hz. In-game-to-wall-clock time speed is a
+config setting per session:
+
+- **Dev / iteration mode: 4x** — 30 in-game min = 7.5 real min.
+  Fast feedback for rule-tuning + prompt-iteration. Acceptable that
+  LLM agents are slightly bandwidth-pressured.
+- **Demo / benchmark recording mode: 1x** — 30 in-game min = 30
+  real min. Watchable arcs, agents can deliberate. The eventual
+  citable artifact runs at 1x.
+
+**Why:** "biggest emergent playground" requires both — fast
+iteration to build it, slow watchable runs to demonstrate it. One
+speed kills one audience. Variable speed costs little (a single
+multiplier in the tick scheduler) and serves both.
+
+**How to apply:**
+- `experiment.yaml` declares `time_multiplier: 1` or `4`.
+- Engine tick scheduler reads the multiplier on boot.
+- All durations (hunger_per_tick, gossip_decay, regen_rate) are
+  expressed in in-game time, so they're invariant to multiplier.
+- LLM-agent action queue rate-limits respect wall-clock, NOT
+  in-game time — at 4x an LLM agent's actions are scarcer per
+  in-game minute, intentionally. (At 4x the agent must be more
+  decisive; at 1x it can deliberate.)
+
 ### D10 — Death: full drop + non-omniscient identification
 
 When an agent dies (combat or starvation):
