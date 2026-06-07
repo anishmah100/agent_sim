@@ -162,24 +162,38 @@ async def check_coin_pickup() -> None:
         async for o in a.observations():
             eid = o.self.entity_id
             break
-        # Find a coin in the world close to agent.
-        world = http_json("/worlds/eldoria.json")
-        coins = [e for e in (world.get("entities") or [])
-                 if e.get("archetype") == "item"
-                 and any(k in str((e.get("extras") or {}).get("sprite", ""))
-                         for k in coin_kinds)]
-        if not coins:
-            fail("no coins in world")
+        # Find a coin from the agent's OWN live observation. Using the
+        # static /worlds/eldoria.json entity ids is wrong: the live engine
+        # assigns its own runtime ids (item_NNN / spawn_NNN), so a static
+        # id resolves to a different (or non-) entity and pickup is
+        # rejected "not_an_item". Walk toward the hub until a monetary
+        # item is in view, then target IT by its live entity_id.
+        target = None
+        target_pos = None
+        target_eid = None
+        for _ in range(40):
+            async for o in a.observations():
+                ax, ay = o.self.pos
+                items = list(getattr(o, "visible_items", []) or [])
+                break
+            monetary = [it for it in items
+                        if any(k in str(it.sprite) for k in coin_kinds)]
+            if monetary:
+                monetary.sort(key=lambda it: max(
+                    abs(it.pos[0] - ax), abs(it.pos[1] - ay)))
+                target = monetary[0]
+                target_pos = tuple(target.pos)
+                target_eid = target.entity_id
+                break
+            # No coin in view; step toward the clustered item hub.
+            hx, hy = 764, 864
+            dx = 1 if ax < hx else -1 if ax > hx else 0
+            dy = 1 if ay < hy else -1 if ay > hy else 0
+            await a.act_batch(ActionBatch(actions=[Move(target=[ax + dx, ay + dy])]))
+            await asyncio.sleep(0.4)
+        if target is None:
+            fail("no monetary item came into view within 40 steps")
             return
-        # Pick closest to spawn.
-        async for o in a.observations():
-            ax, ay = o.self.pos
-            break
-        coins.sort(key=lambda c: max(
-            abs(c["pos"][0] - ax), abs(c["pos"][1] - ay)))
-        target = coins[0]
-        target_pos = tuple(target["pos"])
-        target_eid = target["entity_id"]
         # Walk to adjacency.
         start_gold = (http_json(f"/api/v1/agent/{eid}/mental_state")
                       .get("vitals") or {}).get("gold", 0)
@@ -236,11 +250,14 @@ async def check_social_ledger() -> None:
         async for o in b.observations():
             eid_b, pos_b = o.self.entity_id, o.self.pos
             break
-        # Step-walk A toward B's CURRENT pos every tick (B may also
-        # drift); cap at 90 steps. Pathfind via Move(target=B) often
-        # gets stuck on building corners, so we issue per-tile Moves.
+        # Walk A toward B's CURRENT pos every tick (B may also drift).
+        # Use Move(target=B) so the engine's A* routes around building
+        # walls — a naive per-tile greedy step wedges against corners and
+        # never arrives (the old cause of this check's false failures).
+        # If they spawned >64 tiles apart (beyond the pathfinder's cap),
+        # close the gap with greedy steps first, then let A* finish.
         adjacent = False
-        for step in range(90):
+        for step in range(120):
             async for o in a.observations():
                 ax, ay = o.self.pos
                 break
@@ -251,9 +268,14 @@ async def check_social_ledger() -> None:
                 adjacent = True
                 pos_b = [bx, by]
                 break
-            dx = 1 if ax < bx else -1 if ax > bx else 0
-            dy = 1 if ay < by else -1 if ay > by else 0
-            await a.act_batch(ActionBatch(actions=[Move(target=[ax + dx, ay + dy])]))
+            manhattan = abs(ax - bx) + abs(ay - by)
+            if manhattan > 60:
+                # Out of A* range — greedy-step to get within reach.
+                dx = 1 if ax < bx else -1 if ax > bx else 0
+                dy = 1 if ay < by else -1 if ay > by else 0
+                await a.act_batch(ActionBatch(actions=[Move(target=[ax + dx, ay + dy])]))
+            else:
+                await a.act_batch(ActionBatch(actions=[Move(target=[bx, by])]))
             await asyncio.sleep(0.4)
         if not adjacent:
             fail(f"agent A could not reach B (a={ax,ay} b={bx,by}) after 90 steps")
@@ -285,39 +307,30 @@ async def check_hunger_ticks() -> None:
         persona={"name": "v_h", "bio": ""},
         vision_mode=VisionMode.STRUCTURED, cadence_ms=500)
     async with Agent(creds) as a:
-        # Drain observations continuously so the WS doesn't back up
-        # and get dropped by the engine (which would orphan-clean
-        # the body and return the zero VitalsSnapshot in vitals).
-        async def drain():
-            async for _ in a.observations():
-                pass
-        drain_task = asyncio.create_task(drain())
-        try:
-            async for o in a.observations():
-                eid = o.self.entity_id
-                break
-            v0 = (http_json(f"/api/v1/agent/{eid}/mental_state")
-                  .get("vitals") or {})
-            h0 = v0.get("hunger", 0)
-            hp0 = v0.get("hp", 0)
-            await asyncio.sleep(5)
-            v1 = (http_json(f"/api/v1/agent/{eid}/mental_state")
-                  .get("vitals") or {})
-            h1 = v1.get("hunger", 0)
-            hp1 = v1.get("hp", 0)
-            if hp1 == 0 and hp0 > 0:
-                fail(f"agent body removed mid-test (orphan cleanup raced)")
-            elif h1 > h0:
-                ok(f"hunger went {h0:.4f} → {h1:.4f} (+{h1 - h0:.4f} in 5s)")
-            else:
-                fail(f"hunger did NOT tick: {h0} → {h1} "
-                     f"(hp: {hp0} → {hp1}) — vitals system stalled?")
-        finally:
-            drain_task.cancel()
-            try:
-                await drain_task
-            except (asyncio.CancelledError, Exception):
-                pass
+        # No manual drain needed: the SDK read loop now drops-oldest on a
+        # full inbox instead of blocking, so the WS stays alive (pings
+        # serviced) even while we just sleep. The old drain task spun a
+        # SECOND observations() iterator that raced the eid-grab below and
+        # produced spurious "body removed" failures.
+        async for o in a.observations():
+            eid = o.self.entity_id
+            break
+        v0 = (http_json(f"/api/v1/agent/{eid}/mental_state")
+              .get("vitals") or {})
+        h0 = v0.get("hunger", 0)
+        hp0 = v0.get("hp", 0)
+        await asyncio.sleep(5)
+        v1 = (http_json(f"/api/v1/agent/{eid}/mental_state")
+              .get("vitals") or {})
+        h1 = v1.get("hunger", 0)
+        hp1 = v1.get("hp", 0)
+        if hp1 == 0 and hp0 > 0:
+            fail("agent body removed mid-test (orphan cleanup raced)")
+        elif h1 > h0:
+            ok(f"hunger went {h0:.4f} → {h1:.4f} (+{h1 - h0:.4f} in 5s)")
+        else:
+            fail(f"hunger did NOT tick: {h0} → {h1} "
+                 f"(hp: {hp0} → {hp1}) — vitals system stalled?")
 
 
 # ─── 7. Narrator output (if running) ────────────────────────────────
