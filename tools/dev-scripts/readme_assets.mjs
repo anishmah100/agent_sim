@@ -33,11 +33,18 @@ const c = await frame();
 const browser = await chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 });
 const page = await ctx.newPage();
+// Watch for the atlas-loaded log so we never screenshot the placeholder
+// (rectangle) window before character sprites are ready.
+let atlasReady = false;
+page.on('console', (m) => { if (m.text().includes('character atlas loaded')) atlasReady = true; });
 await page.goto(FRONTEND, { waitUntil: 'domcontentloaded' });
-await page.waitForTimeout(3500);
 const skip = page.getByTestId('onboarding-skip');
-if (await skip.count()) await skip.first().click().catch(() => {});
 await page.waitForTimeout(1500);
+if (await skip.count()) await skip.first().click().catch(() => {});
+// Block until the character atlas has loaded (up to 20s).
+for (let i = 0; i < 40 && !atlasReady; i++) await page.waitForTimeout(500);
+console.log('atlas ready:', atlasReady);
+await page.waitForTimeout(800);
 
 async function shot(name, x, y, zoom, settleMs = 1800) {
   await page.evaluate(({ x, y, zoom }) => {
