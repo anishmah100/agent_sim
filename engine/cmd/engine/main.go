@@ -53,6 +53,7 @@ var (
 	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
 	flagSnapEvery = flag.Duration("snapshot-every", 60*time.Second, "how often to write a snapshot (0 disables)")
 	flagTimeMult  = flag.Float64("time-mult", 1.0, "in-game time multiplier (D11). 1.0 = real-time; 4.0 = 4x speed (dev iteration); higher values pack more in-game minutes into each real minute. The engine scheduler tick rate is multiplied by this value.")
+	flagNarratorJSONL = flag.String("narrator-jsonl", ".runlog/narrator.jsonl", "path to the narrator's output JSONL, served by /api/v1/narrator/recent for the Story Feed UI. The narrator process (tools/narrator) writes it; the engine only reads it.")
 
 	// Security
 	flagCORS    = flag.String("cors-allow", "", "comma-separated CORS allowlist (origins). Empty disables CORS.")
@@ -270,6 +271,8 @@ func main() {
 	mux.HandleFunc("/api/v1/agent/", wire.MentalStateHandler(hist, *flagCaptureReasoning, w))
 	// Debug: synthetic-vision query so we can diagnose D8 routing live.
 	mux.HandleFunc("/api/v1/debug/vision", wire.DebugVisionHandler(w))
+	// D15/D17 — Story Feed reads the narrator's output file via this.
+	mux.HandleFunc("/api/v1/narrator/recent", wire.NarratorHandler(*flagNarratorJSONL))
 
 	// Prometheus-format /metrics. Stats sourced from the existing
 	// counters (no client_golang dep).
