@@ -167,11 +167,20 @@ def render_audible(obs: Any) -> str:
 
 
 def build_prompt(obs: Any, persona: str, goal: str,
-                 last_results: list[str] | None = None) -> str:
+                 last_results: list[str] | None = None,
+                 intent: str = "") -> str:
     """Assemble the full tactical prompt for one decision cycle."""
     parts = [
         persona.strip(),
         f"\nYour current goal: {goal}",
+    ]
+    if intent:
+        parts.append(
+            f"Last turn you decided: \"{intent}\". If that target is "
+            f"still the best move and you haven't reached it, KEEP going "
+            f"toward it — don't switch targets every turn or you'll never "
+            f"arrive.")
+    parts += [
         "",
         render_self(obs),
         "",

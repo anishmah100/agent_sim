@@ -98,6 +98,12 @@ class QwenFocalAgent:
 
     _stopped: bool = False
     _last_results: list[str] = field(default_factory=list)
+    # Short intent memory: what the agent committed to last turn. Fed
+    # back into the prompt so the model maintains a goal across cycles
+    # instead of flip-flopping targets every turn and never arriving
+    # anywhere (the reason LLM agents never reached coins in early runs
+    # while deterministic step-toward bots collected fine).
+    _intent: str = ""
     cycles: int = 0
     accepted: int = 0
     rejected: int = 0
@@ -147,7 +153,7 @@ class QwenFocalAgent:
                     return
                 self.cycles += 1
                 prompt = build_prompt(obs, self.persona, self.goal,
-                                      self._last_results)
+                                      self._last_results, intent=self._intent)
                 t0 = time.monotonic()
                 try:
                     decision = await asyncio.to_thread(self._call_llm, prompt)
@@ -157,6 +163,9 @@ class QwenFocalAgent:
                     continue
                 dt_ms = int((time.monotonic() - t0) * 1000)
                 reasoning = str(decision.get("reasoning", ""))[:200]
+                # Remember this turn's reasoning as next turn's intent so
+                # the agent maintains a consistent goal across cycles.
+                self._intent = reasoning
                 raw_actions = decision.get("actions") or []
                 actions = [a for a in (to_action(d) for d in raw_actions) if a]
                 if not actions:
