@@ -31,7 +31,8 @@ Actions you can take (pick 1-3 per turn):
 Rules:
 - targets are ALWAYS the entity_id (e.g. "spawn_7"), never a display name.
 - RANGE: propose_task and accept_task work at ANY distance — never chase someone just to propose or accept a deal; do it from where you are. speak reaches ~8 tiles, whisper ~2 tiles.
-- ONLY give/pay/trade/attack require the target to be ADJACENT (within 1 tile) — move next to them first for those.
+- pay and give work within ~3 tiles (a short reach) — you do NOT need to be exactly adjacent to pay gold or hand over an item. If a deal partner is within a few tiles, pay/give them NOW.
+- ONLY trade/attack require the target to be strictly ADJACENT (within 1 tile) — move next to them first for those.
 - you can only eat/equip items that are in YOUR inventory."""
 
 

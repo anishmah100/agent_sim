@@ -399,7 +399,14 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 		res.Reason = "not_a_target"
 		return res
 	}
-	if w.Chebyshev(e.Pos(), target.Pos()) > 1 {
+	// Handing over an item is a social transaction; allow it at the same
+	// short configurable range as pay so transfers aren't hostage to
+	// pixel-perfect adjacency with a moving target.
+	giveRange := w.TuningInt("pay_max_range_tiles", 1)
+	if giveRange < 1 {
+		giveRange = 1
+	}
+	if w.Chebyshev(e.Pos(), target.Pos()) > giveRange {
 		res.Reason = "target_too_far"
 		return res
 	}

@@ -80,7 +80,16 @@ func (s *System) handlePay(w syscore.World, e syscore.Entity, env *syscore.Actio
 		res.Reason = "not_a_target"
 		return res
 	}
-	if w.Chebyshev(e.Pos(), target.Pos()) > 1 {
+	// Paying gold is a social transaction, not a physical grapple — allow
+	// it at a short configurable range so a slow LLM brain doesn't have to
+	// land on the exact adjacent tile of a moving target (the coordination
+	// wall that left contract rewards/bribes unpaid: agents accepted deals
+	// but could never get adjacent to honor them). attack stays strict.
+	payRange := w.TuningInt("pay_max_range_tiles", 1)
+	if payRange < 1 {
+		payRange = 1
+	}
+	if w.Chebyshev(e.Pos(), target.Pos()) > payRange {
 		res.Reason = "target_too_far"
 		return res
 	}

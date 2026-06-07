@@ -36,7 +36,7 @@ register_tuning("heal_amount",         5)
 # Economy
 register_tuning("starting_gold",       25)
 register_tuning("work_payment",        3)
-register_tuning("pay_max_range_tiles", 1)       # adjacency only
+register_tuning("pay_max_range_tiles", 3)       # pay + give: short social range, not strict adjacency
 
 # Social
 register_tuning("whisper_radius",      2)
