@@ -155,6 +155,7 @@ interface RenderedEntity {
   body: Sprite | AnimatedSprite | Graphics;
   facingMark: Graphics | null;
   label: Text;
+  hpBar: Graphics | null;          // floating HP bar; shown only when hurt
   prevPos: [number, number];
   movingSince: number;             // ms — for idle detection
   hitFlashUntil: number;           // BLK-1: ms timestamp; red tint while > now
@@ -176,6 +177,28 @@ const HIT_FLASH_MS = 160;
 function hpOf(e: EntityState): number | null {
   const v = e.extras?.["hp"];
   return typeof v === "number" ? v : null;
+}
+function maxHpOf(e: EntityState): number | null {
+  const v = e.extras?.["max_hp"];
+  return typeof v === "number" ? v : null;
+}
+
+// Draw a compact RPG-style HP bar (dark frame + green→amber→red fill)
+// centered over the footprint. Width scales with the entity tile.
+const HP_BAR_W = 14;
+const HP_BAR_H = 2;
+function drawHpBar(g: Graphics, hp: number, max: number): void {
+  g.clear();
+  const frac = Math.max(0, Math.min(1, hp / max));
+  const x = (FOOTPRINT_W - HP_BAR_W) / 2;
+  // color ramps green → amber → red as HP falls.
+  const color = frac > 0.6 ? 0x5ee86a : frac > 0.3 ? 0xffc24a : 0xff4d4d;
+  // dark frame
+  g.rect(x - 1, -1, HP_BAR_W + 2, HP_BAR_H + 2).fill({ color: 0x181425, alpha: 0.85 });
+  // empty track
+  g.rect(x, 0, HP_BAR_W, HP_BAR_H).fill({ color: 0x3a2233, alpha: 0.9 });
+  // fill
+  if (frac > 0) g.rect(x, 0, HP_BAR_W * frac, HP_BAR_H).fill({ color, alpha: 1 });
 }
 
 export interface ItemHoverEvent {
@@ -504,6 +527,20 @@ export class EntityLayer {
     if (facingMark) wrap.addChild(facingMark);
     wrap.addChild(label);
 
+    // Floating HP bar — sits just above the name label, hidden until the
+    // entity has actually taken damage (full-HP agents stay uncluttered).
+    const hpBar = new Graphics();
+    hpBar.y = (spec ? ((FOOTPRINT_H - 1) - 24) - 6 : -16);
+    hpBar.visible = false;
+    wrap.addChild(hpBar);
+    {
+      const hp = hpOf(e), mx = maxHpOf(e);
+      if (hp !== null && mx !== null && hp < mx) {
+        drawHpBar(hpBar, hp, mx);
+        hpBar.visible = true;
+      }
+    }
+
     this.applyPos(wrap, e.pos, e.archetype);
     this.container.addChild(wrap);
 
@@ -547,6 +584,7 @@ export class EntityLayer {
       body,
       facingMark,
       label,
+      hpBar,
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
       hitFlashUntil: 0,
@@ -637,6 +675,7 @@ export class EntityLayer {
       body: placeholder,           // initial body (replaced on tex load)
       facingMark: null,
       label: null as unknown as Text,  // no label for world objects
+      hpBar: null,
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
       hitFlashUntil: 0,
@@ -721,6 +760,16 @@ export class EntityLayer {
       re.hitFlashUntil = performance.now() + HIT_FLASH_MS;
       // BLK-1/FX: emit a floating damage number at the victim.
       this.onDamage?.(next.pos, re.prevHp - nh);
+    }
+    // Floating HP bar — show whenever the entity is below max HP.
+    if (re.hpBar) {
+      const mx = maxHpOf(next);
+      if (nh !== null && mx !== null && nh < mx && nh > 0) {
+        drawHpBar(re.hpBar, nh, mx);
+        re.hpBar.visible = true;
+      } else {
+        re.hpBar.visible = false;
+      }
     }
     re.prevHp = nh;
     re.state = { ...next };
