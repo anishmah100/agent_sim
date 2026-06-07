@@ -196,6 +196,28 @@ def build_prompt(obs: Any, persona: str, goal: str,
             f'{{"verb":"accept_task","id":"{_c.get("id")}"}} (no need to '
             f"move). If it helps your goal, accept this turn; otherwise "
             f"reject it. Don't ignore a pending offer.")
+    # An ACCEPTED deal you're part of is a live obligation: either HONOR it
+    # (pay the gold / give the item you promised — pay & give reach ~3
+    # tiles, no need to be adjacent — then complete_task to close it) or
+    # deliberately DEFECT (keep the reward, maybe even attack them). Both
+    # are legitimate; what's NOT useful is forgetting the deal exists,
+    # which is why accepted contracts produced 0 pays. Make the call.
+    _active = [c for c in (_ex.get("contracts") or [])
+               if isinstance(c, dict) and c.get("status") == "accepted"
+               and (c.get("proposer") == _me or c.get("target") == _me)]
+    if _active:
+        _c = _active[0]
+        _role = "proposer" if _c.get("proposer") == _me else "accepter"
+        _other = _c.get("target") if _role == "proposer" else _c.get("proposer")
+        parts.append(
+            f"\nACTIVE DEAL (id={_c.get('id')}, you are the {_role}) with "
+            f"{_other}: \"{_c.get('terms')}\", reward {_c.get('reward') or '?'}. "
+            f"Decide NOW: HONOR it — pay {_other} gold "
+            f'({{"verb":"pay","target":"{_other}","amount":N}}) or give them '
+            f"the promised item (both reach ~3 tiles, no need to be adjacent) "
+            f"— or DEFECT and keep everything (a betrayer might even attack "
+            f"them). Your persona drives this choice; don't just forget the "
+            f"deal exists.")
     if intent:
         parts.append(
             f"Last turn you decided: \"{intent}\". If that target is "
