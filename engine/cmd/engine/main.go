@@ -267,6 +267,7 @@ func main() {
 	mux.HandleFunc("/api/v1/world/edit_deco", wire.DecorationEditHandler(w))
 	mux.HandleFunc("/api/v1/agents", wire.AgentsListHandler(agents, w))
 	mux.HandleFunc("/api/v1/social", wire.SocialHandler(w)) // Society-Pulse graph
+	mux.HandleFunc("/api/v1/world/walkability", wire.WalkabilityHandler(w)) // static nav grid for agent-side A*
 	// AGENT-A7 inspector → mental_state endpoint. Path includes the
 	// entity id; the handler parses it out.
 	mux.HandleFunc("/api/v1/agent/", wire.MentalStateHandler(hist, *flagCaptureReasoning, w))

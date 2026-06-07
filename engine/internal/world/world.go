@@ -743,6 +743,29 @@ func (w *World) IsWalkable(t Tile) bool {
 	return w.walkable[t[1]][t[0]]
 }
 
+// WalkabilityRows returns the full STATIC walkability grid (terrain +
+// buildings/decorations, doors open) as one row-string per Y, '.'=walkable
+// '#'=blocked. Agents fetch this ONCE at startup to run their own A* (the
+// agent owns navigation; the engine no longer pathfinds for them). This is
+// the engine's authoritative grid, so agent A* exactly matches collision.
+func (w *World) WalkabilityRows() (int, int, []string) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	rows := make([]string, w.HeightTiles)
+	for y := 0; y < w.HeightTiles; y++ {
+		b := make([]byte, w.WidthTiles)
+		for x := 0; x < w.WidthTiles; x++ {
+			if w.walkable[y][x] {
+				b[x] = '.'
+			} else {
+				b[x] = '#'
+			}
+		}
+		rows[y] = string(b)
+	}
+	return w.WidthTiles, w.HeightTiles, rows
+}
+
 // CanEnter returns true if entity e can enter tile t right now:
 // walkable terrain AND not occupied by a different entity.
 func (w *World) CanEnter(e *Entity, t Tile) bool {
