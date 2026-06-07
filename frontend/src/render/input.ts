@@ -55,7 +55,13 @@ export function installClickToInspect(opts: {
     const world = viewport.toWorld(upX, upY);
     const tileX = Math.floor(world.x / TILE_SIZE_PX);
     const tileY = Math.floor(world.y / TILE_SIZE_PX);
-    const entity = hitTestEntity(getEntities(), tileX, tileY);
+    // Hit-test against the PRECISE fractional click point, not the floored
+    // tile centre — otherwise every click in a tile is treated as the
+    // tile's middle, so two agents one tile apart can't be told apart and
+    // the nearest-by-tile pick grabs the wrong (e.g. right-hand) one.
+    const fx = world.x / TILE_SIZE_PX;
+    const fy = world.y / TILE_SIZE_PX;
+    const entity = hitTestEntity(getEntities(), fx, fy);
     onClick({ worldX: world.x, worldY: world.y, tileX, tileY, entity });
   };
 
@@ -79,13 +85,19 @@ export function installClickToInspect(opts: {
 
 function hitTestEntity(
   entities: EntityState[],
-  tileX: number,
-  tileY: number,
+  fx: number,    // fractional click position in tile units (world.x / TILE)
+  fy: number,
 ): EntityState | null {
   let best: { e: EntityState; d2: number } | null = null;
   for (const e of entities) {
-    const dx = e.pos[0] - (tileX + 0.5);
-    const dy = e.pos[1] - (tileY + 0.5);
+    // Entity centre is its tile + (0.5, 0.5). The body sprite renders
+    // ABOVE the feet/logical tile, so a click on the visible torso lands
+    // ~0.6 tile above the centre; bias the click down by that much so
+    // clicking the body matches the entity it belongs to.
+    const cx = e.pos[0] + 0.5;
+    const cy = e.pos[1] + 0.5;
+    const dx = cx - fx;
+    const dy = cy - (fy + 0.6);
     const d2 = dx * dx + dy * dy;
     if (d2 < HIT_RADIUS_TILES * HIT_RADIUS_TILES &&
         (best === null || d2 < best.d2)) {
