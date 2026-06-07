@@ -152,15 +152,19 @@ class Handle:
         self.task: Optional[asyncio.Task] = None
 
 
-async def register_llm(engine: str, idx: int) -> Handle:
+async def register_llm(engine: str, idx: int, brain: str = "qwen") -> Handle:
     name, persona, goal = FOCAL_PERSONAS[idx % len(FOCAL_PERSONAS)]
     creds = await register_agent(
         engine, user_token="dev",
         persona={"name": name, "bio": persona, "archetype_tag": "llm"},
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
         cadence_ms=1000)
-    bot = QwenFocalAgent(creds=creds, persona=persona, goal=goal,
-                         cfg=FocalConfig(timeout_s=90))
+    if brain == "claude":
+        from agents.llm.claude_focal import ClaudeFocalAgent
+        bot = ClaudeFocalAgent(creds=creds, persona=persona, goal=goal)
+    else:
+        bot = QwenFocalAgent(creds=creds, persona=persona, goal=goal,
+                             cfg=FocalConfig(timeout_s=90))
     return Handle(name, "llm", creds, bot)
 
 
@@ -210,7 +214,7 @@ async def main_run(args) -> int:
     # Build cast.
     handles: list[Handle] = []
     for i in range(args.llm):
-        handles.append(await register_llm(engine, i))
+        handles.append(await register_llm(engine, i, getattr(args, "brain", "qwen")))
     cast_spec = _parse_cast(args.cast)
     for arch, count in cast_spec:
         for i in range(count):
@@ -490,6 +494,8 @@ def parse_args(argv):
     p.add_argument("--engine", default="http://127.0.0.1:8080")
     p.add_argument("--wall-seconds", type=int, default=240)
     p.add_argument("--llm", type=int, default=3, help="number of LLM focal agents")
+    p.add_argument("--brain", default="qwen", choices=["qwen", "claude"],
+                   help="LLM brain for focal agents (qwen=local, claude=Anthropic API)")
     p.add_argument("--cast", default="survivor:2,killer:1,manipulator:1",
                    help="rule-based cast e.g. survivor:2,killer:1,manipulator:1")
     p.add_argument("--narrator", action="store_true")
