@@ -53,3 +53,10 @@ emits an entity-id target (salvage-path artifact, rejected harmlessly);
 manipulator baseline shows false "VANISHED" in the harness poll (body is
 alive — wrong entity_id), pure reporting noise.
 
+
+**Update — run13 closes the loop.** With the fulfillment nudge + pay/give
+3-tile range: 5 contracts accepted, **6 pays**, 1 item transfer between
+Qwen agents (Gini 0.25). Full chain works: collect → propose → accept →
+honor-by-pay (or defect). Scorer caveat: it labels honored contracts
+"broken" because agents pay but never emit complete_task (not in grammar)
+— betrayal metric overcounts; fix next.
