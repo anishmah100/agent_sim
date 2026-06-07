@@ -97,16 +97,40 @@ def preflight(engine: str) -> bool:
     except Exception as e:
         log.error("PREFLIGHT FAIL: engine not reachable: %s", e)
         return False
+    # Find a position where an item actually exists, then probe THAT
+    # via debug/vision. This separates two failure modes:
+    #   - D8 wire bug: items exist in the world but vision returns 0
+    #     at a tile we KNOW has an item → hard fail.
+    #   - depletion: few items left anywhere → soft warn (the run can
+    #     proceed but won't have much economy; respawn replenishes).
     try:
-        vis = http_json(engine, "/api/v1/debug/vision?x=778&y=892")
-        if vis.get("v_items", 0) < 1:
-            log.error("PREFLIGHT FAIL: hub vision has %d items — D8 broken?",
-                      vis.get("v_items"))
-            return False
-        log.info("preflight: hub vision OK (%d items)", vis["v_items"])
+        world = http_json(engine, "/worlds/eldoria.json")
     except Exception as e:
-        log.error("PREFLIGHT FAIL: debug/vision unreachable (%s) — "
-                  "rebuild engine with the debug endpoint", e)
+        log.error("PREFLIGHT FAIL: cannot read world snapshot: %s", e)
+        return False
+    items = [e for e in (world.get("entities") or [])
+             if e.get("archetype") == "item"]
+    if len(items) < 20:
+        log.warning("PREFLIGHT WARN: only %d items in world — economy will "
+                    "be thin. Consider restarting the engine fresh "
+                    "(clear .runlog/snapshots).", len(items))
+    if not items:
+        log.error("PREFLIGHT FAIL: zero items in world")
+        return False
+    # Probe at an actual item's tile.
+    sample = items[len(items) // 2]
+    sx, sy = sample["pos"]
+    try:
+        vis = http_json(engine, f"/api/v1/debug/vision?x={sx}&y={sy}")
+        if vis.get("v_items", 0) < 1:
+            log.error("PREFLIGHT FAIL: item %s exists at (%d,%d) but "
+                      "debug/vision sees 0 items there — D8 wire bug?",
+                      sample.get("entity_id"), sx, sy)
+            return False
+        log.info("preflight: vision OK — %d items visible at a known "
+                 "item tile (%d total in world)", vis["v_items"], len(items))
+    except Exception as e:
+        log.error("PREFLIGHT FAIL: debug/vision unreachable (%s)", e)
         return False
     return True
 
@@ -205,8 +229,14 @@ async def main_run(args) -> int:
     for h in handles:
         h.task = asyncio.create_task(h.bot.run(), name=h.name)
 
-    # Run window with periodic progress.
+    # Run window with periodic progress. We ALSO poll each agent's
+    # gold every tick of the loop and keep the last NON-ZERO reading
+    # per agent — robust against an entity vanishing mid-run (which
+    # would otherwise make end-of-run gold read 0). The poll doubles
+    # as a diagnostic: a gold value that goes positive then drops to a
+    # missing entity tells us exactly when a body disappeared.
     t0 = time.monotonic()
+    gold_hist: dict[str, int] = {}
     try:
         while time.monotonic() - t0 < args.wall_seconds:
             await asyncio.sleep(15)
@@ -215,13 +245,34 @@ async def main_run(args) -> int:
                 live = len(http_json(engine, "/api/v1/agents", 3).get("agents", []))
             except Exception:
                 live = -1
-            # LLM cycle progress.
+            # Poll gold + detect vanished entities.
+            vanished = []
+            for h in handles:
+                eid = getattr(h.bot, "entity_id", None)
+                if not eid:
+                    continue
+                try:
+                    ms = http_json(engine, f"/api/v1/agent/{eid}/mental_state", 3)
+                    v = ms.get("vitals") or {}
+                    g = v.get("gold", 0)
+                    hp = v.get("hp", 0)
+                    # hp==0 + max_hp==0 means the zero snapshot → entity gone.
+                    if v.get("max_hp", 0) == 0:
+                        vanished.append(h.name)
+                    else:
+                        gold_hist[h.name] = g
+                except Exception:
+                    pass
             cyc = sum(getattr(h.bot, "cycles", 0) for h in handles if h.kind == "llm")
             acc = sum(getattr(h.bot, "accepted", 0) for h in handles if h.kind == "llm")
-            log.info("t+%ds live=%d llm_cycles=%d llm_accepted=%d",
-                     elapsed, live, cyc, acc)
-        # Collect gold + heatmap BEFORE stopping (disconnect removes bodies).
+            log.info("t+%ds live=%d llm_cycles=%d llm_accepted=%d gold=%s%s",
+                     elapsed, live, cyc, acc, gold_hist,
+                     f" VANISHED={vanished}" if vanished else "")
+        # Final collect; merge with last-known gold for any vanished body.
         gold, heatmap, manip_eids = collect_state(engine, handles)
+        for name, g in gold_hist.items():
+            if gold.get(name, 0) == 0 and g > 0:
+                gold[name] = g  # restore last-known before it vanished
     finally:
         log.info("stopping bots…")
         for h in handles:

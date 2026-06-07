@@ -98,8 +98,12 @@ def render_visible(obs: Any, self_pos) -> str:
         out.append("Items on the ground:")
         for it in sorted(items, key=lambda it: cheb(it.pos))[:8]:
             d = cheb(it.pos)
-            adj = " ADJACENT" if d <= 1 else f" {d} tiles"
-            out.append(f"  {it.entity_id} = {_item_kind(it.sprite)}{adj}")
+            if d <= 1:
+                hint = " ADJACENT — pickup NOW"
+            else:
+                hint = f" {d} tiles away — move to {tuple(it.pos)} first, " \
+                       f"do NOT pickup until adjacent"
+            out.append(f"  {it.entity_id} = {_item_kind(it.sprite)}{hint}")
     objs = list(getattr(obs, "visible_objects", []) or [])
     doors = [o for o in objs if o.kind == "door"]
     if doors:
@@ -188,5 +192,9 @@ def build_prompt(obs: Any, persona: str, goal: str,
         "",
         'Respond with JSON: {"reasoning":"<ONE short sentence, max 25 words>","actions":[<1-3 actions>]}.',
         "Pursue your goal. Be decisive — prefer concrete actions over waiting. Keep reasoning brief.",
+        "IMPORTANT: pickup/eat/pay/trade/whisper/attack only work on an "
+        "ADJACENT target (1 tile). If your target is farther, just move "
+        "toward it this turn and act next turn — do NOT batch a move with "
+        "an action on a far target, it will be rejected.",
     ]
     return "\n".join(parts)
