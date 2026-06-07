@@ -13,7 +13,8 @@ from agent_sim_sdk import (
     Give, Pay, Trade, Attack, ProposeTask, AcceptTask, CompleteTask, RejectTask,
 )
 
-ENGINE = "http://127.0.0.1:8080"
+import os as _os
+ENGINE = _os.environ.get("AGENT_SIM_ENGINE", "http://127.0.0.1:8080")
 results: list[tuple[str, str, str]] = []  # (verb, verdict, detail)
 
 
