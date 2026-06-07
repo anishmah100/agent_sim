@@ -61,7 +61,13 @@ register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
 # agents so scarcity drives interaction instead of just emptying out.
 register_tuning("respawn_interval_ticks", 600)    # 10 in-game sec @ 60Hz
 register_tuning("respawn_cap",            600)
-register_tuning("respawn_radius",         40)
+# radius 40 let items — and the agents chasing them — disperse past each
+# other's vision (radius 12), so runs were a coin-flip between a clustered
+# negotiating group and everyone hoarding solo in opposite corners (run13:
+# 6 pays vs run14: 0 contracts, same config). Match the spawn radius (14)
+# so loot stays in the cluster and agents remain in mutual vision —
+# proximity is the precondition for the propose/trade/pay loop to fire.
+register_tuning("respawn_radius",         14)
 register_tuning("respawn_hub_x",          764)    # == spawn_hub_x
 register_tuning("respawn_hub_y",          864)    # == spawn_hub_y
 
