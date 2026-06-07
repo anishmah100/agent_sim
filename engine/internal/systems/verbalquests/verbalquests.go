@@ -137,6 +137,7 @@ func (s *System) handlePropose(w syscore.World, e syscore.Entity, env *syscore.A
 	appendContract(w, p.Target, contract)
 	w.QueueEvent(TaskProposed{ID: id, Proposer: e.ID(), Target: p.Target, Terms: p.Terms, Reward: p.Reward})
 	w.BumpSocial(e.ID(), p.Target, "contract")
+	w.EmitSound(e.Pos(), "contract_propose") // FX: deal offered
 	res.Accepted = true
 	return res
 }
@@ -200,11 +201,14 @@ func (s *System) transitionStatus(w syscore.World, e syscore.Entity, env *syscor
 	case "TaskAccepted":
 		w.QueueEvent(TaskAccepted{ID: p.ID, Proposer: proposer, Target: target})
 		w.BumpSocial(proposer, target, "contract")
+		w.EmitSound(e.Pos(), "contract_accept") // FX: deal sealed
 	case "TaskRejected":
 		w.QueueEvent(TaskRejected{ID: p.ID, Proposer: proposer, Target: target})
+		w.EmitSound(e.Pos(), "contract_reject")
 	case "TaskCompleted":
 		w.QueueEvent(TaskCompleted{ID: p.ID, Proposer: proposer, Target: target})
 		w.BumpSocial(proposer, target, "contract")
+		w.EmitSound(e.Pos(), "contract_complete") // FX: deal honored
 	}
 	res.Accepted = true
 	return res

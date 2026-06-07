@@ -41,6 +41,36 @@ const GOLD_STYLE = new TextStyle({
   fill: "#fee761",
   stroke: { color: "#2a1f00", width: 3 },
 });
+// Chunk 2 economy/contract floaters (definitions were lost when the
+// session crashed mid-edit; the ingest() cases below reference them).
+const ITEM_STYLE = new TextStyle({
+  fontFamily: "ui-monospace, monospace",
+  fontSize: 10,
+  fontWeight: "bold",
+  fill: "#8ad0ff",
+  stroke: { color: "#06212e", width: 3 },
+});
+const DEAL_STYLE = new TextStyle({
+  fontFamily: "ui-monospace, monospace",
+  fontSize: 10,
+  fontWeight: "bold",
+  fill: "#e8c860",
+  stroke: { color: "#2a1f00", width: 3 },
+});
+const ACCEPT_STYLE = new TextStyle({
+  fontFamily: "ui-monospace, monospace",
+  fontSize: 10,
+  fontWeight: "bold",
+  fill: "#5ee89a",
+  stroke: { color: "#06251a", width: 3 },
+});
+const REJECT_STYLE = new TextStyle({
+  fontFamily: "ui-monospace, monospace",
+  fontSize: 10,
+  fontWeight: "bold",
+  fill: "#ff8a8a",
+  stroke: { color: "#2a0000", width: 3 },
+});
 
 function tilePx(t: [number, number]): { x: number; y: number } {
   return { x: t[0] * TILE_SIZE_PX + TILE_SIZE_PX / 2,
@@ -76,6 +106,28 @@ export class FxLayer {
         case "coin_clink":
           this.float(ev.from_pos, "+gold", GOLD_STYLE);
           this.spark(p.x, p.y, 0xfee761);
+          break;
+        case "item_give":
+          this.float(ev.from_pos, "gift", ITEM_STYLE);
+          this.spark(p.x, p.y, 0x8ad0ff);
+          break;
+        case "item_trade":
+          this.float(ev.from_pos, "trade", ITEM_STYLE);
+          this.spark(p.x, p.y, 0x8ad0ff);
+          break;
+        case "contract_propose":
+          this.float(ev.from_pos, "deal?", DEAL_STYLE);
+          this.ripple(p.x, p.y, 1.4 * TILE_SIZE_PX, 0xc9a227, 360);
+          break;
+        case "contract_accept":
+          this.float(ev.from_pos, "deal ✓", ACCEPT_STYLE);
+          this.ripple(p.x, p.y, 2.0 * TILE_SIZE_PX, 0x3ad17a, 500);
+          break;
+        case "contract_complete":
+          this.float(ev.from_pos, "honored ✓", ACCEPT_STYLE);
+          break;
+        case "contract_reject":
+          this.float(ev.from_pos, "declined", REJECT_STYLE);
           break;
       }
     }

@@ -441,6 +441,7 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 		real.SetExtra("inventory", cur)
 	})
 	w.QueueEvent(ItemTransferred{From: e.ID(), To: p.Target, Item: p.Item})
+	w.EmitSound(target.Pos(), "item_give") // FX: visible gift handoff
 	res.Accepted = true
 	return res
 }

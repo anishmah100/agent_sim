@@ -97,6 +97,7 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 	})
 	w.QueueEvent(inventory.ItemTransferred{From: e.ID(), To: p.Target, Item: p.Item})
 	w.BumpSocial(e.ID(), p.Target, "trade")
+	w.EmitSound(target.Pos(), "item_trade") // FX: visible item handoff
 	res.Accepted = true
 	return res
 }
