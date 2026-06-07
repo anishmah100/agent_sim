@@ -9,7 +9,7 @@ from .client import Agent, register_and_connect, register_agent, AgentCredential
 from .models import (
     Observation, SelfState, VisibleEntity, VisibleObject, VisibleItem, AudibleEvent, WorldClock,
     Action, ActionBatch, ActionResult, ReasonCode, Pos, Facing,
-    Move, Speak, Whisper, Shout, LookAt, Interact,
+    Move, Step, Speak, Whisper, Shout, LookAt, Interact,
     Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
     MentalNote,
     Pay, WorkForPay, Trade, Loot,
@@ -34,7 +34,7 @@ __all__ = [
     "Pos",
     "Facing",
     "VisionMode",
-    "Move", "Speak", "Whisper", "Shout", "LookAt", "Interact",
+    "Move", "Step", "Speak", "Whisper", "Shout", "LookAt", "Interact",
     "Pickup", "Drop", "Eat", "Equip", "Give", "Attack", "Defend", "Heal", "Wait",
     "MentalNote",
     "Pay", "WorkForPay", "Trade", "Loot",

@@ -107,6 +107,31 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			return res
 		}
 		res.Accepted = true
+	case "step":
+		// Single-tile compass step. The AGENT owns navigation (A* on its
+		// known terrain); the engine just executes one committed tile.
+		var p struct {
+			Dir string `json:"dir"`
+		}
+		if err := json.Unmarshal(env.Raw, &p); err != nil {
+			res.Reason = "bad_params"
+			return res
+		}
+		d, ok := dirDelta(p.Dir)
+		if !ok {
+			res.Reason = "bad_direction"
+			return res
+		}
+		next := Tile{e.LogicalTile[0] + d[0], e.LogicalTile[1] + d[1]}
+		if !w.IsWalkable(next) {
+			res.Reason = "blocked_by_terrain"
+			return res
+		}
+		if !w.stepOneTile(e, next) {
+			res.Reason = "blocked"
+			return res
+		}
+		res.Accepted = true
 	case "speak":
 		var p struct {
 			Text string `json:"text"`

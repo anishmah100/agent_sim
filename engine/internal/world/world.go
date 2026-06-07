@@ -803,6 +803,44 @@ func (w *World) startMove(e *Entity, target Tile) bool {
 	return true
 }
 
+// dirDelta maps a compass direction to a one-tile offset. ok=false for an
+// unrecognized direction string.
+func dirDelta(dir string) (Tile, bool) {
+	switch strings.ToUpper(strings.TrimSpace(dir)) {
+	case "N", "NORTH":
+		return Tile{0, -1}, true
+	case "S", "SOUTH":
+		return Tile{0, 1}, true
+	case "E", "EAST":
+		return Tile{1, 0}, true
+	case "W", "WEST":
+		return Tile{-1, 0}, true
+	}
+	return Tile{}, false
+}
+
+// stepOneTile moves the entity exactly one tile to `next` (an adjacent
+// tile), reusing the same per-tile walk machinery startMove uses (claim
+// occupancy, set WalkFromTile/LogicalTile/WalkProgress, facing). NO
+// pathfinding — the AGENT owns navigation now; the engine only executes a
+// single committed step. Returns false (caller → "blocked") when the tile
+// isn't enterable. walkPath is cleared so the tick loop treats this as a
+// one-tile move and frees the from-tile when WalkProgress completes.
+func (w *World) stepOneTile(e *Entity, next Tile) bool {
+	if !w.CanEnter(e, next) {
+		return false
+	}
+	w.occupants[next] = e.EntityID
+	e.WalkFromTile = e.LogicalTile
+	e.LogicalTile = next
+	e.WalkProgress = 0
+	e.walkPath = nil
+	e.targetTile = next
+	e.CurrentAction = "move"
+	e.Facing = stepFacing(e.WalkFromTile, next)
+	return true
+}
+
 func stepFacing(from, to Tile) Facing {
 	if to[0] > from[0] {
 		return FacingE

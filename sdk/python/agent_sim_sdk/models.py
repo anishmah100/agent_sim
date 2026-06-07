@@ -146,6 +146,14 @@ class Move(_Action):
     jog: bool = False
 
 
+class Step(_Action):
+    """Move exactly one tile in a compass direction (N/S/E/W). The AGENT
+    owns navigation — compute your route (see agents.common.nav) and feed
+    the engine one Step per tick. The engine does NOT pathfind."""
+    verb: Literal["step"] = "step"
+    dir: Literal["N", "S", "E", "W"]
+
+
 class Speak(_Action):
     verb: Literal["speak"] = "speak"
     text: str
@@ -374,7 +382,7 @@ class CompleteTask(_Action):
 Action = Annotated[
     Union[
         # Base verbs.
-        Move, Speak, Whisper, Shout, LookAt, Interact,
+        Move, Step, Speak, Whisper, Shout, LookAt, Interact,
         Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
         # Composable-system verbs (session 2).
         Pay, WorkForPay, Trade, Loot,
