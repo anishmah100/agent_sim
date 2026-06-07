@@ -157,6 +157,25 @@ interface RenderedEntity {
   label: Text;
   prevPos: [number, number];
   movingSince: number;             // ms — for idle detection
+  hitFlashUntil: number;           // BLK-1: ms timestamp; red tint while > now
+  prevHp: number | null;           // BLK-1: last seen hp, to detect damage
+}
+
+// BLK-1: a removed agent that's fading out (death). Kept rendering for
+// FADE_MS so a kill reads as a body falling + dissolving instead of the
+// character popping out of existence.
+interface DyingEntity {
+  re: RenderedEntity;
+  start: number;                   // performance.now() when death detected
+}
+const DEATH_FADE_MS = 1400;
+const HIT_FLASH_MS = 160;
+
+// BLK-1: read an entity's hp from its public extras, or null if it has
+// none (world objects / items). Used to detect damage between snapshots.
+function hpOf(e: EntityState): number | null {
+  const v = e.extras?.["hp"];
+  return typeof v === "number" ? v : null;
 }
 
 export interface ItemHoverEvent {
@@ -185,6 +204,7 @@ export interface AgentHoverEvent {
 export class EntityLayer {
   readonly container: Container;
   private items = new Map<string, RenderedEntity>();
+  private dying: DyingEntity[] = [];   // BLK-1: agents fading out on death
   private selectionRing: Graphics;
   private selectedId: string | null = null;
   private pulsePhase = 0;
@@ -288,6 +308,32 @@ export class EntityLayer {
    *  Called from PixiApp's ticker. */
   tick(deltaMs: number): void {
     this.pulsePhase = (this.pulsePhase + deltaMs / 230) % (Math.PI * 2);
+
+    // BLK-1: damage flash — red-tint bodies whose hp just dropped.
+    const now = performance.now();
+    for (const re of this.items.values()) {
+      const b = re.body as unknown as { tint?: number };
+      if (b.tint === undefined) continue;
+      b.tint = re.hitFlashUntil > now ? 0xff4d4d : 0xffffff;
+    }
+    // BLK-1: death fade — advance fading bodies and destroy when done.
+    if (this.dying.length > 0) {
+      const startY = (d: DyingEntity) => d.re.container.y;
+      for (let i = this.dying.length - 1; i >= 0; i--) {
+        const d = this.dying[i];
+        const t01 = Math.min(1, (now - d.start) / DEATH_FADE_MS);
+        d.re.container.alpha = 1 - t01;
+        // slight slump downward as it falls.
+        d.re.container.y = startY(d); // (no cumulative drift; alpha is the tell)
+        const b = d.re.body as unknown as { tint?: number };
+        if (b.tint !== undefined) b.tint = 0x000000; // fade to dark
+        if (t01 >= 1) {
+          d.re.container.destroy({ children: true });
+          this.dying.splice(i, 1);
+        }
+      }
+    }
+
     if (this.selectedId === null) return;
     const re = this.items.get(this.selectedId);
     if (!re) {
@@ -322,8 +368,21 @@ export class EntityLayer {
     // Remove anything that disappeared.
     for (const [id, re] of this.items) {
       if (!incoming.has(id)) {
-        re.container.destroy({ children: true });
+        // BLK-1: a vanished CHARACTER (has hp + wasn't inside a building)
+        // most likely just died — fade it out as a falling body instead
+        // of popping it out instantly. Items (no hp) and agents that
+        // merely entered a building are destroyed immediately as before.
+        const wasChar = re.state.extras != null &&
+          re.state.extras["hp"] !== undefined &&
+          !re.state.inside_building;
+        if (wasChar) {
+          re.container.visible = true;
+          this.dying.push({ re, start: performance.now() });
+        } else {
+          re.container.destroy({ children: true });
+        }
         this.items.delete(id);
+        if (this.selectedId === id) this.setSelected(null);
       }
     }
     // Add or update incoming.
@@ -472,6 +531,8 @@ export class EntityLayer {
       label,
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
+      hitFlashUntil: 0,
+      prevHp: hpOf(e),
     };
   }
 
@@ -560,6 +621,8 @@ export class EntityLayer {
       label: null as unknown as Text,  // no label for world objects
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
+      hitFlashUntil: 0,
+      prevHp: hpOf(e),
     };
   }
 
@@ -633,6 +696,13 @@ export class EntityLayer {
     } else if (re.facingMark && turned) {
       drawFacingMark(re.facingMark, next.facing);
     }
+    // BLK-1: damage flash — if hp dropped since the last snapshot, flash
+    // the body red briefly so combat is visible (the victim flinches).
+    const nh = hpOf(next);
+    if (nh !== null && re.prevHp !== null && nh < re.prevHp) {
+      re.hitFlashUntil = performance.now() + HIT_FLASH_MS;
+    }
+    re.prevHp = nh;
     re.state = { ...next };
   }
 
