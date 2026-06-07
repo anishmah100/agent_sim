@@ -50,6 +50,14 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 			Extras:         copyExtras(e.Extras),
 			InsideBuilding: e.InsideBuilding,
 		},
+		// Initialize collection fields as empty slices, NOT nil. Same
+		// reason as snapshot.go's buildObservationSnap: nil → null in
+		// JSON breaks SDK pydantic validation on typed list[...] fields.
+		VisibleEntities:   []VisibleEntityState{},
+		VisibleObjects:    []VisibleObjectState{},
+		VisibleItems:      []VisibleItemState{},
+		Audible:           []AudibleEvent{},
+		RecentSelfResults: []ActionResult{},
 		WorldClock: WorldClockState{
 			Tick:      w.tick,
 			DayPhase:  dayPhaseFromTick(w.tick),

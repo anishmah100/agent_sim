@@ -42,7 +42,8 @@ WEAPON_KINDS = {"dagger", "sword_short", "sword_long", "axe", "club_wood", "hamm
 # pickup (inventory.go's coinValues table) so the bot doesn't even
 # need a "consume coin" step — pickup IS the deposit.
 MONEY_KINDS = {"coin_single", "coins_small_pile", "coin_pouch",
-               "gem_emerald", "gem_ruby", "gem_diamond"}
+               "coins_large_pile", "coins_jumbo_pile",
+               "gem_sapphire", "gem_emerald", "gem_ruby", "gem_diamond"}
 
 
 def is_money(it) -> bool:

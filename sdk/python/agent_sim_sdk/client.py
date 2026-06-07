@@ -275,8 +275,8 @@ class Agent:
             # model types these as list[...], so coerce None → [] before
             # validation. Engine v0.0.3+ initializes empty slices but we
             # keep the coercion for forward + backward compat.
-            for key in ("visible_entities", "visible_objects", "audible",
-                        "recent_self_results"):
+            for key in ("visible_entities", "visible_objects", "visible_items",
+                        "audible", "recent_self_results"):
                 if payload.get(key) is None:
                     payload[key] = []
             # Defensive: non-agent entities (items, decorations) may

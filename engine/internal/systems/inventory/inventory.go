@@ -28,12 +28,15 @@ type MoneyGranter interface {
 // (coins are wealth, not carryable bags-of-stuff) and frees up
 // the 10-slot inventory cap for items the player actually carries.
 var coinValues = map[string]int{
-	"coin_single":     1,
+	"coin_single":      1,
 	"coins_small_pile": 5,
-	"coin_pouch":      10,
-	"gem_emerald":     50,
-	"gem_ruby":        75,
-	"gem_diamond":    100,
+	"coin_pouch":       10,
+	"coins_large_pile": 25,
+	"coins_jumbo_pile": 50,
+	"gem_sapphire":     30,
+	"gem_emerald":      50,
+	"gem_ruby":         75,
+	"gem_diamond":     100,
 }
 
 // DefaultMaxSlots — D20. Hard cap at 10 slots. Each item (including

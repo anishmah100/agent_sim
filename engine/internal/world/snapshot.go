@@ -199,9 +199,11 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 		// Observation model rejects (these are typed list[...], not
 		// Optional). Empty slices serialize to `[]` and clients can
 		// iterate without null-guards.
-		VisibleEntities: []VisibleEntityState{},
-		VisibleObjects:  []VisibleObjectState{},
-		Audible:         []AudibleEvent{},
+		VisibleEntities:   []VisibleEntityState{},
+		VisibleObjects:    []VisibleObjectState{},
+		VisibleItems:      []VisibleItemState{},
+		Audible:           []AudibleEvent{},
+		RecentSelfResults: []ActionResult{},
 		WorldClock: WorldClockState{
 			Tick:     s.Tick,
 			DayPhase: dayPhaseFromTick(s.Tick),

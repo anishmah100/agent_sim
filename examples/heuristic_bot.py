@@ -36,8 +36,8 @@ from agent_sim_sdk import (
 # engine/internal/systems/inventory/inventory.go::coinValues.
 _MONEY_KINDS = {
     "coin_single", "coins_small_pile", "coin_pouch",
-    "coins_large_pile",
-    "gem_emerald", "gem_ruby", "gem_diamond",
+    "coins_large_pile", "coins_jumbo_pile",
+    "gem_sapphire", "gem_emerald", "gem_ruby", "gem_diamond",
 }
 
 
