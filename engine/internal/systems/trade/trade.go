@@ -48,6 +48,10 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 		res.Reason = "not_a_target"
 		return res
 	}
+	if target.ID() == e.ID() {
+		res.Reason = "self_target" // B15
+		return res
+	}
 	if w.Chebyshev(e.Pos(), target.Pos()) > 1 {
 		res.Reason = "target_too_far"
 		return res

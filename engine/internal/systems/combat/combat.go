@@ -243,6 +243,12 @@ func (s *System) handleHeal(w syscore.World, e syscore.Entity, env *syscore.Acti
 		return res
 	}
 	hp := extrasInt(target, "hp")
+	if hp <= 0 {
+		// BUG FIX (B2): heal must not resurrect the dead. hp==0 is the
+		// death sentinel; reviving a corpse made death non-durable.
+		res.Reason = "target_dead"
+		return res
+	}
 	maxHP := extrasInt(target, "max_hp")
 	newHP := hp + w.TuningInt("heal_amount", DefaultHealAmount)
 	if newHP > maxHP {
@@ -394,6 +400,17 @@ func (s *service) DealDamage(w syscore.World, targetID string, amount int, cause
 			}
 		}
 		w.EmitDeathScream(target.Pos(), targetID, killer, muffled)
+		// BUG FIX (B1): nothing subscribed to EntityDied, so corpses were
+		// NEVER removed — a dead agent kept occupying its tile (blocking
+		// movement/pathing/spawn forever), stayed a valid target for
+		// attack/heal/pay/trade/give/whisper/propose, and still showed in
+		// visible_entities, corrupting every emergence metric. Remove the
+		// body now (frees its occupant tile + spatial index via the
+		// adapter). Loot was already dropped to the ground above, so it
+		// stays lootable; the killer can loot the drops. The agent's WS
+		// simply stops receiving observations (BuildObservationFor returns
+		// nil for a missing entity → push skipped), so its bot idles out.
+		w.RemoveEntity(targetID)
 	}
 	return newHP, died
 }

@@ -69,8 +69,15 @@ func (a *WorldAdapter) SpawnEntity(e syscore.Entity) error {
 func (a *WorldAdapter) SpawnEntityFromSpec(spec syscore.EntitySpec) (syscore.Entity, error) {
 	id := spec.ID
 	if id == "" {
-		id = "spawn_" + formatUint64(a.W.eventSeq)
-		a.W.eventSeq++
+		// BUG FIX (B3): use the SAME pre-increment allocator as
+		// SpawnAgentEntity (queue.go nextEntityID). Previously this path
+		// read the counter THEN incremented (post-increment) while
+		// nextEntityID increments THEN reads — the off-by-one on the
+		// shared counter let the two spawn paths mint the same "spawn_N"
+		// id for two different entities, silently clobbering one in
+		// w.entities (e.g. a death-drop/respawn item overwriting a live
+		// agent body).
+		id = nextEntityID(&a.W.eventSeq)
 	}
 	e := &Entity{
 		EntityID:    id,

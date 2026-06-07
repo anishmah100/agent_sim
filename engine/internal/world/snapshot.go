@@ -251,8 +251,10 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 						sprite = "item:" + other.EntityID
 					}
 					qty := 1
-					if q, ok := other.Extras["quantity"].(int); ok && q > 0 {
-						qty = q
+					// BUG FIX (C2): see observation.go — extras numerics are
+					// float64 after JSON load, so `.(int)` always missed.
+					if q, ok := numericExtra(other.Extras, "quantity"); ok && q > 0 {
+						qty = int(q)
 					}
 					obs.VisibleItems = append(obs.VisibleItems, VisibleItemState{
 						EntityID: other.EntityID,

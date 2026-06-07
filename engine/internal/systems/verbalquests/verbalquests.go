@@ -280,6 +280,15 @@ func indexContract(contracts []map[string]any, id string) int {
 }
 
 func appendContract(w syscore.World, entityID string, contract map[string]any) {
+	// BUG FIX (B5): store an INDEPENDENT clone per party. handlePropose
+	// passes the same map to both proposer and target; sharing the
+	// pointer meant mutateContract on one ledger silently mutated the
+	// other (defeating per-party ledgers) and aliased a nested map across
+	// the snapshot boundary.
+	clone := make(map[string]any, len(contract))
+	for k, v := range contract {
+		clone[k] = v
+	}
 	w.MutateEntity(entityID, func(real syscore.Entity) {
 		cur := readContracts(real)
 		// Materialize as []any so JSON round-trips match the seeded shape.
@@ -287,7 +296,7 @@ func appendContract(w syscore.World, entityID string, contract map[string]any) {
 		for _, c := range cur {
 			out = append(out, c)
 		}
-		out = append(out, contract)
+		out = append(out, clone)
 		real.SetExtra("contracts", out)
 	})
 }

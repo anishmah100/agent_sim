@@ -86,6 +86,10 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			res.Reason = "unreachable"
 			return res
 		}
+		// BLK-3: for a WALKABLE but currently-unreachable target (behind a
+		// wall, ringed by occupants), startMove → findPath now returns a
+		// best-effort path that gets the agent as close as possible instead
+		// of failing outright — so agents stop wedging on "no_path".
 		if !w.startMove(e, t) {
 			res.Reason = "no_path"
 			return res
@@ -97,7 +101,11 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			res.Reason = "bad_params"
 			return res
 		}
-		w.emitSpeech(e, "speech", p.Text, 3)
+		// Radius from rules.star (speak_radius), not a hardcoded 3 —
+		// the tuning was declared (=8) but ignored, so speech carried
+		// far less than intended and clustered agents (vision 12) often
+		// couldn't hear each other.
+		w.emitSpeech(e, "speech", p.Text, w.Rules.GetInt("speak_radius", 8))
 		res.Accepted = true
 	case "shout":
 		var p struct{ Text string `json:"text"` }
@@ -105,7 +113,7 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			res.Reason = "bad_params"
 			return res
 		}
-		w.emitSpeech(e, "shout", p.Text, 15)
+		w.emitSpeech(e, "shout", p.Text, w.Rules.GetInt("shout_radius", 30))
 		res.Accepted = true
 	case "whisper":
 		var p struct {
@@ -121,7 +129,7 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			res.Reason = "unknown_target"
 			return res
 		}
-		if chebyshev(e.LogicalTile, target.LogicalTile) > 1 {
+		if chebyshev(e.LogicalTile, target.LogicalTile) > w.Rules.GetInt("whisper_radius", 2) {
 			res.Reason = "target_too_far"
 			return res
 		}

@@ -744,6 +744,9 @@ func (w *World) startMove(e *Entity, target Tile) bool {
 	if target == e.LogicalTile {
 		return true
 	}
+	// BLK-3: findPath now returns a best-effort path toward an unreachable
+	// (walkable) target — gets the agent as close as it can rather than
+	// returning nil, so agents stop wedging retrying the same blocked move.
 	path := w.findPath(e.LogicalTile, target, e)
 	if len(path) < 2 {
 		return false
@@ -804,6 +807,21 @@ func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 	seen := map[Tile]int{start: 0}
 	queue := []int{0}
 	dirs := []Tile{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
+	// BUG FIX (BLK-3): track the explored tile CLOSEST to the goal so
+	// that when the exact goal is unreachable (blocked by a wall, sitting
+	// on a non-walkable decoration tile, or occupied), we still return a
+	// best-effort path that makes progress toward it — instead of nil,
+	// which left agents wedged retrying the same blocked move ("no_path"
+	// was the #1 logged failure). Distance is manhattan-to-goal.
+	bestIdx := 0
+	bestDist := absInt(goal[0]-start[0]) + absInt(goal[1]-start[1])
+	reconstruct := func(idx int) []Tile {
+		path := []Tile{}
+		for i := idx; i != -1; i = visited[i].parent {
+			path = append([]Tile{visited[i].t}, path...)
+		}
+		return path
+	}
 	// Visit cap as a second safety net — diagonals + obstacles can blow
 	// past manhattan in pathological maps. 4096 tiles ≈ 64² area covered.
 	const maxNodes = 4096
@@ -812,12 +830,7 @@ func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 		queue = queue[1:]
 		cur := visited[idx].t
 		if cur == goal {
-			// reconstruct
-			path := []Tile{}
-			for i := idx; i != -1; i = visited[i].parent {
-				path = append([]Tile{visited[i].t}, path...)
-			}
-			return path
+			return reconstruct(idx)
 		}
 		for _, d := range dirs {
 			n := Tile{cur[0] + d[0], cur[1] + d[1]}
@@ -839,7 +852,17 @@ func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 			seen[n] = len(visited)
 			visited = append(visited, node{t: n, parent: idx})
 			queue = append(queue, len(visited)-1)
+			if d := absInt(n[0]-goal[0]) + absInt(n[1]-goal[1]); d < bestDist {
+				bestDist = d
+				bestIdx = len(visited) - 1
+			}
 		}
+	}
+	// Goal unreachable: return the best-effort path toward it (empty if
+	// we couldn't get any closer than where we started — caller treats
+	// len<2 as no_path).
+	if bestIdx != 0 {
+		return reconstruct(bestIdx)
 	}
 	return nil
 }

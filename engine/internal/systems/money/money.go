@@ -80,6 +80,10 @@ func (s *System) handlePay(w syscore.World, e syscore.Entity, env *syscore.Actio
 		res.Reason = "not_a_target"
 		return res
 	}
+	if target.ID() == e.ID() {
+		res.Reason = "self_target" // B15: no self-pay loops in the ledger
+		return res
+	}
 	// Paying gold is a social transaction, not a physical grapple — allow
 	// it at a short configurable range so a slow LLM brain doesn't have to
 	// land on the exact adjacent tile of a moving target (the coordination

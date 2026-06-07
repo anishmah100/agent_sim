@@ -234,9 +234,20 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 		res.Reason = "inventory_full"
 		return res
 	}
+	// Store a kind-bearing inventory id: "item:<kind>#<entityid>".
+	// BUG FIX: previously we stored the raw target entity id (e.g.
+	// "spawn_160"/"item_221"), but every downstream consumer
+	// (satietyForItem, weaponKindOf, vitals itemKindString, the LLM's
+	// render_self) resolves an item's kind by stripping "item:" and "#"
+	// — neither present in a raw entity id. So eat returned "not_food",
+	// equip couldn't see weapons, and both the inspector and the agent's
+	// own perception showed opaque ids. The "#<entityid>" suffix keeps
+	// each carried item unique (so give/drop/eat target the right one)
+	// while "item:<kind>" makes the kind resolvable everywhere.
+	invID := "item:" + kind + "#" + p.Target
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
 		cur := extrasStrSlice(real, "inventory")
-		cur = append(cur, p.Target)
+		cur = append(cur, invID)
 		real.SetExtra("inventory", cur)
 	})
 	w.RemoveEntity(p.Target)
@@ -397,6 +408,10 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 	}
 	if !syscore.IsAgentArchetype(target.Archetype()) {
 		res.Reason = "not_a_target"
+		return res
+	}
+	if target.ID() == e.ID() {
+		res.Reason = "self_target" // B15
 		return res
 	}
 	// Handing over an item is a social transaction; allow it at the same

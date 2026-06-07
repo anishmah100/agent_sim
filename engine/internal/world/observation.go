@@ -88,8 +88,12 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 				sprite = "item:" + other.EntityID
 			}
 			qty := 1
-			if q, ok := other.Extras["quantity"].(int); ok && q > 0 {
-				qty = q
+			// BUG FIX (C2): world.json extras decode via json.Unmarshal,
+			// so numerics are float64 — the `.(int)` assertion ALWAYS
+			// failed and every stack reported quantity:1. Use the tolerant
+			// numericExtra helper.
+			if q, ok := numericExtra(other.Extras, "quantity"); ok && q > 0 {
+				qty = int(q)
 			}
 			obs.VisibleItems = append(obs.VisibleItems, VisibleItemState{
 				EntityID: other.EntityID,
@@ -170,9 +174,44 @@ func copyExtras(src map[string]interface{}) map[string]interface{} {
 	}
 	dst := make(map[string]interface{}, len(src))
 	for k, v := range src {
-		dst[k] = v
+		// BUG FIX (B4): DEEP-copy nested maps/slices. A shallow copy left
+		// nested values (equipped map, inventory/contracts slices) shared
+		// by reference between the lock-free observation snapshot and the
+		// live entity. The obs builder reads them with no world lock while
+		// verb handlers mutate them in place under the lock → "concurrent
+		// map read and map write" crashes (the exact class the top-level
+		// snapshot copy was meant to prevent — it just stopped at depth 1).
+		dst[k] = deepCopyExtraValue(v)
 	}
 	return dst
+}
+
+// deepCopyExtraValue clones the nested containers extras can hold
+// (map[string]any, []string, []any). Scalars are returned as-is. One
+// level of nesting is enough for the shapes the engine stores
+// (equipped: map[string]string-ish; inventory/contracts: slices of
+// strings/maps), but it recurses to be safe.
+func deepCopyExtraValue(v interface{}) interface{} {
+	switch x := v.(type) {
+	case map[string]interface{}:
+		m := make(map[string]interface{}, len(x))
+		for k, vv := range x {
+			m[k] = deepCopyExtraValue(vv)
+		}
+		return m
+	case []interface{}:
+		s := make([]interface{}, len(x))
+		for i, vv := range x {
+			s[i] = deepCopyExtraValue(vv)
+		}
+		return s
+	case []string:
+		s := make([]string, len(x))
+		copy(s, x)
+		return s
+	default:
+		return v
+	}
 }
 
 type VisibleEntityState struct {
@@ -480,7 +519,18 @@ func (w *World) RemoveEntity(id string) {
 	if e == nil {
 		return
 	}
-	delete(w.occupants, e.LogicalTile)
+	// Free BOTH tiles this entity may hold. A mid-walk entity has
+	// claimed its destination (LogicalTile, set immediately by startMove)
+	// AND still holds WalkFromTile until the step completes. Freeing only
+	// LogicalTile leaked the WalkFromTile claim → a permanent phantom
+	// block (H1). Guard each delete so we don't evict a different
+	// entity that legitimately owns the tile.
+	if w.occupants[e.LogicalTile] == id {
+		delete(w.occupants, e.LogicalTile)
+	}
+	if w.occupants[e.WalkFromTile] == id {
+		delete(w.occupants, e.WalkFromTile)
+	}
 	delete(w.entities, id)
 }
 

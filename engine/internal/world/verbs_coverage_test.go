@@ -425,8 +425,11 @@ func TestD10_DeathDropsInventoryAndEquipped(t *testing.T) {
 	if !res.Accepted {
 		t.Fatalf("attack should accept; got %q", res.Reason)
 	}
-	if vc.world.entities["b"].Extras["hp"].(int) > 0 {
-		t.Fatal("B should be dead")
+	// B1: a dead entity is now REMOVED from the world (it no longer
+	// occupies a tile, is targetable, or shows in observations). The
+	// dropped loot remains on the ground.
+	if vc.world.entities["b"] != nil {
+		t.Fatal("B should be removed from the world after death")
 	}
 	// Inventory + equipped should drop as item entities at B's tile.
 	dropped := 0
@@ -442,10 +445,9 @@ func TestD10_DeathDropsInventoryAndEquipped(t *testing.T) {
 	if dropped < 3 {
 		t.Errorf("expected at least 3 item entities at corpse tile (apple+bread+dagger), got %d", dropped)
 	}
-	// Inventory should be cleared on the dead entity.
-	inv := vc.world.entities["b"].Extras["inventory"].([]string)
-	if len(inv) != 0 {
-		t.Errorf("dead agent's inventory should be empty, got %v", inv)
+	// And the corpse must not leave a phantom occupant claim behind.
+	if occ := vc.world.occupants[Tile{2, 1}]; occ == "b" {
+		t.Errorf("dead agent's occupant claim should be freed, still %q", occ)
 	}
 }
 
