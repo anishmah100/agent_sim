@@ -100,3 +100,28 @@ func (l *socialLedger) PeersOf(a string) map[string]SocialCounts {
 	}
 	return out
 }
+
+// SocialEdge — one undirected relationship edge for the Society-Pulse
+// overlay. A < B (string order) so each pair appears once.
+type SocialEdge struct {
+	A string `json:"a"`
+	B string `json:"b"`
+	SocialCounts
+}
+
+// AllEdges returns every interaction pair exactly once (deduped across
+// the mirrored (a,b)/(b,a) entries). Fresh copy, safe after release.
+func (l *socialLedger) AllEdges() []SocialEdge {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	out := []SocialEdge{}
+	for a, inner := range l.counts {
+		for b, c := range inner {
+			if a >= b {
+				continue // keep only a<b so each undirected pair appears once
+			}
+			out = append(out, SocialEdge{A: a, B: b, SocialCounts: *c})
+		}
+	}
+	return out
+}

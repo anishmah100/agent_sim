@@ -300,6 +300,21 @@ export class EntityLayer {
     return re.container.visible !== false;
   }
 
+  /** Society-Pulse bridge: world-space center point of a live entity's
+   *  body, or null if it isn't tracked / is hidden inside a building.
+   *  Used by RelationshipOverlay to anchor relationship lines. The point
+   *  is the mid-body (footprint center), matching where the eye reads a
+   *  character's "location". */
+  posOf(id: string): { x: number; y: number } | null {
+    const re = this.items.get(id);
+    if (!re) return null;
+    if (re.container.visible === false) return null; // inside building / hidden
+    return {
+      x: re.container.x + FOOTPRINT_W / 2,
+      y: re.container.y + FOOTPRINT_H / 2,
+    };
+  }
+
   setSelected(id: string | null): void {
     this.selectedId = id;
     if (id === null) {

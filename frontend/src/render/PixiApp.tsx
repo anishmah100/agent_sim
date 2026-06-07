@@ -25,6 +25,7 @@ import { DecorationLayer, type DecorationInfoEvent } from "./Decoration";
 import { InteriorLayer } from "./Interior";
 import { SpeechBubbleLayer } from "./SpeechBubble";
 import { FxLayer } from "./FxLayer";
+import { RelationshipOverlay, type SocialEdge } from "./RelationshipOverlay";
 import { DayNight } from "./DayNight";
 import { HD2DStack } from "./HD2D";
 import type { AudibleEvent } from "../net/ws";
@@ -84,6 +85,11 @@ export interface PixiHandle {
    *  remove). Solid layer flips this whenever the editor toggles. */
   setEditorActive(active: boolean): void;
   ingestAudible(events: AudibleEvent[]): void;
+  /** Society-Pulse — feed the latest social-ledger edges (from
+   *  GET /api/v1/social) so the relationship overlay can redraw. */
+  setSocialEdges(edges: SocialEdge[]): void;
+  /** Society-Pulse — show/hide the relationship overlay. */
+  setRelationshipsVisible(on: boolean): void;
   /** Editor — repaint one tile to a new glyph. Returns previous glyph
    *  for optimistic-update revert, or undefined if out of bounds. */
   setTileGlyph(tileX: number, tileY: number, glyph: string): string | undefined;
@@ -132,10 +138,15 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   const entities = new EntityLayer();
   const speechBubbles = new SpeechBubbleLayer();
   const fx = new FxLayer();                 // combat/economy one-shot FX
+  // Society-Pulse: persistent relationship lines BELOW entities so they
+  // read as ground-level ties, not overlay clutter. Anchored to live
+  // entity positions via entities.posOf.
+  const relationships = new RelationshipOverlay((id) => entities.posOf(id));
   const fxAbove = new Container();          // particles, selection rings, day/night tint top
   fxAbove.label = "fx_above";
   viewport.addChild(tilemap.container);
   viewport.addChild(decorations.container);
+  viewport.addChild(relationships.container); // beneath entities
   viewport.addChild(entities.container);
   viewport.addChild(fx.container);          // above entities so numbers/rings read
   viewport.addChild(speechBubbles.container);
@@ -204,6 +215,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     for (const e of entities.getAll()) byId.set(e.entity_id, e);
     speechBubbles.tick(byId);
     fx.tick(delta.deltaMS);
+    relationships.tick();                    // redraw lines to track movement
     dayNight.tick();
     if (currentWorld) {
       const view = viewport.getVisibleBounds();
@@ -393,6 +405,13 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
       fx.ingest(events);
     },
 
+    setSocialEdges(edges) {
+      relationships.setEdges(edges);
+    },
+    setRelationshipsVisible(on) {
+      relationships.setEnabled(on);
+    },
+
     getViewportTileRect() {
       if (!currentWorld) return null;
       // viewport.left/top/right/bottom are in WORLD (pixel) coords.
@@ -409,6 +428,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
       tilemap.destroy();
       entities.destroy();
       speechBubbles.destroy();
+      relationships.destroy();
       resetTileCache();
       app.destroy(true, { children: true, texture: true });
     },

@@ -283,6 +283,15 @@ func (w *World) SocialCountsFor(a, b string) SocialCounts {
 	return w.social.CountsFor(a, b)
 }
 
+// SocialEdges — D19/Society-Pulse. Every interaction pair once, for the
+// frontend relationship overlay.
+func (w *World) SocialEdges() []SocialEdge {
+	if w.social == nil {
+		return []SocialEdge{}
+	}
+	return w.social.AllEdges()
+}
+
 // SetOnActionAccepted installs the historian hook for accepted actions.
 // Call once after scenario install, before Tick() begins.
 func (w *World) SetOnActionAccepted(h func(entityID, verb string, tick uint64, raw []byte)) {

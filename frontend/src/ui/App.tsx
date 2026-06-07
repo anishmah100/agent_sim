@@ -71,6 +71,9 @@ export function App() {
   const [worldTiles, setWorldTiles] = createSignal<string[] | undefined>(undefined);
   const [editorOpen, setEditorOpen] = createSignal(false);
   const [agentsPickerOpen, setAgentsPickerOpen] = createSignal(false);
+  // Society Pulse — persistent relationship-line overlay. On by default
+  // so a viewer immediately sees coalitions/feuds without hunting for it.
+  const [pulseOn, setPulseOn] = createSignal(true);
   // Editor state hoisted up so the canvas click handler can read it.
   // When paint+glyph is set and editorOpen, a click paints instead of
   // inspecting. Default tool=paint so opening the editor + clicking a
@@ -468,6 +471,30 @@ export function App() {
         }
       },
     });
+
+    // Society Pulse — poll the social-ledger graph and feed the overlay.
+    // The ledger only grows with actual interactions, so the payload is
+    // tiny; 2s cadence is plenty (lines redraw every frame to track
+    // movement; only the edge SET refreshes here).
+    const pollSocial = async () => {
+      try {
+        const r = await fetch(`${ENGINE_URL}/api/v1/social`);
+        if (r.ok) {
+          const j = await r.json() as { edges?: import("../render/RelationshipOverlay").SocialEdge[] };
+          pixiHandle?.setSocialEdges(j.edges ?? []);
+        }
+      } catch {
+        // engine offline / transient — keep the last edge set.
+      }
+    };
+    void pollSocial();
+    const socialTimer = window.setInterval(() => void pollSocial(), 2000);
+    onCleanup(() => window.clearInterval(socialTimer));
+
+    // Reflect the Society-Pulse toggle into the overlay's visibility.
+    createEffect(() => {
+      pixiHandle?.setRelationshipsVisible(pulseOn());
+    });
   });
 
   onCleanup(() => {
@@ -631,6 +658,23 @@ export function App() {
             }}
           >
             join as agent
+          </button>
+          <button
+            type="button"
+            data-testid="pulse-toggle-button"
+            onClick={() => setPulseOn(!pulseOn())}
+            title="Society Pulse — relationship lines (red=feud, gold=contract, green=ally)"
+            style={{
+              padding: "4px 10px",
+              background: pulseOn() ? "#feae34" : "#3a4466",
+              color: pulseOn() ? "#1f2238" : "#ead4aa",
+              border: pulseOn() ? "1px solid #feae34" : "1px solid #5a6988",
+              "border-radius": "3px",
+              cursor: "pointer",
+              "font-size": "12px",
+            }}
+          >
+            pulse
           </button>
           <button
             type="button"
