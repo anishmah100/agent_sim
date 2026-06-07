@@ -29,7 +29,7 @@ register_tuning("hunger_damage_interval_ticks",   324)
 register_tuning("max_hp",                         100)
 
 # Combat
-register_tuning("attack_damage",       10)
+register_tuning("attack_damage",       20)     # lethal enough that fights resolve visibly (~5 hits to a kill)
 register_tuning("defend_damage_mul",   0.5)     # damage taken while defending
 register_tuning("heal_amount",         5)
 

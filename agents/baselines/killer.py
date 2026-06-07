@@ -27,7 +27,9 @@ from ._common import (
 
 
 # How many ticks the target may stay off-screen before we give up.
-LOSE_TARGET_TICKS = 3
+# Generous so the killer commits to a chase instead of constantly
+# re-picking and orbiting (which read as idle wandering).
+LOSE_TARGET_TICKS = 12
 
 
 @dataclass
@@ -90,16 +92,17 @@ class Killer(ArchetypeBot):
                 )
                 if weap_in_inv:
                     return Equip(item=weap_in_inv, slot="weapon")
-                # Walk to a visible weapon item.
+                # Grab a weapon ONLY if it's right here — never detour across
+                # the map for one. Detouring made killers wander after distant
+                # weapons forever and never actually hunt (they read as idle).
+                # Unarmed hunting is fine; a found weapon is a bonus.
                 weap_items = [
                     it for it in obs.visible_items
                     if item_kind(it) in WEAPON_KINDS
+                    and chebyshev(here, tuple(it.pos)) <= 1
                 ]
                 if weap_items:
-                    target = nearest(weap_items, here)
-                    if chebyshev(here, tuple(target.pos)) <= 1:
-                        return Pickup(target=target.entity_id)
-                    return Move(target=list(step_toward(here, tuple(target.pos))))
+                    return Pickup(target=weap_items[0].entity_id)
             choice = self._pick_target(obs.visible_entities, here)
             if choice is not None:
                 self.target_id = choice.entity_id
