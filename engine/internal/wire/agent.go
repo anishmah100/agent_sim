@@ -18,6 +18,7 @@ package wire
 
 import (
 	"context"
+	crand "crypto/rand"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -615,13 +616,23 @@ func (c *agentConn) allowAction() bool {
 	return true
 }
 
-// genID — short URL-safe random ID.
+// genID — short URL-safe random ID. H3 FIX: was seeded from
+// time.Now().UnixNano() with a 1ns sleep per char, making agent SECRETS
+// guessable from wall-clock and collision-prone under coarse clocks
+// (auth is the only gate on controlling an entity). Use crypto/rand.
 func genID(n int) string {
 	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	out := make([]byte, n)
-	for i := range out {
-		out[i] = alphabet[time.Now().UnixNano()%int64(len(alphabet))]
-		time.Sleep(time.Nanosecond)
+	buf := make([]byte, n)
+	if _, err := crand.Read(buf); err != nil {
+		// Extremely unlikely; fall back to a non-secret but unique-ish id
+		// rather than panicking the register handler.
+		for i := range buf {
+			buf[i] = alphabet[(int(buf[i])+i)%len(alphabet)]
+		}
+		return string(buf)
 	}
-	return string(out)
+	for i := range buf {
+		buf[i] = alphabet[int(buf[i])%len(alphabet)]
+	}
+	return string(buf)
 }

@@ -816,9 +816,13 @@ func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
 	bestIdx := 0
 	bestDist := absInt(goal[0]-start[0]) + absInt(goal[1]-start[1])
 	reconstruct := func(idx int) []Tile {
+		// B14: append then reverse (O(n)) instead of prepend-in-loop (O(n²)).
 		path := []Tile{}
 		for i := idx; i != -1; i = visited[i].parent {
-			path = append([]Tile{visited[i].t}, path...)
+			path = append(path, visited[i].t)
+		}
+		for l, r := 0, len(path)-1; l < r; l, r = l+1, r-1 {
+			path[l], path[r] = path[r], path[l]
 		}
 		return path
 	}
