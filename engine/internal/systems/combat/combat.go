@@ -84,6 +84,15 @@ func (s *System) tickRegen(w syscore.World, tick uint64) {
 	if tick%300 != 0 {
 		return
 	}
+	// Don't regen THROUGH active starvation. The vitals system drains hp
+	// once hunger crosses hunger_damage_above; if regen kept running it
+	// would (in Eldoria) slightly outpace that drain, pinning a starving
+	// agent at max hp forever — the survival loop never bites AND the UI
+	// spams a "-1" damage floater every hunger tick while hp visibly
+	// stays 100/100. Gating regen on "not starving" makes starvation
+	// actually cost hp and removes the phantom-damage flicker. A well-fed
+	// agent that got hurt in combat still regenerates normally.
+	hungerCap := w.Tuning("hunger_damage_above", 1.0)
 	for _, id := range w.EntityIDs() {
 		e := w.EntityByID(id)
 		if e == nil {
@@ -93,6 +102,9 @@ func (s *System) tickRegen(w syscore.World, tick uint64) {
 		maxHP := extrasInt(e, "max_hp")
 		if hp <= 0 || hp >= maxHP {
 			continue
+		}
+		if extrasFloat(e, "hunger") > hungerCap {
+			continue // starving — let hunger damage stand
 		}
 		w.MutateEntity(id, func(real syscore.Entity) {
 			real.SetExtra("hp", hp+1)
@@ -467,6 +479,22 @@ func extrasInt(e syscore.Entity, k string) int {
 		return int(x)
 	case float64:
 		return int(x)
+	}
+	return 0
+}
+
+func extrasFloat(e syscore.Entity, k string) float64 {
+	v, ok := e.GetExtra(k)
+	if !ok {
+		return 0
+	}
+	switch x := v.(type) {
+	case float64:
+		return x
+	case int:
+		return float64(x)
+	case int64:
+		return float64(x)
 	}
 	return 0
 }
