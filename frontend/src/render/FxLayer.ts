@@ -71,6 +71,15 @@ const REJECT_STYLE = new TextStyle({
   fill: "#ff8a8a",
   stroke: { color: "#2a0000", width: 3 },
 });
+// Hunger/starvation — amber, visually DISTINCT from red combat damage so a
+// viewer instantly tells "starving" apart from "being attacked".
+const HUNGER_STYLE = new TextStyle({
+  fontFamily: "ui-monospace, monospace",
+  fontSize: 10,
+  fontWeight: "bold",
+  fill: "#ff9e3d",
+  stroke: { color: "#2a1500", width: 3 },
+});
 
 function tilePx(t: [number, number]): { x: number; y: number } {
   return { x: t[0] * TILE_SIZE_PX + TILE_SIZE_PX / 2,
@@ -128,6 +137,18 @@ export class FxLayer {
           break;
         case "contract_reject":
           this.float(ev.from_pos, "declined", REJECT_STYLE);
+          break;
+        case "hunger_pang":
+          // amber pang — distinct from red combat damage.
+          this.float(ev.from_pos, "hungry", HUNGER_STYLE);
+          break;
+        case "building_enter":
+          // dust puff at the door as someone steps inside.
+          this.spark(p.x, p.y, 0xcdbb9a);
+          this.ripple(p.x, p.y, 1.2 * TILE_SIZE_PX, 0xb7a17f, 360);
+          break;
+        case "building_exit":
+          this.spark(p.x, p.y, 0xcdbb9a);
           break;
       }
     }
