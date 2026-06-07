@@ -142,8 +142,15 @@ class Killer(ArchetypeBot):
         if self.state == "ATTACKING":
             target = self._find_target(obs.visible_entities)
             if target is None:
-                self.state = "HUNTING"
+                # MAJ-9: target gone — presumed dead. If it dropped loot
+                # nearby, switch to LOOTING to grab it (the kill→loot beat
+                # the docstring promised). The LOOTING handler walks to and
+                # picks up the nearest visible item, then returns to HUNTING.
                 self.target_id = None
+                if obs.visible_items:
+                    self.state = "LOOTING"
+                else:
+                    self.state = "HUNTING"
                 return None
             # Did the target die? Detect via missing entity OR
             # extras_summary's hp_bucket=="dying" then absence.

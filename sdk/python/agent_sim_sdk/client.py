@@ -19,6 +19,10 @@ from .models import Action, ActionBatch, ActionResult, Observation, VisionMode
 
 _ObservationAdapter = TypeAdapter(Observation)
 
+# MAJ-6: sentinel pushed into the inbox when the WS reader ends, so
+# observations() can return cleanly instead of blocking forever.
+_STREAM_END = object()
+
 
 @dataclass
 class AgentCredentials:
@@ -129,11 +133,21 @@ class Agent:
         # no-op for them.
         while True:
             obs = await self._inbox.get()
+            # MAJ-6: end-of-stream sentinel. When the WS drops, _read_loop
+            # pushes _STREAM_END so this generator RETURNS cleanly instead
+            # of blocking forever on inbox.get() (which silently froze the
+            # agent — the keepalive fix prevents self-inflicted drops, but
+            # a server/network drop still ends the reader). The bot's
+            # `async for obs in agent.observations()` then exits its loop.
+            if obs is _STREAM_END:
+                return
             while True:
                 try:
                     obs = self._inbox.get_nowait()
                 except asyncio.QueueEmpty:
                     break
+                if obs is _STREAM_END:
+                    return
             yield obs
 
     async def act(self, action: Action) -> Optional[ActionResult]:
@@ -266,6 +280,25 @@ class Agent:
         await self._ws.send(json.dumps(payload))
 
     async def _read_loop(self) -> None:
+        # MAJ-6: whatever ends the reader (clean close, server drop,
+        # network error, cancel), signal end-of-stream so observations()
+        # returns instead of hanging forever on inbox.get().
+        try:
+            await self._read_loop_impl()
+        finally:
+            try:
+                self._inbox.put_nowait(_STREAM_END)
+            except asyncio.QueueFull:
+                try:
+                    self._inbox.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    self._inbox.put_nowait(_STREAM_END)
+                except asyncio.QueueFull:
+                    pass
+
+    async def _read_loop_impl(self) -> None:
         assert self._ws
         async for raw in self._ws:
             try:
