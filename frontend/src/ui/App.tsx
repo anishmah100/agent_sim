@@ -415,6 +415,10 @@ export function App() {
           display_name: ev.display_name ?? row?.display_name ?? row?.persona_name,
           archetype: row?.archetype ?? ev.archetype,
           is_llm: row?.is_llm ?? false,
+          // M1: a background NPC isn't in /api/v1/agents (connected agents
+          // only), so it would otherwise show a misleading "rule" badge +
+          // 0/0 HP. Flag it so the card renders "NPC" and hides vitals.
+          is_npc: row === undefined,
           hp: vit.hp,
           max_hp: vit.max_hp,
           gold: vit.gold,

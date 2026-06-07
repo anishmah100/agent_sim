@@ -16,6 +16,7 @@ export interface AgentHoverInfo {
   display_name?: string;
   archetype: string;
   is_llm: boolean;
+  is_npc?: boolean;
   hp: number;
   max_hp: number;
   gold: number;
@@ -82,9 +83,13 @@ export function AgentHoverCard(props: {
               >
                 {info().display_name ?? info().entity_id}
               </strong>
-              {info().is_llm
-                ? <Badge kind="llm" />
-                : <Badge kind="rule" />}
+              {info().is_npc
+                ? <span style={{ "font-size": "9px", color: "#8b9bb4",
+                    border: "1px solid #3a4466", "border-radius": "3px",
+                    padding: "0 4px" }}>NPC</span>
+                : info().is_llm
+                  ? <Badge kind="llm" />
+                  : <Badge kind="rule" />}
             </div>
             <div
               style={{
