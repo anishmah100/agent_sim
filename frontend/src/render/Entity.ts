@@ -392,7 +392,7 @@ export class EntityLayer {
     if (facingMark) wrap.addChild(facingMark);
     wrap.addChild(label);
 
-    this.applyPos(wrap, e.pos);
+    this.applyPos(wrap, e.pos, e.archetype);
     this.container.addChild(wrap);
 
     // Hover outline on the BODY sprite only. Clicks still flow through
@@ -494,7 +494,7 @@ export class EntityLayer {
       wrap.on("pointertap", (ev) => { ev.stopPropagation(); });
     }
 
-    this.applyPos(wrap, e.pos);
+    this.applyPos(wrap, e.pos, e.archetype);
     this.container.addChild(wrap);
 
     return {
@@ -531,7 +531,7 @@ export class EntityLayer {
       // Still need to track pos changes (rare — most world objects
       // don't move, but items dropped at character feet do).
       const moved = re.state.pos[0] !== next.pos[0] || re.state.pos[1] !== next.pos[1];
-      if (moved) this.applyPos(re.container, next.pos);
+      if (moved) this.applyPos(re.container, next.pos, next.archetype);
       re.state = { ...next };
       return;
     }
@@ -540,7 +540,7 @@ export class EntityLayer {
     const turned = re.state.facing !== next.facing;
     const renamed = re.state.display_name !== next.display_name;
     if (moved) {
-      this.applyPos(re.container, next.pos);
+      this.applyPos(re.container, next.pos, next.archetype);
       re.movingSince = performance.now();
     }
     if (renamed) re.label.text = next.display_name ?? next.entity_id;
@@ -582,14 +582,19 @@ export class EntityLayer {
     re.state = { ...next };
   }
 
-  private applyPos(c: Container, tile: [number, number]): void {
+  private applyPos(c: Container, tile: [number, number], archetype?: string): void {
     // Container origin sits at the top-left of the 16x16 footprint.
     // The body sprite was positioned with its anchor at footprint
     // bottom-center, so head/cap extends up automatically.
     c.x = Math.round(tile[0] * TILE_SIZE_PX);
     c.y = Math.round(tile[1] * TILE_SIZE_PX);
     // Sort by foot pixel Y so entities further south draw on top.
-    c.zIndex = c.y + FOOTPRINT_H;
+    // BUT items (coins, gems, dropped loot) sit on the ground and
+    // must ALWAYS render below characters — even when a character
+    // walks onto an item's tile. Push items down by a big constant
+    // so any non-item Y-sorted zIndex still beats them.
+    const groundOffset = archetype === "item" ? -100000 : 0;
+    c.zIndex = c.y + FOOTPRINT_H + groundOffset;
   }
 
   destroy(): void {

@@ -84,6 +84,16 @@ type agentRecord struct {
 	Persona   map[string]any
 	VisionMode string
 	CadenceMs int
+	// AutoSpawned — true when the engine spawned a fresh body for
+	// this agent at register time. Currently informational; the
+	// disconnect cleanup keys on BoundExplicit instead.
+	AutoSpawned bool
+	// BoundExplicit — true when the caller passed a non-empty
+	// bind_entity in the register payload. Disconnect cleanup leaves
+	// the body alone for these (the caller asked for an existing
+	// entity by id and expects it to persist); all other bodies are
+	// removed so 1 agent = 1 visible body.
+	BoundExplicit bool
 	// ConnectedAt — unix milliseconds when the WS connect succeeded.
 	// Zero before connect. Surfaced by /api/v1/agents so the picker UI
 	// can show recency.
@@ -187,6 +197,8 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 	// Binding to a tree / rock / building / item is rejected — those are
 	// world objects, not bodies.
 	entityID := req.BindEntity
+	autoSpawned := false
+	boundExplicit := req.BindEntity != ""
 	if entityID == "" {
 		for _, id := range h.w.EntityIDs() {
 			e := h.w.EntityByID(id)
@@ -238,6 +250,7 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 				return
 			}
 			entityID = spawned
+			autoSpawned = true
 		}
 	}
 	target := h.w.EntityByID(entityID)
@@ -260,6 +273,8 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 		VisionMode:     req.VisionMode,
 		CadenceMs:      req.CadenceMs,
 		ShareReasoning: req.ShareReasoning,
+		AutoSpawned:    autoSpawned,
+		BoundExplicit:  boundExplicit,
 	}
 	h.mu.Lock()
 	h.registry[secret] = rec
@@ -421,13 +436,33 @@ func (c *agentConn) readPump() {
 		// A new register might have stomped over us with a fresh
 		// connection; in that case the new one owns the slot.
 		c.hub.mu.Lock()
+		stillOwner := false
 		if cur, ok := c.hub.live[c.rec.AgentID]; ok && cur == c {
 			delete(c.hub.live, c.rec.AgentID)
+			stillOwner = true
 		}
+		// Forget the registry entry too so the entity tile slot is
+		// released for future register() calls — without this, the
+		// next bot to register sees the dead body as "taken" until
+		// the engine restarts.
+		delete(c.hub.registry, c.rec.Secret)
 		c.hub.mu.Unlock()
 		// Closing c.send AFTER closedAt+done are set lets any in-flight
 		// sender bail out via trySend's c.closedAt check.
 		close(c.send)
+		// Remove the body on disconnect so it doesn't ghost. The user
+		// saw "3 agents on screen, only 2 in connected list" because
+		// the register handler binds to any agent-eligible entity it
+		// finds — including NPC supervisor bodies — and leaves them
+		// dangling on disconnect. Removing the entity here keeps
+		// 1-agent-connected == 1-body-on-screen as the invariant.
+		// Skip when bind_entity was explicitly passed: the caller
+		// claimed an existing entity by id and expects it to persist.
+		if stillOwner && !c.rec.BoundExplicit && c.rec.EntityID != "" {
+			c.hub.w.LockWrite()
+			c.hub.w.RemoveEntity(c.rec.EntityID)
+			c.hub.w.UnlockWrite()
+		}
 		log.Printf("agent disconnect: %s", c.rec.AgentID)
 	}()
 	c.conn.SetReadLimit(1 << 16)

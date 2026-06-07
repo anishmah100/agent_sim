@@ -15,6 +15,7 @@ from agent_sim_sdk import Action, Move, Observation, Pickup
 from ._common import (
     ArchetypeBot,
     has_weapon_equipped,
+    is_money,
     item_kind,
     nearest,
     random_walk,
@@ -86,7 +87,19 @@ class Scavenger(ArchetypeBot):
                 t = nearest(threats, here)
                 return Move(target=list(step_away(here, tuple(t.pos))))
 
-        # IDLE: low-cadence random walk.
+        # IDLE: idle-fallback to grab visible coins/gems when nothing
+        # else is going on. Money isn't the scavenger's primary goal
+        # (they wait for deaths) — but when no scream has been heard
+        # in a while, free coins on the ground are still worth a
+        # detour. Killers/manipulators get the same fallback in their
+        # own files.
+        money_items = [it for it in obs.visible_items if is_money(it)]
+        if money_items and not threats:
+            target = nearest(money_items, here)
+            if max(abs(target.pos[0] - here[0]),
+                   abs(target.pos[1] - here[1])) <= 1:
+                return Pickup(target=target.entity_id)
+            return Move(target=list(step_toward(here, tuple(target.pos))))
         self._idle_tick = (self._idle_tick + 1) % 4
         if self._idle_tick == 0:
             return random_walk(self, here)

@@ -106,7 +106,7 @@ export function Inspector(props: {
           position: "absolute",
           top: "56px",
           right: "16px",
-          width: "360px",
+          width: "440px",
           "max-height": "calc(100vh - 88px)",
           overflow: "auto",
           background: "rgba(24, 20, 37, 0.95)",
@@ -243,10 +243,14 @@ function TabBtn(p: {
         color: active() ? "#1f2238" : p.enabled ? "#ead4aa" : "#5a6988",
         border: "1px solid " + (active() ? "#feae34" : "#3a4466"),
         "border-radius": "3px",
-        padding: "4px 10px",
+        padding: "4px 8px",
         cursor: p.enabled ? "pointer" : "not-allowed",
         "font-size": "12px",
         flex: "1",
+        "min-width": "0",
+        "white-space": "nowrap",
+        "text-overflow": "ellipsis",
+        overflow: "hidden",
       }}
     >
       {p.label}

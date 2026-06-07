@@ -25,10 +25,13 @@ from agent_sim_sdk import (
     Speak,
 )
 
+from agent_sim_sdk import Pickup
+
 from ._common import (
     ArchetypeBot,
     chebyshev,
     has_weapon_equipped,
+    is_money,
     item_kind,
     nearest,
     random_walk,
@@ -105,6 +108,15 @@ class Manipulator(ArchetypeBot):
                 self.propose_step = 0
                 self.waiting_ticks = 0
             else:
+                # Idle-fallback to gold pickup. Manipulators don't
+                # primarily chase money but it'd be weird to walk
+                # past a coin pile when there's no mark to scam.
+                money_items = [it for it in obs.visible_items if is_money(it)]
+                if money_items:
+                    pickup_target = nearest(money_items, here)
+                    if chebyshev(here, tuple(pickup_target.pos)) <= 1:
+                        return Pickup(target=pickup_target.entity_id)
+                    return Move(target=list(step_toward(here, tuple(pickup_target.pos))))
                 return random_walk(self, here)
 
         # APPROACHING — walk to target until adjacent.

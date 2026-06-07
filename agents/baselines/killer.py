@@ -17,6 +17,7 @@ from ._common import (
     WEAPON_KINDS,
     chebyshev,
     has_weapon_equipped,
+    is_money,
     item_kind,
     nearest,
     random_walk,
@@ -106,6 +107,16 @@ class Killer(ArchetypeBot):
                 self.lost_ticks = 0
                 self.state = "PURSUING"
             else:
+                # No target + no weapon need: opportunistic gold grab
+                # so the killer doesn't visibly ignore loose coins.
+                # Money is the LOWEST priority — only fires when
+                # nothing more interesting is around.
+                money_items = [it for it in obs.visible_items if is_money(it)]
+                if money_items:
+                    target = nearest(money_items, here)
+                    if chebyshev(here, tuple(target.pos)) <= 1:
+                        return Pickup(target=target.entity_id)
+                    return Move(target=list(step_toward(here, tuple(target.pos))))
                 return random_walk(self, here)
 
         if self.state == "PURSUING":
