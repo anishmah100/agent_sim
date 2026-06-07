@@ -209,7 +209,7 @@ export function Inspector(props: {
 
         {/* Tab body */}
         <Show when={tab() === "speech"}>
-          <SpeechTab lines={props.mentalState?.dialogue ?? []} />
+          <SpeechTab lines={props.mentalState?.dialogue ?? []} selfId={props.entity?.entity_id ?? ""} />
         </Show>
         <Show when={tab() === "mind" && mindVisible()}>
           <MindTab mind={props.mentalState!.mind} />
@@ -272,7 +272,7 @@ function TabBtn(p: {
   );
 }
 
-function SpeechTab(props: { lines: DialogueLine[] }) {
+function SpeechTab(props: { lines: DialogueLine[]; selfId: string }) {
   return (
     <Show
       when={props.lines.length > 0}
@@ -290,7 +290,8 @@ function SpeechTab(props: { lines: DialogueLine[] }) {
                 t={line.tick} · <span style={{ color: channelColor(line.channel) }}>
                   {line.channel}
                 </span>
-                {line.speaker !== "self" ? <> · from {line.speaker}</> : null}
+                {line.speaker !== "self" && line.speaker !== props.selfId
+                  ? <> · from {line.speaker}</> : null}
               </div>
               <div style={{ "font-family": "ui-monospace, monospace" }}>
                 {line.text}
