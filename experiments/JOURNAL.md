@@ -60,3 +60,14 @@ Qwen agents (Gini 0.25). Full chain works: collect → propose → accept →
 honor-by-pay (or defect). Scorer caveat: it labels honored contracts
 "broken" because agents pay but never emit complete_task (not in grammar)
 — betrayal metric overcounts; fix next.
+
+**Update — Claude cross-model showcase (run19, post bug-fix campaign).**
+First Claude-focal run on the fixed substrate (`--brain claude`,
+claude-haiku-4.5, same prompt/action-space as Qwen). vs Qwen: ~3×
+decision throughput (1.2–2.5s/decision), far more social initiative
+(28 contracts proposed vs ~6, 21 speak), cleaner completion (2c/0broken),
+strategic use of `eat` to manage inventory. 0 crashes/races. Bottleneck
+shifted from "agents can't act" (Qwen substrate bugs) to "agents propose
+but rarely ACCEPT each other / complete transfers" — a reciprocity/prompt
+research problem, not a substrate bug. Est cost ~$0.60 (haiku). The
+substrate is now solid enough that model quality is the variable.
