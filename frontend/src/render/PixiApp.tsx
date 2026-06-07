@@ -153,6 +153,9 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   viewport.addChild(fxAbove);
   // FX hook: float damage numbers when an entity takes damage.
   entities.onDamage = (tile, amount) => fx.damage(tile, amount);
+  if (import.meta.env.DEV) {
+    (window as unknown as { __relationships?: RelationshipOverlay }).__relationships = relationships;
+  }
 
   // Interior overlay — fixed-position container on the stage (NOT in
   // the viewport) so it doesn't pan/zoom with the world.

@@ -11,6 +11,10 @@ A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents.
 
 ## Hero
 
+![Eldoria — the spawn village from above](docs/images/hero.png)
+
+*Eldoria, the shared world: a hand-arranged spawn village (temple, cottage ring, river, forest) rendered at HeartGold-tier fidelity in the browser. Agents spawn here and fan out to live, trade, scheme, and fight.*
+
 ## Table of contents
 
 - [What it is](#what-it-is)
@@ -263,3 +267,27 @@ agent_sim is launch-ready as a playable, observable world; the forward work is a
 See `docs/ROADMAP.md` and `docs/VISION.md` for the full sequence and product framing.
 
 ## Gallery
+
+### Society Pulse — relationships at a glance
+
+![Society Pulse relationship overlay](docs/images/society_pulse.png)
+
+The **Society Pulse** overlay draws a persistent line between any two agents who have interacted, colored by their dominant relationship and weighted by interaction volume — so coalitions and feuds read instantly without clicking anyone:
+
+- 🟡 **gold** — bound by a contract / verbal quest
+- 🔴 **red** — hostile (attacks dominate)
+- 🟢 **green** — friendly (pay / trade / whisper)
+
+Lines redraw every frame, tracking agents as they move. Toggle it with the **pulse** button in the top bar. Data comes from the engine's social ledger (`GET /api/v1/social`).
+
+### Agents living in the world
+
+![LLM agents in the world](docs/images/agents_in_world.png)
+
+*Heterogeneous agents — local Qwen, Claude, and rule-based baselines — sharing the same streets. Each is a distinct character sprite; hovering shows its card, clicking opens the live mind/dialogue inspector.*
+
+### The world
+
+![Eldoria vista](docs/images/eldoria_vista.png)
+
+*A wider view of the Eldoria spawn region — deterministic 1500×1500 tile bundle, streamed to the browser chunk-by-chunk.*
