@@ -260,18 +260,19 @@ func dayPhaseFromTick(tick uint64) string {
 	// One in-engine day = 14400 ticks (4 min @ 60Hz). Phase by sextiles.
 	const dayLen = 14400
 	t := tick % dayLen
+	// B11: the two adjacent midday branches collapsed "noon" into one
+	// label and shifted the others. Use clean sextiles: dawn, morning,
+	// midday, afternoon, dusk, night.
 	switch {
-	case t < dayLen/12:
+	case t < dayLen/6:
 		return "dawn"
-	case t < dayLen/4:
+	case t < dayLen*2/6:
 		return "morning"
-	case t < dayLen*5/12:
+	case t < dayLen*3/6:
 		return "midday"
-	case t < dayLen*7/12:
-		return "midday"
-	case t < dayLen*9/12:
+	case t < dayLen*4/6:
 		return "afternoon"
-	case t < dayLen*11/12:
+	case t < dayLen*5/6:
 		return "dusk"
 	default:
 		return "night"

@@ -176,11 +176,20 @@ class QwenFocalAgent:
                     continue
                 dt_ms = int((time.monotonic() - t0) * 1000)
                 reasoning = str(decision.get("reasoning", ""))[:200]
-                # Remember this turn's reasoning as next turn's intent so
-                # the agent maintains a consistent goal across cycles.
-                self._intent = reasoning
                 raw_actions = decision.get("actions") or []
                 actions = [a for a in (to_action(d) for d in raw_actions) if a]
+                # M8: remember the actual PLAN (verbs + any move target) as
+                # next turn's intent, not the free-text reasoning. The
+                # anti-flip-flop nudge should reinforce where the agent was
+                # actually heading, not its narration (which can diverge).
+                if actions:
+                    _plan = []
+                    for a in actions:
+                        if a.verb == "move" and getattr(a, "target", None):
+                            _plan.append(f"move toward {tuple(a.target)}")
+                        else:
+                            _plan.append(a.verb)
+                    self._intent = "; ".join(_plan)[:200]
                 if not actions:
                     log.info("[%s] cycle %d (%dms): no valid actions from %r",
                              self.creds.agent_id, self.cycles, dt_ms, raw_actions)
