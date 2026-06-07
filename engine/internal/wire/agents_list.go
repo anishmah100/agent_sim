@@ -59,6 +59,18 @@ func AgentsListHandler(hub *AgentHub, w *world.World) http.HandlerFunc {
 				if bio, ok := p["bio"].(string); ok {
 					info.Bio = bio
 				}
+				// IsLLM was declared but never set, so the frontend badge
+				// showed every agent as rule-based. The registrar tags an
+				// LLM brain with persona.archetype_tag == "llm"; rule-based
+				// bots tag their archetype name (survivor/killer/…). Treat
+				// anything explicitly tagged non-"llm" as rule-based, and
+				// default unknown/manual joins to LLM (the original intent:
+				// "anything not a known heuristic bot is assumed LLM").
+				if tag, ok := p["archetype_tag"].(string); ok {
+					info.IsLLM = tag == "llm"
+				} else {
+					info.IsLLM = true
+				}
 			}
 			if pos, ok := entityPos[c.rec.EntityID]; ok {
 				info.Pos = pos
