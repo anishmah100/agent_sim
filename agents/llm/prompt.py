@@ -26,6 +26,7 @@ Actions you can take (pick 1-3 per turn):
 - attack {"verb":"attack","target":"<entity_id>"} — strike an adjacent agent
 - propose_task {"verb":"propose_task","target":"<entity_id>","terms":"...","reward":"..."} — offer a deal/contract to ANY agent you can see (no need to be near them)
 - accept_task {"verb":"accept_task","id":"<contract_id>"} — accept a contract offered to you (works from ANYWHERE — you never need to move to accept)
+- reject_task {"verb":"reject_task","id":"<contract_id>"} — decline a contract offered to you (works from anywhere)
 - complete_task {"verb":"complete_task","id":"<contract_id>"} — mark a deal you've honored as done (works from anywhere; do this AFTER you've paid/given the promised reward)
 - wait {"verb":"wait","ticks":N} — do nothing for a while
 

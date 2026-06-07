@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from agent_sim_sdk import (
     Action, Move, Speak, Whisper, Shout, Eat, Pickup, Equip, Give,
-    Pay, Trade, Attack, ProposeTask, AcceptTask, CompleteTask, Wait,
+    Pay, Trade, Attack, ProposeTask, AcceptTask, CompleteTask, RejectTask, Wait,
 )
 
 log = logging.getLogger("agents.llm.actions")
@@ -57,6 +57,8 @@ def to_action(d: dict[str, Any]) -> Optional[Action]:
             return AcceptTask(id=str(d["id"]))
         if verb == "complete_task":
             return CompleteTask(id=str(d["id"]))
+        if verb == "reject_task":
+            return RejectTask(id=str(d["id"]))
         if verb == "wait":
             return Wait(ticks=int(d.get("ticks", 60)))
     except (KeyError, ValueError, TypeError) as e:

@@ -304,12 +304,25 @@ class Agent:
                     v["facing"] = "S"
             if isinstance(payload.get("self"), dict) and not payload["self"].get("facing"):
                 payload["self"]["facing"] = "S"
+            # M4: coerce an unknown audible `kind` to "sound" before
+            # validation. The engine field is a free string; if any emitter
+            # ever sends a kind outside the SDK enum, pydantic would reject
+            # the WHOLE observation and the brain would silently go blind
+            # (agent "looks dead"). Better to keep the obs and degrade one
+            # field. Same defensive spirit as the facing coercion.
+            _AUD_KINDS = {"speech", "shout", "whisper", "sound"}
+            for ev in payload.get("audible") or []:
+                if isinstance(ev, dict) and ev.get("kind") not in _AUD_KINDS:
+                    ev["kind"] = "sound"
             try:
                 obs = _ObservationAdapter.validate_python(payload)
             except Exception as e:
                 import logging
-                logging.getLogger("agent_sim_sdk").warning(
-                    "observation validation failed: %s — payload keys=%s",
+                # ERROR (not WARNING) with the full error: a persistent
+                # validation failure silently blinds the agent, so it must
+                # be loud. (M4)
+                logging.getLogger("agent_sim_sdk").error(
+                    "observation DROPPED — validation failed: %s — payload keys=%s",
                     e, list(payload.keys()),
                 )
                 continue

@@ -39,6 +39,7 @@ attack-action  ::= "{" ws "\"verb\":" ws "\"attack\"" "," ws "\"target\":" ws st
 propose-action ::= "{" ws "\"verb\":" ws "\"propose_task\"" "," ws "\"target\":" ws string "," ws "\"terms\":" ws string ("," ws "\"reward\":" ws string)? ws "}"
 accept-action  ::= "{" ws "\"verb\":" ws "\"accept_task\"" "," ws "\"id\":" ws string ws "}"
 complete-action ::= "{" ws "\"verb\":" ws "\"complete_task\"" "," ws "\"id\":" ws string ws "}"
+reject-action  ::= "{" ws "\"verb\":" ws "\"reject_task\"" "," ws "\"id\":" ws string ws "}"
 wait-action    ::= "{" ws "\"verb\":" ws "\"wait\"" ("," ws "\"ticks\":" ws integer)? ws "}"
 
 string  ::= "\"" char* "\""

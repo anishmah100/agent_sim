@@ -148,6 +148,19 @@ class QwenFocalAgent:
                     return
                 if self.entity_id is None:
                     self.entity_id = obs.self.entity_id
+                # MAJ-7: stop cleanly when dead instead of looping forever
+                # calling the (expensive) LLM on a corpse whose actions are
+                # all rejected. The engine removes dead bodies so obs stop
+                # anyway; this covers the brief pre-removal window and
+                # non-combat deaths (starvation).
+                _hp = (obs.self.extras or {}).get("hp")
+                try:
+                    if _hp is not None and int(_hp) <= 0:
+                        log.info("[%s] dead (hp=%s) — stopping agent loop",
+                                 self.creds.agent_id, _hp)
+                        return
+                except (TypeError, ValueError):
+                    pass
                 if (self.cfg.max_cycles is not None
                         and self.cycles >= self.cfg.max_cycles):
                     return
