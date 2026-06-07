@@ -183,12 +183,15 @@ def score_events(events: list[dict], *,
         if status == "accepted":
             s.contracts_broken += 1
 
-    # Manipulator defection success: a manipulator attacked someone it
-    # had a contract with. Conservative — only counts observable
-    # active defections (silent walk-aways aren't in the event stream).
+    # Manipulator defection success: count DISTINCT contract partners a
+    # manipulator attacked (not raw damage events — a single betrayal is
+    # many DamageDealt ticks). Conservative: only observable active
+    # defections (silent walk-aways aren't in the event stream).
+    defected_pairs: set[tuple[str, str]] = set()
     for atk, victim in attacks:
         if atk in manipulators and victim in manip_partners.get(atk, set()):
-            s.manipulator_defections += 1
+            defected_pairs.add((atk, victim))
+    s.manipulator_defections = len(defected_pairs)
 
     s.top_speakers = sorted(speakers.items(), key=lambda kv: -kv[1])[:8]
 

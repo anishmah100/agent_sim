@@ -49,16 +49,19 @@ def test_kills_and_damage():
     assert s.kill_pairs[0]["victim"] == "v"
 
 
-def test_manipulator_defection():
+def test_manipulator_defection_dedups_raw_attacks():
     events = [
         ev("TaskProposed", ID="c1", Proposer="manip", Target="mark", Terms="deal"),
         ev("TaskAccepted", ID="c1", Proposer="manip", Target="mark"),
-        # Manipulator later attacks its contract partner.
+        # Manipulator attacks its contract partner MANY times — that's
+        # ONE betrayal, not 3.
         ev("DamageDealt", Target="mark", Killer="manip", Amount=12, NewHP=88),
+        ev("DamageDealt", Target="mark", Killer="manip", Amount=12, NewHP=76),
+        ev("DamageDealt", Target="mark", Killer="manip", Amount=12, NewHP=64),
     ]
     s = score_events(events, manipulators={"manip"})
     assert s.manipulator_contracts == 1
-    assert s.manipulator_defections == 1
+    assert s.manipulator_defections == 1  # deduped, not 3
 
 
 def test_no_false_defection_for_unrelated_attack():

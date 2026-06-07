@@ -112,6 +112,38 @@ def render_visible(obs: Any, self_pos) -> str:
     return "\n".join(out)
 
 
+def render_contracts(obs: Any) -> str:
+    """Surface pending verbal contracts where this agent is the target
+    (can accept) or proposer (awaiting). Without this the LLM never
+    sees a contract proposed to it and can't accept_task — the gap
+    that produced '9 proposed / 0 accepted' in the first P7 run."""
+    extras = obs.self.extras or {}
+    contracts = extras.get("contracts") or []
+    me = obs.self.entity_id
+    if not contracts:
+        return ""
+    out = ["Contracts involving you:"]
+    for c in contracts:
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id", "?")
+        status = c.get("status", "?")
+        proposer = c.get("proposer", "?")
+        target = c.get("target", "?")
+        terms = c.get("terms", "")
+        reward = c.get("reward", "")
+        if target == me and status == "proposed":
+            out.append(f"  [{cid}] {proposer} offers you: \"{terms}\" "
+                       f"for {reward} — you can accept_task with id={cid}")
+        elif proposer == me:
+            out.append(f"  [{cid}] you offered {target}: \"{terms}\" "
+                       f"(status: {status})")
+        else:
+            out.append(f"  [{cid}] {proposer}->{target}: \"{terms}\" "
+                       f"({status})")
+    return "\n".join(out) if len(out) > 1 else ""
+
+
 def render_audible(obs: Any) -> str:
     aud = list(getattr(obs, "audible", []) or [])
     if not aud:
@@ -141,6 +173,9 @@ def build_prompt(obs: Any, persona: str, goal: str,
         "",
         render_visible(obs, obs.self.pos),
     ]
+    contracts = render_contracts(obs)
+    if contracts:
+        parts += ["", contracts]
     aud = render_audible(obs)
     if aud:
         parts += ["", aud]

@@ -101,6 +101,9 @@ class QwenFocalAgent:
     cycles: int = 0
     accepted: int = 0
     rejected: int = 0
+    # Set from the first observation; lets the experiment runner map
+    # this bot to its world entity without racing the /agents endpoint.
+    entity_id: Optional[str] = None
 
     def stop(self) -> None:
         self._stopped = True
@@ -137,6 +140,8 @@ class QwenFocalAgent:
             async for obs in agent.observations():
                 if self._stopped:
                     return
+                if self.entity_id is None:
+                    self.entity_id = obs.self.entity_id
                 if (self.cfg.max_cycles is not None
                         and self.cycles >= self.cfg.max_cycles):
                     return

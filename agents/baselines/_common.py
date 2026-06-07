@@ -129,6 +129,9 @@ class ArchetypeBot:
     _agent: Optional[Agent] = None
     _last_state: str = ""
     _last_action: Optional[Action] = None
+    # Set from the first observation; lets an experiment runner map this
+    # bot to its world entity without racing the /agents endpoint.
+    entity_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         # Per-bot RNG seeded by entity id so different bots make
@@ -155,6 +158,8 @@ class ArchetypeBot:
             async for obs in agent.observations():
                 if self._stopped:
                     return
+                if self.entity_id is None:
+                    self.entity_id = obs.self.entity_id
                 try:
                     act = self.decide(obs)
                 except Exception:
