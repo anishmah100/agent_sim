@@ -24,13 +24,14 @@ Actions you can take (pick 1-3 per turn):
 - pay {"verb":"pay","target":"<entity_id>","amount":N} — give gold to an adjacent agent
 - trade {"verb":"trade","target":"<entity_id>","item":"<item_id>","price":N} — sell an item to an adjacent agent
 - attack {"verb":"attack","target":"<entity_id>"} — strike an adjacent agent
-- propose_task {"verb":"propose_task","target":"<entity_id>","terms":"...","reward":"..."} — offer a deal/contract
-- accept_task {"verb":"accept_task","id":"<contract_id>"} — accept a contract offered to you
+- propose_task {"verb":"propose_task","target":"<entity_id>","terms":"...","reward":"..."} — offer a deal/contract to ANY agent you can see (no need to be near them)
+- accept_task {"verb":"accept_task","id":"<contract_id>"} — accept a contract offered to you (works from ANYWHERE — you never need to move to accept)
 - wait {"verb":"wait","ticks":N} — do nothing for a while
 
 Rules:
 - targets are ALWAYS the entity_id (e.g. "spawn_7"), never a display name.
-- whisper/give/pay/trade/attack/propose_task require the target to be ADJACENT (within 1 tile). move toward them first.
+- RANGE: propose_task and accept_task work at ANY distance — never chase someone just to propose or accept a deal; do it from where you are. speak reaches ~8 tiles, whisper ~2 tiles.
+- ONLY give/pay/trade/attack require the target to be ADJACENT (within 1 tile) — move next to them first for those.
 - you can only eat/equip items that are in YOUR inventory."""
 
 
@@ -174,6 +175,26 @@ def build_prompt(obs: Any, persona: str, goal: str,
         persona.strip(),
         f"\nYour current goal: {goal}",
     ]
+    # If someone has proposed a contract TO this agent, surface it as a
+    # top-priority decision. accept_task needs no movement and no
+    # adjacency, so the agent should act on it immediately instead of
+    # letting the offer rot while it chases gold (the cause of every run
+    # ending 'N proposed / 0 accepted'). Reject is also free.
+    _ex = obs.self.extras or {}
+    _me = obs.self.entity_id
+    _pending = [c for c in (_ex.get("contracts") or [])
+                if isinstance(c, dict) and c.get("target") == _me
+                and c.get("status") == "proposed"]
+    if _pending:
+        _c = _pending[0]
+        parts.append(
+            f"\nPRIORITY: {_c.get('proposer')} has offered you a deal "
+            f"(id={_c.get('id')}): \"{_c.get('terms')}\" for "
+            f"{_c.get('reward') or 'no stated reward'}. You can accept it "
+            f"RIGHT NOW from where you stand with "
+            f'{{"verb":"accept_task","id":"{_c.get("id")}"}} (no need to '
+            f"move). If it helps your goal, accept this turn; otherwise "
+            f"reject it. Don't ignore a pending offer.")
     if intent:
         parts.append(
             f"Last turn you decided: \"{intent}\". If that target is "

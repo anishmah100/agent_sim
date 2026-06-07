@@ -43,6 +43,18 @@ ACTOR_KEYS = {
 SKIP_KINDS = {"ActionAccepted"}
 
 
+def _is_item_spawn(ev: dict) -> bool:
+    """True for periodic ITEM respawns (Sprite='item:...'). The world
+    respawns food/coins/weapons as `Spawned` events sharing the same
+    kind as agent appearances; without this filter the narrator wrote
+    'agent spawn_42 appeared as a bread loaf', flooding the emergence
+    story with respawn noise and miscategorising loot as characters."""
+    if ev.get("kind") != "Spawned":
+        return False
+    sprite = str((ev.get("payload") or {}).get("Sprite", ""))
+    return sprite.startswith("item:")
+
+
 def actor_of(ev: dict) -> Optional[str]:
     """Extract the primary actor id from an event, or None if the
     event has no single actor (or is in SKIP_KINDS)."""
@@ -78,6 +90,8 @@ class Bucketizer:
     def ingest(self, ev: dict) -> None:
         self.seen += 1
         if ev.get("kind") in SKIP_KINDS:
+            return
+        if _is_item_spawn(ev):
             return
         actor = actor_of(ev)
         if actor is not None:
