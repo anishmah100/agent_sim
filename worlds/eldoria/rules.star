@@ -50,11 +50,20 @@ register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
 # respawn_radius of (respawn_hub_x, respawn_hub_y), unless the
 # total item count exceeds respawn_cap. Default hub matches the
 # experiment hub from D5 (Crossroads market area).
-register_tuning("respawn_interval_ticks", 1800)   # 30 in-game sec @ 60Hz
+# Respawn must track the CLUSTERED SPAWN hub, not the old market. With
+# hub=(772,894)/radius=200 the economy replenished at the market while
+# agents clustered at (764,864) and starved — and across a 200-tile disc
+# a single respawn rarely landed near anyone. run7 showed one greedy
+# collector (Bram, 25->245 gold) stripping the local cluster faster than
+# it refilled, leaving every other agent at the starting 25 with nothing
+# to do (no trades, no contracts). Aligning the respawn hub to the spawn
+# hub + a tight radius + a faster interval keeps a live economy under the
+# agents so scarcity drives interaction instead of just emptying out.
+register_tuning("respawn_interval_ticks", 600)    # 10 in-game sec @ 60Hz
 register_tuning("respawn_cap",            600)
-register_tuning("respawn_radius",         200)
-register_tuning("respawn_hub_x",          772)
-register_tuning("respawn_hub_y",          894)
+register_tuning("respawn_radius",         40)
+register_tuning("respawn_hub_x",          764)    # == spawn_hub_x
+register_tuning("respawn_hub_y",          864)    # == spawn_hub_y
 
 # D5 — clustered spawn for emergence experiments. When set, new
 # agents drop into the disc of `spawn_radius` tiles around
