@@ -26,9 +26,28 @@ import random
 from typing import Optional
 
 from agent_sim_sdk import (
-    ActionBatch, Move, Observation, Speak, VisionMode,
+    ActionBatch, Move, Observation, Pickup, Speak, VisionMode,
     register_and_connect, render_layered_observation,
 )
+
+
+# Item kinds the engine auto-converts to gold on pickup. Used by the
+# wanderer's "see a coin, grab it" reflex. Mirrors
+# engine/internal/systems/inventory/inventory.go::coinValues.
+_MONEY_KINDS = {
+    "coin_single", "coins_small_pile", "coin_pouch",
+    "coins_large_pile",
+    "gem_emerald", "gem_ruby", "gem_diamond",
+}
+
+
+def _kind_of(sprite: str) -> str:
+    s = sprite or ""
+    if s.startswith("item:"):
+        s = s[5:]
+    if "#" in s:
+        s = s.split("#", 1)[0]
+    return s
 
 
 # Closure-state for the brain. Real agents would keep this in a more
@@ -77,6 +96,40 @@ def pick_action(obs: Observation) -> tuple[ActionBatch, str]:
                 ),
                 f"WALK_TO_FOOD ({hunger:.2f})",
             )
+
+    # GOLD: if a visible coin/gem is within ~6 tiles, walk over and
+    # pick it up. The engine auto-converts monetary items to gold on
+    # pickup so this directly grows the wanderer's wealth — and stops
+    # the "agent walks past piles of gold like they don't exist" optic
+    # the user flagged. Money items appear in obs.visible_items, not
+    # obs.visible_entities, since D8's items-split lands.
+    coins = [
+        it for it in obs.visible_items
+        if _kind_of(it.sprite) in _MONEY_KINDS
+        and max(abs(it.pos[0] - me[0]), abs(it.pos[1] - me[1])) <= 6
+    ]
+    if coins:
+        # Nearest by Chebyshev.
+        coins.sort(key=lambda c: max(abs(c.pos[0] - me[0]), abs(c.pos[1] - me[1])))
+        target = coins[0]
+        d = max(abs(target.pos[0] - me[0]), abs(target.pos[1] - me[1]))
+        if d <= 1:
+            return (
+                ActionBatch(
+                    actions=[Pickup(target=target.entity_id)],
+                    reasoning=f"pickup {_kind_of(target.sprite)} at {tuple(target.pos)}",
+                ),
+                f"PICKUP_COIN {target.entity_id}",
+            )
+        step_x = me[0] + (1 if target.pos[0] > me[0] else -1 if target.pos[0] < me[0] else 0)
+        step_y = me[1] + (1 if target.pos[1] > me[1] else -1 if target.pos[1] < me[1] else 0)
+        return (
+            ActionBatch(
+                actions=[Move(target=(step_x, step_y))],
+                reasoning=f"walking toward {_kind_of(target.sprite)} at {tuple(target.pos)}",
+            ),
+            f"WALK_TO_COIN ({d} tiles)",
+        )
 
     # WANDER: random 1-tile drift.
     dx, dy = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
