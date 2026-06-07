@@ -69,48 +69,57 @@ export class CharacterAtlas {
     if (!r.ok) throw new Error(`character manifest ${r.status}`);
     const manifest = (await r.json()) as Manifest;
 
-    for (const c of manifest.characters) {
+    // Load EVERY frame concurrently. The previous implementation awaited
+    // each frame one-at-a-time — ~200 serial round-trips that left agents
+    // rendering as placeholder rectangles for ~6s on every page load
+    // (and made automated screenshots catch the placeholder window).
+    // Firing them in parallel collapses that to a single concurrent burst.
+    const loadTex = async (url: string): Promise<Texture | null> => {
+      try {
+        const tex = await Assets.load<Texture>(url);
+        tex.source.scaleMode = "nearest";
+        return tex;
+      } catch (e) {
+        console.warn(`frame load failed ${url}:`, e);
+        return null;
+      }
+    };
+
+    const walkRows = ROW_NAMES.filter((row) => row !== "action");
+    const specs = await Promise.all(manifest.characters.map(async (c) => {
       const anims: Record<CharacterAnim, Texture[]> = {
         walk_down: [], walk_up: [], walk_left: [], walk_right: [],
         attack_windup: [], attack_release: [], hit: [], interact: [],
       };
+      // Build the load jobs, then await them all at once.
+      const walkJobs = walkRows.flatMap((row) =>
+        [0, 1, 2, 3].map((i) => ({ row, p: loadTex(FRAME_URL(c.id, row, i)) })));
+      const actionJobs = ACTION_FRAMES.map((af) =>
+        ({ af, p: loadTex(FRAME_URL(c.id, "action", af.idx)) }));
+      const [walkTex, actionTex] = await Promise.all([
+        Promise.all(walkJobs.map((j) => j.p)),
+        Promise.all(actionJobs.map((j) => j.p)),
+      ]);
+
       let maxH = 0;
       let ok = true;
-
-      // Walk rows: load 4 frames each.
-      for (const row of ROW_NAMES) {
-        if (row === "action") continue;
-        for (let i = 0; i < 4; i++) {
-          try {
-            const tex = await Assets.load<Texture>(FRAME_URL(c.id, row, i));
-            tex.source.scaleMode = "nearest";
-            anims[row].push(tex);
-            if (tex.height > maxH) maxH = tex.height;
-          } catch (e) {
-            console.warn(`frame load failed for ${c.id}/${row}_${i}:`, e);
-            ok = false;
-          }
-        }
-      }
-
-      // Action row: 4 frames mapped to attack/hit/interact.
-      for (const af of ACTION_FRAMES) {
-        try {
-          const tex = await Assets.load<Texture>(FRAME_URL(c.id, "action", af.idx));
-          tex.source.scaleMode = "nearest";
-          anims[af.anim].push(tex);
-          if (tex.height > maxH) maxH = tex.height;
-        } catch (e) {
-          console.warn(`action frame load failed for ${c.id}/${af.idx}:`, e);
-          ok = false;
-        }
-      }
+      walkJobs.forEach((j, k) => {
+        const tex = walkTex[k];
+        if (!tex) { ok = false; return; }
+        anims[j.row].push(tex);
+        if (tex.height > maxH) maxH = tex.height;
+      });
+      actionJobs.forEach((j, k) => {
+        const tex = actionTex[k];
+        if (!tex) { ok = false; return; }
+        anims[j.af.anim].push(tex);
+        if (tex.height > maxH) maxH = tex.height;
+      });
 
       if (!ok) {
         console.warn(`skipping ${c.id} — frames missing`);
-        continue;
+        return null;
       }
-
       const spec: CharacterSpec = {
         id: c.id,
         display_name: c.display_name,
@@ -123,7 +132,13 @@ export class CharacterAtlas {
         },
         ref_frame_h: maxH,
       };
-      atlas.characters.set(c.id, spec);
+      return spec;
+    }));
+
+    // Preserve manifest order for deterministic fallback selection.
+    for (const spec of specs) {
+      if (!spec) continue;
+      atlas.characters.set(spec.id, spec);
       if (atlas.fallback === null) atlas.fallback = spec;
     }
     return atlas;
