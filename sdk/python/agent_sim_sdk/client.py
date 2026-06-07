@@ -119,8 +119,22 @@ class Agent:
             await self._ws.close()
 
     async def observations(self) -> AsyncIterator[Observation]:
+        # Coalesce to the freshest observation. A slow brain (e.g. an LLM
+        # that takes 3-8s/decision) falls behind the engine's observation
+        # cadence; queued observations are stale snapshots of the world and
+        # acting on them is worse than useless (the agent chases positions
+        # that have moved). So we block for at least one observation, then
+        # drain any others already waiting and yield only the most recent.
+        # Fast brains (rule-based bots) never have a backlog, so this is a
+        # no-op for them.
         while True:
-            yield await self._inbox.get()
+            obs = await self._inbox.get()
+            while True:
+                try:
+                    obs = self._inbox.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+            yield obs
 
     async def act(self, action: Action) -> Optional[ActionResult]:
         """Send ONE action. Returns engine's ack if it arrives within
@@ -299,7 +313,26 @@ class Agent:
                     e, list(payload.keys()),
                 )
                 continue
-            await self._inbox.put(obs)
+            # NEVER block the read loop. If the consumer is slow and the
+            # inbox is full, `await put()` would stall this loop — which
+            # also stalls the websockets recv path that answers server
+            # pings, so the connection dies with a 1011 keepalive-ping
+            # timeout (this silently killed every LLM agent ~2min into a
+            # run: 3-8s/decision filled the 64-slot inbox, the reader
+            # blocked, pings stopped, the body got orphan-cleaned). Drop
+            # the oldest observation to make room and keep draining the
+            # socket; observations() coalesces to the freshest anyway.
+            try:
+                self._inbox.put_nowait(obs)
+            except asyncio.QueueFull:
+                try:
+                    self._inbox.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    self._inbox.put_nowait(obs)
+                except asyncio.QueueFull:
+                    pass
 
     def _dispatch_ack(self, msg: dict) -> None:
         """Resolve the pending future for an action_ack frame.
