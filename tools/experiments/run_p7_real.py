@@ -237,6 +237,8 @@ async def main_run(args) -> int:
     # missing entity tells us exactly when a body disappeared.
     t0 = time.monotonic()
     gold_hist: dict[str, int] = {}
+    start_gold: dict[str, int] = {}
+    early_stop_reason = None
     try:
         while time.monotonic() - t0 < args.wall_seconds:
             await asyncio.sleep(15)
@@ -255,19 +257,61 @@ async def main_run(args) -> int:
                     ms = http_json(engine, f"/api/v1/agent/{eid}/mental_state", 3)
                     v = ms.get("vitals") or {}
                     g = v.get("gold", 0)
-                    hp = v.get("hp", 0)
-                    # hp==0 + max_hp==0 means the zero snapshot → entity gone.
                     if v.get("max_hp", 0) == 0:
                         vanished.append(h.name)
                     else:
                         gold_hist[h.name] = g
+                        start_gold.setdefault(h.name, g)
                 except Exception:
                     pass
             cyc = sum(getattr(h.bot, "cycles", 0) for h in handles if h.kind == "llm")
             acc = sum(getattr(h.bot, "accepted", 0) for h in handles if h.kind == "llm")
-            log.info("t+%ds live=%d llm_cycles=%d llm_accepted=%d gold=%s%s",
-                     elapsed, live, cyc, acc, gold_hist,
+
+            # ── Live scoring on the event window so far (cheap; the
+            # event file is local). This gives a real emergence pulse
+            # every checkpoint instead of waiting for the run to end.
+            try:
+                ev_now = [e for e in load_events(str(events_path))
+                          if int(e.get("tick", 0)) >= start_tick]
+                live_score = score_events(ev_now)
+                gold_moved = any(gold_hist.get(n, 0) != start_gold.get(n, 0)
+                                 for n in gold_hist)
+                pulse = (f"contracts={live_score.contracts_proposed}p/"
+                         f"{live_score.contracts_accepted}a "
+                         f"kills={live_score.kills} dmg={live_score.damage_events} "
+                         f"pays={live_score.pay_transfers} "
+                         f"speak={live_score.speech_count} "
+                         f"gold_moved={gold_moved}")
+            except Exception:
+                live_score = None
+                gold_moved = False
+                pulse = "(score unavailable)"
+
+            log.info("t+%ds live=%d cyc=%d acc=%d gold=%s | %s%s",
+                     elapsed, live, cyc, acc, gold_hist, pulse,
                      f" VANISHED={vanished}" if vanished else "")
+
+            # ── Early-abort heuristics (fast iteration). ───────────
+            # DEAD RUN: by 60s, if the LLM agents have produced zero
+            # accepted actions, the harness/LLM pipeline is broken —
+            # don't waste the full window.
+            if elapsed >= 60 and args.llm > 0 and acc == 0:
+                early_stop_reason = ("DEAD: 0 accepted LLM actions by 60s — "
+                                     "LLM/harness pipeline broken")
+                break
+            # STALLED ECONOMY: by 90s, if NOTHING economic/social has
+            # happened (no gold movement, no contracts, no combat, no
+            # speech), the setup is inert — bail and iterate on it.
+            if (elapsed >= 90 and live_score is not None
+                    and not gold_moved
+                    and live_score.contracts_proposed == 0
+                    and live_score.damage_events == 0
+                    and live_score.pay_transfers == 0):
+                early_stop_reason = ("STALLED: no gold movement / contracts / "
+                                     "combat / pays by 90s — setup is inert")
+                break
+        if early_stop_reason:
+            log.warning("EARLY STOP — %s", early_stop_reason)
         # Final collect; merge with last-known gold for any vanished body.
         gold, heatmap, manip_eids = collect_state(engine, handles)
         for name, g in gold_hist.items():
@@ -302,6 +346,7 @@ async def main_run(args) -> int:
     summary = {
         "engine": engine,
         "wall_seconds": args.wall_seconds,
+        "early_stop_reason": early_stop_reason,
         "start_tick": start_tick,
         "cast": {"llm": args.llm, "rule_based": dict(cast_spec)},
         "agents": [{"name": h.name, "kind": h.kind,

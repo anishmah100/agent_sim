@@ -66,9 +66,17 @@ register_tuning("respawn_hub_y",          894)
 # 18 ≈ everyone in mutual vision (vision_radius=12) from frame 1.
 # Setting spawn_radius to 0 disables clustering (falls back to
 # random world tile, the demo behaviour).
-register_tuning("spawn_hub_x",   772)
-register_tuning("spawn_hub_y",   894)
-register_tuning("spawn_radius",  18)
+# Hub relocated from the Crossroads market (772,894) to the open NW
+# pocket (764,864). The market is dense with buildings whose walls
+# BLOCK line-of-sight: a probe at the old hub saw 0 items even with
+# coins 6 tiles away, so clustered agents spawned blind and never
+# pursued anything (gold frozen at the starting 25 across every run).
+# A debug/vision scan found (764,864) sees 6 items / 5 monetary with
+# clear LOS. Radius tightened 18→14 to keep the cluster in the open
+# pocket rather than spilling back into the market.
+register_tuning("spawn_hub_x",   764)
+register_tuning("spawn_hub_y",   864)
+register_tuning("spawn_radius",  14)
 
 # ---- Stats ----
 # Per-entity stats this world tracks. The engine creates the extras
