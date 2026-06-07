@@ -23,7 +23,7 @@ action-list ::= "[" ws action ws ("," ws action ws)* "]"
 action ::= move-action | speak-action | whisper-action | shout-action
          | eat-action | pickup-action | equip-action | give-action
          | pay-action | trade-action | attack-action
-         | propose-action | accept-action | wait-action
+         | propose-action | accept-action | complete-action | wait-action
 
 move-action    ::= "{" ws "\"verb\":" ws "\"move\"" "," ws "\"target\":" ws "[" ws integer ws "," ws integer ws "]" ws "}"
 speak-action   ::= "{" ws "\"verb\":" ws "\"speak\"" "," ws "\"text\":" ws string ws "}"
@@ -38,6 +38,7 @@ trade-action   ::= "{" ws "\"verb\":" ws "\"trade\"" "," ws "\"target\":" ws str
 attack-action  ::= "{" ws "\"verb\":" ws "\"attack\"" "," ws "\"target\":" ws string ws "}"
 propose-action ::= "{" ws "\"verb\":" ws "\"propose_task\"" "," ws "\"target\":" ws string "," ws "\"terms\":" ws string ("," ws "\"reward\":" ws string)? ws "}"
 accept-action  ::= "{" ws "\"verb\":" ws "\"accept_task\"" "," ws "\"id\":" ws string ws "}"
+complete-action ::= "{" ws "\"verb\":" ws "\"complete_task\"" "," ws "\"id\":" ws string ws "}"
 wait-action    ::= "{" ws "\"verb\":" ws "\"wait\"" ("," ws "\"ticks\":" ws integer)? ws "}"
 
 string  ::= "\"" char* "\""

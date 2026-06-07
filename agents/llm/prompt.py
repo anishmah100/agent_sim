@@ -26,6 +26,7 @@ Actions you can take (pick 1-3 per turn):
 - attack {"verb":"attack","target":"<entity_id>"} — strike an adjacent agent
 - propose_task {"verb":"propose_task","target":"<entity_id>","terms":"...","reward":"..."} — offer a deal/contract to ANY agent you can see (no need to be near them)
 - accept_task {"verb":"accept_task","id":"<contract_id>"} — accept a contract offered to you (works from ANYWHERE — you never need to move to accept)
+- complete_task {"verb":"complete_task","id":"<contract_id>"} — mark a deal you've honored as done (works from anywhere; do this AFTER you've paid/given the promised reward)
 - wait {"verb":"wait","ticks":N} — do nothing for a while
 
 Rules:
@@ -214,7 +215,8 @@ def build_prompt(obs: Any, persona: str, goal: str,
             f"{_other}: \"{_c.get('terms')}\", reward {_c.get('reward') or '?'}. "
             f"Decide NOW: HONOR it — pay {_other} gold "
             f'({{"verb":"pay","target":"{_other}","amount":N}}) or give them '
-            f"the promised item (both reach ~3 tiles, no need to be adjacent) "
+            f"the promised item (both reach ~3 tiles, no need to be adjacent), "
+            f'then close it with {{"verb":"complete_task","id":"{_c.get("id")}"}} '
             f"— or DEFECT and keep everything (a betrayer might even attack "
             f"them). Your persona drives this choice; don't just forget the "
             f"deal exists.")
