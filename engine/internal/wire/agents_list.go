@@ -75,6 +75,14 @@ func AgentsListHandler(hub *AgentHub, w *world.World) http.HandlerFunc {
 			if pos, ok := entityPos[c.rec.EntityID]; ok {
 				info.Pos = pos
 			}
+			// Copy the picker telemetry (set under infoMu on the action
+			// path). These were declared but never copied here, so the UI
+			// always saw empty last_verb/last_speech and couldn't show what
+			// an agent was doing — making slow LLM agents look frozen.
+			c.rec.infoMu.Lock()
+			info.LastVerb = c.rec.LastVerb
+			info.LastSpeech = c.rec.LastSpeech
+			c.rec.infoMu.Unlock()
 			out = append(out, info)
 		}
 		// Sort by persona name then entity id so the picker is stable.
