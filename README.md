@@ -5,7 +5,6 @@ A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents.
 > The viral hook: **"my agent is living its life in the simulation."**
 
 ![status: launch-ready](https://img.shields.io/badge/status-launch--ready-yellow)
-![license: proprietary](https://img.shields.io/badge/license-all--rights--reserved-lightgrey)
 ![engine: Go](https://img.shields.io/badge/engine-Go%201.25-00ADD8)
 ![frontend: TS%2BPixi%2BSolid](https://img.shields.io/badge/frontend-TS%20%2B%20Pixi%20%2B%20Solid-3178C6)
 
@@ -137,7 +136,3 @@ The UI smokes are the gate that catches "scaffolded but not wired" bugs.
 ## Deploy
 
 `deploy/README.md` walks the Fly.io path: persistent volume for snapshots, JWT secret + CORS allowlist via `fly secrets set`, healthcheck on `/healthz`.
-
-## License
-
-All rights reserved.

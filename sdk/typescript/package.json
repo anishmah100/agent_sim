@@ -17,7 +17,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
-  "license": "MIT",
+  "license": "UNLICENSED",
   "dependencies": {
     "isomorphic-ws": "^5.0.0",
     "zod": "^3.23.0"
