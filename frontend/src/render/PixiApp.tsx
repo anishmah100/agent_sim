@@ -24,6 +24,7 @@ import { EntityLayer, type EntityState } from "./Entity";
 import { DecorationLayer, type DecorationInfoEvent } from "./Decoration";
 import { InteriorLayer } from "./Interior";
 import { SpeechBubbleLayer } from "./SpeechBubble";
+import { FxLayer } from "./FxLayer";
 import { DayNight } from "./DayNight";
 import { HD2DStack } from "./HD2D";
 import type { AudibleEvent } from "../net/ws";
@@ -130,13 +131,17 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   const decorations = new DecorationLayer();
   const entities = new EntityLayer();
   const speechBubbles = new SpeechBubbleLayer();
+  const fx = new FxLayer();                 // combat/economy one-shot FX
   const fxAbove = new Container();          // particles, selection rings, day/night tint top
   fxAbove.label = "fx_above";
   viewport.addChild(tilemap.container);
   viewport.addChild(decorations.container);
   viewport.addChild(entities.container);
+  viewport.addChild(fx.container);          // above entities so numbers/rings read
   viewport.addChild(speechBubbles.container);
   viewport.addChild(fxAbove);
+  // FX hook: float damage numbers when an entity takes damage.
+  entities.onDamage = (tile, amount) => fx.damage(tile, amount);
 
   // Interior overlay — fixed-position container on the stage (NOT in
   // the viewport) so it doesn't pan/zoom with the world.
@@ -198,6 +203,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     const byId = new Map<string, EntityState>();
     for (const e of entities.getAll()) byId.set(e.entity_id, e);
     speechBubbles.tick(byId);
+    fx.tick(delta.deltaMS);
     dayNight.tick();
     if (currentWorld) {
       const view = viewport.getVisibleBounds();
@@ -384,6 +390,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
     ingestAudible(events) {
       speechBubbles.ingest(events);
+      fx.ingest(events);
     },
 
     getViewportTileRect() {

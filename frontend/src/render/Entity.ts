@@ -203,6 +203,9 @@ export interface AgentHoverEvent {
 
 export class EntityLayer {
   readonly container: Container;
+  /** FX hook: called with (tile, amount) when an entity's hp drops, so
+   *  the FxLayer can float a damage number. Wired by PixiApp. */
+  onDamage?: (tile: [number, number], amount: number) => void;
   private items = new Map<string, RenderedEntity>();
   private dying: DyingEntity[] = [];   // BLK-1: agents fading out on death
   private selectionRing: Graphics;
@@ -701,6 +704,8 @@ export class EntityLayer {
     const nh = hpOf(next);
     if (nh !== null && re.prevHp !== null && nh < re.prevHp) {
       re.hitFlashUntil = performance.now() + HIT_FLASH_MS;
+      // BLK-1/FX: emit a floating damage number at the victim.
+      this.onDamage?.(next.pos, re.prevHp - nh);
     }
     re.prevHp = nh;
     re.state = { ...next };
