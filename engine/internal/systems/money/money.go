@@ -104,6 +104,7 @@ func (s *System) handlePay(w syscore.World, e syscore.Entity, env *syscore.Actio
 		return res
 	}
 	w.BumpSocial(e.ID(), target.ID(), "pay")
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }
@@ -120,9 +121,9 @@ func (s *System) manifest() manifest.SystemDeclaration {
 		Description: "Gold balance + transfers. Drives the economy. Doesn't enforce reciprocity — that's emergent (Q34 verbal contracts).",
 		Verbs: []manifest.VerbDeclaration{
 			{
-				Verb:        "pay",
-				Description: "Transfer gold to an adjacent entity.",
-				ParamsSchema: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"amount":{"type":"integer","minimum":1}},"required":["target","amount"]}`),
+				Verb:             "pay",
+				Description:      "Transfer gold to an adjacent entity.",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"amount":{"type":"integer","minimum":1}},"required":["target","amount"]}`),
 				Preconditions:    []string{"target within 1 tile", "self has at least `amount` gold"},
 				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_enough_gold"},
 				EmitsEvents:      []string{"GoldTransferred"},

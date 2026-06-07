@@ -9,16 +9,16 @@ import (
 // Action is the wire-level shape of an action submitted by an agent.
 // We unmarshal into ActionEnvelope first, then dispatch by Verb.
 type ActionEnvelope struct {
-	ActionID         string          `json:"action_id"`
-	InResponseToObs  uint64          `json:"in_response_to_obs,omitempty"`
-	Verb             string          `json:"verb"`
-	Priority         int             `json:"priority,omitempty"`
+	ActionID        string `json:"action_id"`
+	InResponseToObs uint64 `json:"in_response_to_obs,omitempty"`
+	Verb            string `json:"verb"`
+	Priority        int    `json:"priority,omitempty"`
 	// Reasoning is a free-text trace the agent's tactical brain
 	// emits alongside the action. Captured only when the experiment's
 	// capture_reasoning flag AND the agent's share_reasoning flag are
 	// BOTH set — see docs/EXPERIMENT_SYSTEM_PLAN.md §8.
-	Reasoning        string          `json:"reasoning,omitempty"`
-	Raw              json.RawMessage `json:"-"`
+	Reasoning string          `json:"reasoning,omitempty"`
+	Raw       json.RawMessage `json:"-"`
 }
 
 func (a *ActionEnvelope) UnmarshalJSON(data []byte) error {
@@ -65,6 +65,18 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			return res
 		}
 	}
+	// Building entry for decoration-backed buildings. Eldoria's buildings
+	// are decorations exposed to agents as visible doors
+	// (object_id "door:bld:NNN:x,y"); they have no entity, so the property
+	// system's entity-based `enter` handler rejects them as unknown_target.
+	// Resolve such a target to its bld: id and enter via the same
+	// InsideBuilding path interact{affordance=enter} uses. Falls through to
+	// the scenario handler for genuine entity-backed buildings.
+	if env.Verb == "enter" {
+		if r, handled := w.tryEnterDecorationBuilding(e, env); handled {
+			return r
+		}
+	}
 	// Scenario handlers take precedence — a scenario can override base
 	// verb semantics (e.g. attack with HP rules) or implement entirely
 	// scenario-custom verbs (trade, pay).
@@ -96,7 +108,9 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 		}
 		res.Accepted = true
 	case "speak":
-		var p struct{ Text string `json:"text"` }
+		var p struct {
+			Text string `json:"text"`
+		}
 		if err := json.Unmarshal(env.Raw, &p); err != nil {
 			res.Reason = "bad_params"
 			return res
@@ -108,7 +122,9 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 		w.emitSpeech(e, "speech", p.Text, w.Rules.GetInt("speak_radius", 8))
 		res.Accepted = true
 	case "shout":
-		var p struct{ Text string `json:"text"` }
+		var p struct {
+			Text string `json:"text"`
+		}
 		if err := json.Unmarshal(env.Raw, &p); err != nil {
 			res.Reason = "bad_params"
 			return res
@@ -144,7 +160,9 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 		// the social signal layer (future). Always accepted.
 		res.Accepted = true
 	case "wait":
-		var p struct{ Ticks int `json:"ticks"` }
+		var p struct {
+			Ticks int `json:"ticks"`
+		}
 		_ = json.Unmarshal(env.Raw, &p)
 		if p.Ticks <= 0 {
 			p.Ticks = 60
@@ -220,4 +238,77 @@ func chebyshev(a, b Tile) int {
 		return dx
 	}
 	return dy
+}
+
+// tryEnterDecorationBuilding handles `enter` for decoration-backed
+// buildings (the bld:/door: family exposed as visible doors). Returns
+// (result, true) when it took responsibility; (zero, false) when the
+// target isn't a decoration building so the caller falls through to the
+// scenario handler (entity-backed buildings).
+func (w *World) tryEnterDecorationBuilding(e *Entity, env *ActionEnvelope) (ActionResult, bool) {
+	res := ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	var p struct {
+		Target string `json:"target"`
+	}
+	if err := json.Unmarshal(env.Raw, &p); err != nil {
+		return res, false
+	}
+	bid := normalizeBuildingTarget(p.Target)
+	if bid == "" {
+		return res, false // not a decoration-building target
+	}
+	if e.InsideBuilding != "" {
+		res.Reason = "already_inside"
+		return res, true
+	}
+	hasBuilding, adjacent := false, false
+	for tile, ref := range w.buildingDoors {
+		if ref.Sprite != bid {
+			continue
+		}
+		hasBuilding = true
+		if chebyshev(e.LogicalTile, tile) <= 1 {
+			adjacent = true
+			break
+		}
+	}
+	if !hasBuilding {
+		res.Reason = "unknown_target"
+		return res, true
+	}
+	if !adjacent {
+		res.Reason = "target_too_far"
+		return res, true
+	}
+	e.InsideBuilding = bid
+	e.insideTicks = 240 + w.rng.IntN(360)
+	if w.onBuildingEntered != nil {
+		w.onBuildingEntered(e.EntityID, bid, w.tick)
+	}
+	w.SetEntityAction(e.EntityID, "interact", 20)
+	w.audibleAppend(AudibleEvent{
+		EventID:   nextEventID(&w.eventSeq),
+		Kind:      "sound",
+		SoundKind: "building_enter",
+		FromPos:   e.LogicalTile,
+		Tick:      w.tick,
+		radius:    8,
+	})
+	res.Accepted = true
+	return res, true
+}
+
+// normalizeBuildingTarget maps an agent-supplied enter target to a bld:
+// sprite id. Accepts "bld:NNN", "bld:NNN:x,y", or "door:bld:NNN:x,y".
+// Returns "" if it doesn't look like a building target.
+func normalizeBuildingTarget(t string) string {
+	t = strings.TrimPrefix(t, "door:")
+	if !strings.HasPrefix(t, "bld:") {
+		return ""
+	}
+	parts := strings.Split(t, ":")
+	if len(parts) >= 2 {
+		return parts[0] + ":" + parts[1]
+	}
+	return t
 }

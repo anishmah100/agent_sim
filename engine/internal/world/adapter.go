@@ -102,12 +102,12 @@ func (a *WorldAdapter) RemoveEntity(id string) error {
 
 func (a *WorldAdapter) EmitSound(at [2]int, kind string) {
 	a.W.audibleAppend(AudibleEvent{
-		EventID:    nextEventID(&a.W.eventSeq),
-		Kind:       "sound",
-		SoundKind:  kind,
-		FromPos:    at,
-		Tick:       a.W.tick,
-		radius:     8,
+		EventID:   nextEventID(&a.W.eventSeq),
+		Kind:      "sound",
+		SoundKind: kind,
+		FromPos:   at,
+		Tick:      a.W.tick,
+		radius:    8,
 	})
 }
 
@@ -118,12 +118,17 @@ func (a *WorldAdapter) EmitSound(at [2]int, kind string) {
 // witnesses get the truth and can choose to gossip about it.
 //
 // at        — killing tile (rounded to 5-tile cell for the
-//              anonymous scream to obfuscate exact position).
+//
+//	anonymous scream to obfuscate exact position).
+//
 // victimID  — the dead entity's id; carried in the witness event only.
 // killerID  — the attacker's id; carried in the witness event only.
-//              Empty for non-combat deaths (starvation, etc).
+//
+//	Empty for non-combat deaths (starvation, etc).
+//
 // muffled   — true when the kill occurred inside a building. Reduces
-//              scream radius to ~10 tiles, simulating muffled sound.
+//
+//	scream radius to ~10 tiles, simulating muffled sound.
 func (a *WorldAdapter) EmitDeathScream(at [2]int, victimID, killerID string, muffled bool) {
 	// Round position to 5-tile cell for anonymity.
 	approxX := (at[0] / 5) * 5
@@ -215,7 +220,7 @@ func (a *WorldAdapter) BumpSocial(a1, b, kind string) {
 
 func (a *WorldAdapter) QueueEvent(ev eventbus.Event) { a.Bus.Queue(ev) }
 
-func (a *WorldAdapter) GetService(name string) any   { return a.services[name] }
+func (a *WorldAdapter) GetService(name string) any { return a.services[name] }
 func (a *WorldAdapter) RegisterService(name string, svc any) {
 	a.services[name] = svc
 }
@@ -257,6 +262,12 @@ func (a *WorldAdapter) ExitBuilding(entityID string) bool {
 	return true
 }
 
+// SetEntityAction — transient one-shot action animation. Delegates to
+// the world; the tick loop clears it after holdTicks.
+func (a *WorldAdapter) SetEntityAction(id, verb string, holdTicks int) {
+	a.W.SetEntityAction(id, verb, holdTicks)
+}
+
 func (a *WorldAdapter) InsideBuilding(entityID string) string {
 	e := a.W.EntityByIDUnlocked(entityID)
 	if e == nil {
@@ -295,9 +306,9 @@ type EntityAdapter struct {
 	W *World
 }
 
-func (a *EntityAdapter) ID() string         { return a.E.EntityID }
-func (a *EntityAdapter) Archetype() string  { return a.E.Archetype }
-func (a *EntityAdapter) Pos() [2]int        { return a.E.LogicalTile }
+func (a *EntityAdapter) ID() string        { return a.E.EntityID }
+func (a *EntityAdapter) Archetype() string { return a.E.Archetype }
+func (a *EntityAdapter) Pos() [2]int       { return a.E.LogicalTile }
 func (a *EntityAdapter) SetExtra(k string, v any) {
 	if a.E.Extras == nil {
 		a.E.Extras = map[string]any{}

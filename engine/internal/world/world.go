@@ -49,6 +49,14 @@ type Entity struct {
 	CurrentAction string `json:"current_action,omitempty"`
 	actionTicks   int    // demo random action timer
 
+	// Transient one-shot action animation (attack / hit / interact).
+	// Set by verb handlers via SetEntityAction; the tick loop clears it
+	// when transientUntil passes. Overrides CurrentAction in the wire
+	// snapshot so the frontend plays the swing / flinch / use animation
+	// even though the underlying action is instantaneous.
+	transientAction string
+	transientUntil  uint64
+
 	// PlayerControlled — true when an external bot has bound to this
 	// entity. The engine's autonomous wander / demo-action loop SKIPS
 	// these entities so the bot's intent isn't overridden every few
@@ -106,15 +114,21 @@ func (e *Entity) MarshalJSON() ([]byte, error) {
 			publicExtras[k] = v
 		}
 	}
+	// Transient one-shot action (attack/hit/interact) overrides the
+	// steady-state CurrentAction so the frontend plays the animation.
+	action := e.CurrentAction
+	if e.transientAction != "" {
+		action = e.transientAction
+	}
 	return json.Marshal(struct {
-		EntityID      string         `json:"entity_id"`
-		Archetype     string         `json:"archetype"`
-		DisplayName   string         `json:"display_name,omitempty"`
-		Pos            [2]float64    `json:"pos"`
-		Facing         Facing        `json:"facing"`
-		CurrentAction  string        `json:"current_action,omitempty"`
-		LogicalTile    [2]int        `json:"logical_tile"`
-		InsideBuilding string        `json:"inside_building,omitempty"`
+		EntityID       string         `json:"entity_id"`
+		Archetype      string         `json:"archetype"`
+		DisplayName    string         `json:"display_name,omitempty"`
+		Pos            [2]float64     `json:"pos"`
+		Facing         Facing         `json:"facing"`
+		CurrentAction  string         `json:"current_action,omitempty"`
+		LogicalTile    [2]int         `json:"logical_tile"`
+		InsideBuilding string         `json:"inside_building,omitempty"`
 		Extras         map[string]any `json:"extras,omitempty"`
 	}{
 		EntityID:       e.EntityID,
@@ -122,11 +136,24 @@ func (e *Entity) MarshalJSON() ([]byte, error) {
 		DisplayName:    e.DisplayName,
 		Pos:            e.renderPos,
 		Facing:         e.Facing,
-		CurrentAction:  e.CurrentAction,
+		CurrentAction:  action,
 		LogicalTile:    e.LogicalTile,
 		InsideBuilding: e.InsideBuilding,
 		Extras:         publicExtras,
 	})
+}
+
+// SetEntityAction sets a transient one-shot action animation (attack /
+// hit / interact) on an entity for holdTicks ticks. The tick loop clears
+// it automatically. Caller must hold the world write lock (verb dispatch
+// already does). No-op for unknown ids.
+func (w *World) SetEntityAction(id, verb string, holdTicks int) {
+	e := w.entities[id]
+	if e == nil {
+		return
+	}
+	e.transientAction = verb
+	e.transientUntil = w.tick + uint64(holdTicks)
 }
 
 // recomputeRenderPos updates renderPos based on the walk state. Called
@@ -370,13 +397,13 @@ type buildingRef struct {
 }
 
 type fileWorld struct {
-	MapID        string             `json:"map_id"`
-	WidthTiles   int                `json:"width_tiles"`
-	HeightTiles  int                `json:"height_tiles"`
-	TilesLegend  map[string]string  `json:"tiles_legend"`
-	Tiles        []string           `json:"tiles"`
-	Entities     []json.RawMessage  `json:"entities"`
-	Decorations  []fileDecoration   `json:"decorations,omitempty"`
+	MapID       string            `json:"map_id"`
+	WidthTiles  int               `json:"width_tiles"`
+	HeightTiles int               `json:"height_tiles"`
+	TilesLegend map[string]string `json:"tiles_legend"`
+	Tiles       []string          `json:"tiles"`
+	Entities    []json.RawMessage `json:"entities"`
+	Decorations []fileDecoration  `json:"decorations,omitempty"`
 }
 
 type fileDecoration struct {
@@ -390,15 +417,15 @@ type fileDecoration struct {
 }
 
 type fileEntity struct {
-	EntityID    string         `json:"entity_id"`
-	Archetype   string         `json:"archetype"`
-	Pos         [2]int         `json:"pos"`
-	Facing      Facing         `json:"facing"`
-	DisplayName string         `json:"display_name"`
+	EntityID    string `json:"entity_id"`
+	Archetype   string `json:"archetype"`
+	Pos         [2]int `json:"pos"`
+	Facing      Facing `json:"facing"`
+	DisplayName string `json:"display_name"`
 	// Extras lets world.json declare item entities with a sprite +
 	// quantity (e.g., scattered wealth from D7). Optional. Any keys
 	// land directly into entity.Extras.
-	Extras      map[string]any `json:"extras,omitempty"`
+	Extras map[string]any `json:"extras,omitempty"`
 }
 
 // objectArchetypes mirrors the closed set in
@@ -562,7 +589,7 @@ func Load(path string) (*World, error) {
 		if d.HeightTiles >= 1.5 {
 			extraRows := int(d.HeightTiles) - fpH
 			if d.HeightTiles-float64(int(d.HeightTiles)) > 1e-9 {
-				extraRows++   // ceil — covers fractional roof
+				extraRows++ // ceil — covers fractional roof
 			}
 			if extraRows < 1 {
 				extraRows = 1
@@ -706,7 +733,6 @@ func (w *World) nearestWalkable(from Tile, radius int) (Tile, bool) {
 	}
 	return Tile{}, false
 }
-
 
 // IsWalkable returns true if (x,y) is on the map AND has walkable
 // terrain. Does not consider dynamic occupancy.
@@ -901,6 +927,12 @@ func (w *World) Tick() {
 	}
 
 	for _, e := range w.entities {
+		// Expire one-shot action animations (attack/hit/interact) once
+		// their hold window passes, so the frontend reverts to walk/idle.
+		if e.transientUntil != 0 && w.tick >= e.transientUntil {
+			e.transientAction = ""
+			e.transientUntil = 0
+		}
 		// World-object archetypes (trees, rocks, items, blueprints,
 		// buildings, decorations) DO NOT have a brain. The autonomous
 		// wander / demo-action / auto-enter behavior below would

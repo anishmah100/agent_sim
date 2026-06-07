@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	DefaultMaxHP        = 100
+	DefaultMaxHP = 100
 	// DefaultAttackDamage — D21 changed this from 12 to 4 to match the
 	// unarmed weapon stat (weaponStats's unarmedDmg). Verbs that don't
 	// resolve a weapon still see this default via the fallback path.
@@ -35,11 +35,11 @@ func (EntityDied) Kind() string { return "EntityDied" }
 
 // DamageDealt — emitted on every successful damage application.
 type DamageDealt struct {
-	Target   string
-	Killer   string
-	Amount   int
-	NewHP    int
-	Cause    string
+	Target string
+	Killer string
+	Amount int
+	NewHP  int
+	Cause  string
 }
 
 func (DamageDealt) Kind() string { return "DamageDealt" }
@@ -155,6 +155,10 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 	svc.DealDamage(w, other.ID(), dmg, "attack", e.ID())
 	w.EmitSound(e.Pos(), "sword_clang")
 	w.BumpSocial(e.ID(), other.ID(), "attack")
+	// Visual beats: attacker swings, victim flinches (~0.33s @60Hz),
+	// enough for the one-shot anim to read at the ~30Hz viewer feed.
+	w.SetEntityAction(e.ID(), "attack", 20)
+	w.SetEntityAction(other.ID(), "hit", 20)
 	res.Accepted = true
 	return res
 }
@@ -214,14 +218,14 @@ type weaponStat struct {
 // rulebook item kinds. Damage is final HP loss before defend
 // multiplier. Reach is Chebyshev tiles.
 var weaponTable = map[string]weaponStat{
-	"dagger":       {damage: 10, reach: 1},
-	"sword_short":  {damage: 12, reach: 1},
-	"sword_long":   {damage: 16, reach: 1},
-	"axe":          {damage: 18, reach: 1},
-	"club_wood":    {damage: 6, reach: 1},
-	"hammer":       {damage: 12, reach: 1},
-	"bow":          {damage: 10, reach: 6},
-	"crossbow":     {damage: 14, reach: 6},
+	"dagger":      {damage: 10, reach: 1},
+	"sword_short": {damage: 12, reach: 1},
+	"sword_long":  {damage: 16, reach: 1},
+	"axe":         {damage: 18, reach: 1},
+	"club_wood":   {damage: 6, reach: 1},
+	"hammer":      {damage: 12, reach: 1},
+	"bow":         {damage: 10, reach: 6},
+	"crossbow":    {damage: 14, reach: 6},
 }
 
 func (s *System) handleDefend(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
@@ -279,9 +283,9 @@ func (s *System) manifest() manifest.SystemDeclaration {
 		Description: "HP-based melee combat. Attack damages adjacent targets, defend halves incoming damage, heal restores HP.",
 		Verbs: []manifest.VerbDeclaration{
 			{
-				Verb:        "attack",
-				Description: "Damage an adjacent target.",
-				ParamsSchema: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
+				Verb:             "attack",
+				Description:      "Damage an adjacent target.",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target must be within 1 tile (chebyshev)"},
 				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far"},
 				EmitsEvents:      []string{"DamageDealt", "EntityDied"},
@@ -297,9 +301,9 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				RejectionReasons: []string{},
 			},
 			{
-				Verb:         "heal",
-				Description:  "Restore HP on self or adjacent target.",
-				ParamsSchema: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}}}`),
+				Verb:             "heal",
+				Description:      "Restore HP on self or adjacent target.",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}}}`),
 				Preconditions:    []string{"if target != self, target must be within 1 tile"},
 				RejectionReasons: []string{"unknown_target", "target_too_far"},
 			},

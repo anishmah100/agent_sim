@@ -97,7 +97,8 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 	})
 	w.QueueEvent(inventory.ItemTransferred{From: e.ID(), To: p.Target, Item: p.Item})
 	w.BumpSocial(e.ID(), p.Target, "trade")
-	w.EmitSound(target.Pos(), "item_trade") // FX: visible item handoff
+	w.EmitSound(target.Pos(), "item_trade")   // FX: visible item handoff
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }
@@ -108,8 +109,8 @@ func (s *System) manifest() manifest.SystemDeclaration {
 		Description: "Atomic item-for-gold swap with an adjacent partner. Higher-order verbal contracts use propose_task instead.",
 		Verbs: []manifest.VerbDeclaration{
 			{
-				Verb:        "trade",
-				Description: "Give an item to an adjacent target in exchange for gold (target pays).",
+				Verb:         "trade",
+				Description:  "Give an item to an adjacent target in exchange for gold (target pays).",
 				ParamsSchema: json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"item":{"type":"string"},"price":{"type":"integer","minimum":0}},"required":["target","item","price"]}`),
 				Preconditions: []string{
 					"target within 1 tile",

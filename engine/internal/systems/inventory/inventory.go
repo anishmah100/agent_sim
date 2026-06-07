@@ -36,7 +36,7 @@ var coinValues = map[string]int{
 	"gem_sapphire":     30,
 	"gem_emerald":      50,
 	"gem_ruby":         75,
-	"gem_diamond":     100,
+	"gem_diamond":      100,
 }
 
 // DefaultMaxSlots — D20. Hard cap at 10 slots. Each item (including
@@ -50,7 +50,10 @@ type ItemPicked struct{ Picker, Item string }
 
 func (ItemPicked) Kind() string { return "ItemPicked" }
 
-type ItemDropped struct{ Dropper, Item string; At [2]int }
+type ItemDropped struct {
+	Dropper, Item string
+	At            [2]int
+}
 
 func (ItemDropped) Kind() string { return "ItemDropped" }
 
@@ -178,6 +181,7 @@ func (s *System) handleEat(w syscore.World, e syscore.Entity, env *syscore.Actio
 		Satiety: sat,
 		Hunger:  next,
 	})
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }
@@ -226,6 +230,7 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 		svc.Grant(w, e.ID(), value, "pickup_coin")
 		w.RemoveEntity(p.Target)
 		w.QueueEvent(ItemPicked{Picker: e.ID(), Item: p.Target})
+		w.SetEntityAction(e.ID(), "interact", 18) // use animation
 		res.Accepted = true
 		return res
 	}
@@ -252,6 +257,7 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 	})
 	w.RemoveEntity(p.Target)
 	w.QueueEvent(ItemPicked{Picker: e.ID(), Item: p.Target})
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }
@@ -312,6 +318,7 @@ func (s *System) handleDrop(w syscore.World, e syscore.Entity, env *syscore.Acti
 		},
 	})
 	w.QueueEvent(ItemDropped{Dropper: e.ID(), Item: p.Item, At: e.Pos()})
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }
@@ -387,6 +394,7 @@ func (s *System) handleEquip(w syscore.World, e syscore.Entity, env *syscore.Act
 		m[slot] = p.Item
 		real.SetExtra("equipped", m)
 	})
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }
@@ -441,7 +449,8 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 		real.SetExtra("inventory", cur)
 	})
 	w.QueueEvent(ItemTransferred{From: e.ID(), To: p.Target, Item: p.Item})
-	w.EmitSound(target.Pos(), "item_give") // FX: visible gift handoff
+	w.EmitSound(target.Pos(), "item_give")    // FX: visible gift handoff
+	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
 	return res
 }

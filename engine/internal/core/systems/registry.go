@@ -64,6 +64,11 @@ type World interface {
 	ExitBuilding(entityID string) bool
 	InsideBuilding(entityID string) string
 
+	// SetEntityAction sets a transient one-shot action animation
+	// (attack/hit/interact) on an entity for holdTicks ticks; the engine
+	// clears it automatically. Drives the frontend swing/flinch/use anims.
+	SetEntityAction(id, verb string, holdTicks int)
+
 	// Declarative-ruleset access. Tunings live in worlds/<name>/rules.star
 	// and are loaded into World.Rules at bundle load. The methods are
 	// nil-safe — a world without a ruleset returns the supplied default,
