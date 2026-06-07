@@ -169,6 +169,19 @@ export interface ItemHoverEvent {
   pos: [number, number];
 }
 
+/** Pointer-enter on a non-item / non-world-object entity (i.e. an
+ *  agent or character). Carries screen coords from the originating
+ *  pointer event so the App layer can position a floating hover-card
+ *  next to the cursor. */
+export interface AgentHoverEvent {
+  entity_id: string;
+  archetype: string;
+  display_name?: string;
+  /** Window-space coords of the pointer at the time of the event. */
+  screen_x: number;
+  screen_y: number;
+}
+
 export class EntityLayer {
   readonly container: Container;
   private items = new Map<string, RenderedEntity>();
@@ -178,6 +191,8 @@ export class EntityLayer {
   private atlas: CharacterAtlas | null = null;
   private itemHoverEnterHandlers: Array<(ev: ItemHoverEvent) => void> = [];
   private itemHoverExitHandlers: Array<(ev: ItemHoverEvent) => void> = [];
+  private agentHoverEnterHandlers: Array<(ev: AgentHoverEvent) => void> = [];
+  private agentHoverExitHandlers: Array<(ev: AgentHoverEvent) => void> = [];
 
   /** Subscribe to pointer-enter on an item-archetype entity. Used by
    *  the App layer to drive the InfoPanel (D8 + D17). */
@@ -195,6 +210,26 @@ export class EntityLayer {
     return () => {
       const i = this.itemHoverExitHandlers.indexOf(h);
       if (i >= 0) this.itemHoverExitHandlers.splice(i, 1);
+    };
+  }
+
+  /** Subscribe to pointer-enter on an agent / character entity (i.e.
+   *  NOT items, trees, rocks, blueprints). Drives the floating
+   *  hover-card preview in App (D17 task 6.2). */
+  onAgentHoverEnter(h: (ev: AgentHoverEvent) => void): () => void {
+    this.agentHoverEnterHandlers.push(h);
+    return () => {
+      const i = this.agentHoverEnterHandlers.indexOf(h);
+      if (i >= 0) this.agentHoverEnterHandlers.splice(i, 1);
+    };
+  }
+
+  /** Subscribe to pointer-exit on an agent / character entity. */
+  onAgentHoverExit(h: (ev: AgentHoverEvent) => void): () => void {
+    this.agentHoverExitHandlers.push(h);
+    return () => {
+      const i = this.agentHoverExitHandlers.indexOf(h);
+      if (i >= 0) this.agentHoverExitHandlers.splice(i, 1);
     };
   }
 
@@ -401,11 +436,30 @@ export class EntityLayer {
     if (e.archetype !== "item" && e.archetype !== "decoration") {
       wrap.eventMode = "static";
       wrap.cursor = "pointer";
-      wrap.on("pointerover", () => {
-        body.filters = [HOVER_OUTLINE];
+      // Capture entity identity at create-time so the closures don't
+      // rely on later mutations of `e` (the engine sends a fresh
+      // EntityState every tick; `re.state` is what we keep).
+      const agentEv = (screenX: number, screenY: number): AgentHoverEvent => ({
+        entity_id: e.entity_id,
+        archetype: e.archetype,
+        display_name: e.display_name,
+        screen_x: screenX,
+        screen_y: screenY,
       });
-      wrap.on("pointerout", () => {
+      wrap.on("pointerover", (ev) => {
+        body.filters = [HOVER_OUTLINE];
+        // Pixi8 FederatedPointerEvent — global is page-space.
+        const g = (ev as { global?: { x: number; y: number } }).global;
+        const sx = g?.x ?? 0;
+        const sy = g?.y ?? 0;
+        for (const h of this.agentHoverEnterHandlers) h(agentEv(sx, sy));
+      });
+      wrap.on("pointerout", (ev) => {
         body.filters = [];
+        const g = (ev as { global?: { x: number; y: number } }).global;
+        const sx = g?.x ?? 0;
+        const sy = g?.y ?? 0;
+        for (const h of this.agentHoverExitHandlers) h(agentEv(sx, sy));
       });
     }
 

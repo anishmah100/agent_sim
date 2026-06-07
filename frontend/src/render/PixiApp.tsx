@@ -64,6 +64,11 @@ export interface PixiHandle {
   onItemHoverEnter(handler: (ev: import("./Entity").ItemHoverEvent) => void): () => void;
   /** D8 — pointer-exit. */
   onItemHoverExit(handler: (ev: import("./Entity").ItemHoverEvent) => void): () => void;
+  /** D17 task 6.2 — pointer-enter on an agent/character (non-item,
+   *  non-world-object) entity. Drives the floating hover-card. */
+  onAgentHoverEnter(handler: (ev: import("./Entity").AgentHoverEvent) => void): () => void;
+  /** D17 task 6.2 — pointer-exit on an agent/character entity. */
+  onAgentHoverExit(handler: (ev: import("./Entity").AgentHoverEvent) => void): () => void;
   /** Editor — drop a decoration at (tileX, tileY). The sprite id +
    *  footprint come from the editor's selected palette entry. The
    *  caller is responsible for POSTing to /api/v1/world/edit_deco
@@ -331,6 +336,12 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
     },
     onItemHoverExit(handler) {
       return entities.onItemHoverExit(handler);
+    },
+    onAgentHoverEnter(handler) {
+      return entities.onAgentHoverEnter(handler);
+    },
+    onAgentHoverExit(handler) {
+      return entities.onAgentHoverExit(handler);
     },
 
     async addDecoration(spec) {

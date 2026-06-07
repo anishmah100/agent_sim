@@ -15,13 +15,14 @@
 
 import { onMount, onCleanup, createSignal, createEffect } from "solid-js";
 import { mountPixiApp, type PixiHandle } from "../render/PixiApp";
-import { fetchMentalState, fetchWorldInfo, fetchWorldMap, type MentalStateResponse, type WorldInfo } from "../net/api";
+import { ENGINE_URL, fetchMentalState, fetchWorldInfo, fetchWorldMap, type MentalStateResponse, type WorldInfo } from "../net/api";
 import type { MentalState } from "./Inspector";
 import { connectViewer, type ViewerClient } from "../net/ws";
 import type { TileMapData } from "../render/Tilemap";
 import type { EntityState } from "../render/Entity";
 import { Inspector } from "./Inspector";
 import { InfoPanel } from "./InfoPanel";
+import { AgentHoverCard, type AgentHoverInfo } from "./AgentHoverCard";
 import { describeSprite, type SpriteInfo } from "./SpriteInfo";
 import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
@@ -34,6 +35,24 @@ import { StoryFeed } from "./StoryFeed";
 import { AgentsPicker } from "./AgentsPicker";
 import { JoinAgent } from "./JoinAgent";
 import { Onboarding } from "./Onboarding";
+
+/** Shape of one row in /api/v1/agents. The full response carries
+ *  more (persona_name, bio, last_verb, …) but the hover card + the
+ *  inspector badge only need the fields below. Kept local to App
+ *  — AgentsPicker has its own typing for the richer surface. */
+interface AgentsRow {
+  entity_id: string;
+  is_llm?: boolean;
+  archetype?: string;
+  display_name?: string;
+  persona_name?: string;
+}
+
+/** Cached /api/v1/agents lookup. The hover card fires a fetch ONCE
+ *  per hover-enter and reuses the result for 2 seconds — keeps the
+ *  engine from getting hammered if the user sweeps the pointer over
+ *  a row of NPCs. */
+const AGENTS_TTL_MS = 2000;
 
 export function App() {
   const [worldInfo, setWorldInfo] = createSignal<WorldInfo | null>(null);
@@ -68,9 +87,47 @@ export function App() {
   const [info, setInfo] = createSignal<SpriteInfo | null>(null);
   const [infoAt, setInfoAt] = createSignal<{ x: number; y: number } | null>(null);
   const [infoSource, setInfoSource] = createSignal<"world" | "interior">("world");
+  // D17 task 6.2 + 6.5 — hover card + inspector badge state.
+  const [hoverCard, setHoverCard] = createSignal<AgentHoverInfo | null>(null);
+  const [hoverAt, setHoverAt] = createSignal<{ x: number; y: number } | null>(null);
+
+  // Cached /api/v1/agents lookup. Refreshed when older than
+  // AGENTS_TTL_MS; multiple concurrent callers share one in-flight
+  // promise so a quick mouse-sweep doesn't fan out N fetches.
+  let agentsCache: { fetchedAtMs: number; byId: Map<string, AgentsRow> } | null = null;
+  let agentsInFlight: Promise<Map<string, AgentsRow>> | null = null;
+  async function getAgentsLookup(): Promise<Map<string, AgentsRow>> {
+    const now = Date.now();
+    if (agentsCache && now - agentsCache.fetchedAtMs < AGENTS_TTL_MS) {
+      return agentsCache.byId;
+    }
+    if (agentsInFlight) return agentsInFlight;
+    agentsInFlight = (async () => {
+      try {
+        const r = await fetch(`${ENGINE_URL}/api/v1/agents`);
+        if (!r.ok) return new Map<string, AgentsRow>();
+        const j = await r.json() as { agents?: AgentsRow[] };
+        const byId = new Map<string, AgentsRow>();
+        for (const a of j.agents ?? []) byId.set(a.entity_id, a);
+        agentsCache = { fetchedAtMs: Date.now(), byId };
+        return byId;
+      } catch {
+        return new Map<string, AgentsRow>();
+      } finally {
+        agentsInFlight = null;
+      }
+    })();
+    return agentsInFlight;
+  }
 
   function fetchAndSetMentalState(entityID: string) {
-    fetchMentalState(entityID).then((m: MentalStateResponse) => {
+    // Kick off both fetches in parallel. The agents lookup is cheap
+    // (cached for 2s) and its only contribution is the is_llm flag
+    // for the inspector header badge.
+    const mentalP = fetchMentalState(entityID);
+    const agentsP = getAgentsLookup();
+    Promise.all([mentalP, agentsP]).then(([m, agents]: [MentalStateResponse, Map<string, AgentsRow>]) => {
+      const row = agents.get(entityID);
       setMentalState({
         dialogue: m.dialogue.map((d) => ({
           tick: d.tick,
@@ -83,6 +140,7 @@ export function App() {
         capture_reasoning_enabled: m.capture_reasoning_enabled,
         peers: m.peers ?? {},
         vitals: m.vitals,
+        is_llm: row?.is_llm,
       });
     }).catch(() => setMentalState(null));
   }
@@ -311,6 +369,65 @@ export function App() {
     pixiHandle.onDecorationHoverExit((ev) => hideInfoFor(ev.sprite));
     pixiHandle.onInteriorPropHoverEnter((ev) => showInfoFor(ev.sprite, ev.x, ev.y, "interior"));
     pixiHandle.onInteriorPropHoverExit((ev) => hideInfoFor(ev.sprite));
+
+    // D17 task 6.2 — agent hover-card. One fetch per hover-enter,
+    // result cached for 2s via getAgentsLookup(). We also tap the
+    // entity's vitals via fetchMentalState if it's in our live
+    // entity list, but vitals there require an extra round-trip and
+    // a 200ms hover doesn't justify it — the engine's /api/v1/agents
+    // doesn't carry hp/gold today, so we fall back to "0" until the
+    // engine exposes vitals there. For now, the /mental_state vitals
+    // path drives the hover card too: one fetch, cached briefly.
+    //
+    // hoveredEntity guards the swap-race in the same way hoveredSprite
+    // does for decorations.
+    let hoveredEntity: string | null = null;
+    const vitalsCache = new Map<string, { fetchedAtMs: number; hp: number; max_hp: number; gold: number }>();
+    const VITALS_TTL_MS = 2000;
+    async function getVitals(entityId: string) {
+      const now = Date.now();
+      const c = vitalsCache.get(entityId);
+      if (c && now - c.fetchedAtMs < VITALS_TTL_MS) return c;
+      try {
+        const m = await fetchMentalState(entityId);
+        const v = {
+          fetchedAtMs: Date.now(),
+          hp: m.vitals?.hp ?? 0,
+          max_hp: m.vitals?.max_hp ?? 0,
+          gold: m.vitals?.gold ?? 0,
+        };
+        vitalsCache.set(entityId, v);
+        return v;
+      } catch {
+        return { fetchedAtMs: Date.now(), hp: 0, max_hp: 0, gold: 0 };
+      }
+    }
+    pixiHandle.onAgentHoverEnter((ev) => {
+      hoveredEntity = ev.entity_id;
+      setHoverAt({ x: ev.screen_x, y: ev.screen_y });
+      // Fire the agents lookup + vitals lookup. Show whatever resolves
+      // first; the hover card re-renders when state updates.
+      void Promise.all([getAgentsLookup(), getVitals(ev.entity_id)]).then(([agents, vit]) => {
+        if (hoveredEntity !== ev.entity_id) return;   // pointer already moved
+        const row = agents.get(ev.entity_id);
+        setHoverCard({
+          entity_id: ev.entity_id,
+          display_name: ev.display_name ?? row?.display_name ?? row?.persona_name,
+          archetype: row?.archetype ?? ev.archetype,
+          is_llm: row?.is_llm ?? false,
+          hp: vit.hp,
+          max_hp: vit.max_hp,
+          gold: vit.gold,
+        });
+      });
+    });
+    pixiHandle.onAgentHoverExit((ev) => {
+      if (hoveredEntity === ev.entity_id) {
+        hoveredEntity = null;
+        setHoverCard(null);
+        setHoverAt(null);
+      }
+    });
 
     // ESC closes the inspector. (The info panel hides on mouse-out
     // automatically — no manual close needed.)
@@ -541,6 +658,8 @@ export function App() {
         source={infoSource()}
       />
 
+      <AgentHoverCard info={hoverCard()} at={hoverAt()} />
+
       {hudOpen() && (
         <HUD
           dayPhase="day"
@@ -644,7 +763,7 @@ export function App() {
         getViewportTileRect={() => pixiHandle?.getViewportTileRect() ?? null}
       />
 
-      <StoryFeed entityId={selectedId()} shiftLeft={editorOpen()} />
+      <StoryFeed />
 
       <JoinAgent open={joinOpen()} onClose={() => setJoinOpen(false)} />
       <Onboarding />

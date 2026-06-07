@@ -400,9 +400,21 @@ func (h *AgentHub) tickObservations() {
 			"self":              obs.Self,
 			"visible_entities":  obs.VisibleEntities,
 			"visible_objects":   obs.VisibleObjects,
+			// D8 — items the agent can see. CRITICAL: this MUST be
+			// in the map. The hand-rolled serialization used to drop
+			// it, which silently broke every items-aware feature
+			// (survivor money-seeking, killer weapon pickup, scavenger
+			// looting, wanderer coin grab). Discovered by comparing
+			// the /api/v1/debug/vision endpoint output (which uses
+			// BuildObservationFor directly) against the WS payload.
+			"visible_items":     obs.VisibleItems,
 			"audible":           obs.Audible,
 			"known_map_summary": obs.KnownMap,
 			"world_clock":       obs.WorldClock,
+			// recent_self_results was also being dropped — surfaces
+			// the engine's verb ack history so brains can recognise
+			// "my last pickup was rejected" without parsing acks.
+			"recent_self_results": obs.RecentSelfResults,
 		}
 		data, err := json.Marshal(msg)
 		if err != nil {

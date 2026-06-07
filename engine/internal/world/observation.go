@@ -412,6 +412,26 @@ func (w *World) BuildObservationFor(entityID string, obsID uint64, opts *AgentOb
 	return w.BuildObservation(e, obsID, opts)
 }
 
+// DebugObsAtTile — synthetic observation at the given tile using the
+// CURRENT live snapshot. The probe is fake (not a real entity); used
+// only by /api/v1/debug/vision to diagnose what the engine's
+// observation pipeline would return for that position. Returns nil
+// if no snapshot has been published yet.
+func (w *World) DebugObsAtTile(at [2]int) *Observation {
+	snap := w.snapshot.Load()
+	if snap == nil {
+		return nil
+	}
+	probe := &Entity{
+		EntityID:    "_debug_probe",
+		Archetype:   "trainer",
+		LogicalTile: Tile{at[0], at[1]},
+		Facing:      FacingS,
+		Extras:      map[string]any{},
+	}
+	return snap.buildObservationSnap(probe, 0, nil)
+}
+
 // CurrentTick returns the latest engine tick (for cadence calc).
 //
 // Lock-free: reads w.tick atomically. Writes happen under w.mu.Lock()

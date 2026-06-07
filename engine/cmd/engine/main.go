@@ -268,6 +268,8 @@ func main() {
 	// AGENT-A7 inspector → mental_state endpoint. Path includes the
 	// entity id; the handler parses it out.
 	mux.HandleFunc("/api/v1/agent/", wire.MentalStateHandler(hist, *flagCaptureReasoning, w))
+	// Debug: synthetic-vision query so we can diagnose D8 routing live.
+	mux.HandleFunc("/api/v1/debug/vision", wire.DebugVisionHandler(w))
 
 	// Prometheus-format /metrics. Stats sourced from the existing
 	// counters (no client_golang dep).

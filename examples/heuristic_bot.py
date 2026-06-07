@@ -103,12 +103,29 @@ def pick_action(obs: Observation) -> tuple[ActionBatch, str]:
     # the "agent walks past piles of gold like they don't exist" optic
     # the user flagged. Money items appear in obs.visible_items, not
     # obs.visible_entities, since D8's items-split lands.
+    # Diagnostic: log the visible_items inventory so we can verify
+    # the bot is actually receiving items from the engine. Logged
+    # once every 12 obs to keep volume sane.
+    STATE.setdefault("obs_count", 0)
+    STATE["obs_count"] += 1
+    if STATE["obs_count"] % 12 == 1:
+        logging.getLogger("heuristic_bot").info(
+            "vision: %d items, %d entities, pos=%s",
+            len(obs.visible_items), len(obs.visible_entities), obs.self.pos,
+        )
+        for it in obs.visible_items[:4]:
+            logging.getLogger("heuristic_bot").info(
+                "  item: %s at %s", it.sprite, tuple(it.pos),
+            )
     coins = [
         it for it in obs.visible_items
         if _kind_of(it.sprite) in _MONEY_KINDS
         and max(abs(it.pos[0] - me[0]), abs(it.pos[1] - me[1])) <= 6
     ]
     if coins:
+        logging.getLogger("heuristic_bot").info(
+            "GOLD branch firing — %d coins in vision", len(coins),
+        )
         # Nearest by Chebyshev.
         coins.sort(key=lambda c: max(abs(c.pos[0] - me[0]), abs(c.pos[1] - me[1])))
         target = coins[0]

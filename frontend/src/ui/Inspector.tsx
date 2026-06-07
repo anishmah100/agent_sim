@@ -14,6 +14,7 @@
 
 import { For, Show, createMemo, createSignal } from "solid-js";
 import type { EntityState } from "../render/Entity";
+import { Badge } from "./AgentHoverCard";
 
 export interface DialogueLine {
   tick: number;
@@ -71,6 +72,11 @@ export interface MentalState {
   // D19 — per-pair counters keyed by the *other* agent's entity_id.
   peers?: Record<string, SocialCounts>;
   vitals?: VitalsSnapshot;
+  // D17 task 6.5 — surfaced via the /api/v1/agents lookup that
+  // App.tsx runs alongside fetchMentalState. Drives the LLM/rule
+  // badge in the inspector header. Undefined when the entity is
+  // not a registered agent (e.g. background NPCs).
+  is_llm?: boolean;
 }
 
 type Tab = "speech" | "mind" | "trace" | "relationships" | "inventory";
@@ -130,9 +136,17 @@ export function Inspector(props: {
             "border-bottom": "1px solid #3a4466",
           }}
         >
-          <strong style={{ color: "#fee761", "font-size": "14px" }}>
-            {props.entity?.display_name ?? props.entity?.entity_id ?? "(unknown)"}
-          </strong>
+          <div style={{ display: "flex", "align-items": "center", gap: "8px", "min-width": "0", flex: "1" }}>
+            <strong style={{
+              color: "#fee761", "font-size": "14px",
+              overflow: "hidden", "text-overflow": "ellipsis", "white-space": "nowrap",
+            }}>
+              {props.entity?.display_name ?? props.entity?.entity_id ?? "(unknown)"}
+            </strong>
+            <Show when={props.mentalState?.is_llm !== undefined}>
+              <Badge kind={props.mentalState!.is_llm ? "llm" : "rule"} />
+            </Show>
+          </div>
           <button
             type="button"
             onClick={() => props.onClose()}

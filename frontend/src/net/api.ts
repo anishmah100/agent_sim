@@ -125,6 +125,37 @@ export async function fetchAffordances(): Promise<AffordanceManifest> {
   return (await r.json()) as AffordanceManifest;
 }
 
+// D17 / D15 — NarratorSummary record emitted to .runlog/narrator.jsonl
+// by tools/narrator. The /api/v1/narrator/recent endpoint serves the
+// most recent N of these for the Story Feed UI.
+export type NarratorLevel = 'L1' | 'L2' | 'L3' | 'L4';
+
+export interface NarratorRecord {
+  tick:     number;
+  level:    NarratorLevel;
+  scope:    string;
+  actors:   string[];
+  text:     string;
+  n_events: number;
+  llm:      string;
+  reason:   string;
+}
+
+export interface NarratorRecentResponse {
+  events: NarratorRecord[];
+}
+
+export async function fetchNarratorRecent(
+  n = 30,
+  level?: NarratorLevel,
+): Promise<NarratorRecentResponse> {
+  const params = new URLSearchParams({ n: String(n) });
+  if (level) params.set('level', level);
+  const r = await fetch(`${ENGINE_URL}/api/v1/narrator/recent?${params.toString()}`);
+  if (!r.ok) throw new Error(`narrator/recent ${r.status}`);
+  return (await r.json()) as NarratorRecentResponse;
+}
+
 export async function fetchWorldMap(name = "dev_test"): Promise<unknown> {
   // Try engine first; fall back to Vite static.
   for (const base of [ENGINE_URL, ""]) {
