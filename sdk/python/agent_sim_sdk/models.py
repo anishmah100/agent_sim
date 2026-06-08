@@ -319,6 +319,14 @@ class Mine(_Action):
     target: str
 
 
+class Forage(_Action):
+    """Gather fruit (a food item) from an adjacent tree/bush without
+    felling it (Resources system). Renewable: the source ripens again
+    after a cooldown. Reasons: not_forageable / not_ripe / target_too_far."""
+    verb: Literal["forage"] = "forage"
+    target: str
+
+
 class Enter(_Action):
     """Step inside an adjacent building (Property system)."""
     verb: Literal["enter"] = "enter"
@@ -412,7 +420,7 @@ Action = Annotated[
         Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
         # Composable-system verbs (session 2).
         Pay, WorkForPay, BuyFood, Trade, Loot,
-        Chop, Mine,
+        Chop, Mine, Forage,
         Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
         PlaceBlueprint, AdvanceConstruction, Demolish,
         ProposeTask, AcceptTask, RejectTask, CompleteTask,
