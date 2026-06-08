@@ -189,8 +189,13 @@ func main() {
 		log.Printf("supervising %d NPC spec(s) from %s", len(cfg.NPCs), npcConfig)
 	}
 
+	// Multi-map hub: the overworld plus any building interiors loaded at
+	// runtime (HeartGold model). The agent hub routes each agent's
+	// observations/actions to whichever map it's standing on. With only the
+	// overworld loaded, behavior is identical to the single-world engine.
+	mmhub := world.NewMultiMapHub(w)
 	hub := wire.NewViewerHub(ctx, w)
-	agents := wire.NewAgentHub(ctx, w)
+	agents := wire.NewAgentHub(ctx, w, mmhub)
 
 	// Layered reasoning capture. -capture-reasoning AND the per-agent
 	// share_reasoning flag must both be true for a trace to land in
@@ -413,7 +418,9 @@ func main() {
 			return
 
 		case <-tickTimer.C:
-			w.Tick()
+			// Tick every loaded map (overworld + interiors). Single-map =
+			// just w.Tick().
+			mmhub.TickAll()
 			tick.Add(1)
 
 		case <-tickerOrNop(snapTimer):

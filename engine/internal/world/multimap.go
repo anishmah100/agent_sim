@@ -64,6 +64,31 @@ func (h *MultiMapHub) Get(id string) *World {
 	return h.maps[id]
 }
 
+// Primary returns the overworld (top-level) map.
+func (h *MultiMapHub) Primary() *World {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.maps[h.primary]
+}
+
+// WorldOf returns the map that currently holds the given entity, or nil if
+// no loaded map contains it. Used to route an agent's observations/actions to
+// whichever map it's standing on (overworld or a building interior).
+func (h *MultiMapHub) WorldOf(entityID string) *World {
+	h.mu.RLock()
+	ms := make([]*World, 0, len(h.maps))
+	for _, w := range h.maps {
+		ms = append(ms, w)
+	}
+	h.mu.RUnlock()
+	for _, w := range ms {
+		if w.EntityByID(entityID) != nil {
+			return w
+		}
+	}
+	return nil
+}
+
 // Warp moves an entity from one map to another. The entity is removed
 // from `from` and added to `to` at the target tile. Returns false if
 // either map is unknown or the entity isn't on `from`.

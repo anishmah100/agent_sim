@@ -35,6 +35,11 @@ import (
 // AgentHub manages registered agents + their live connections.
 type AgentHub struct {
 	w *world.World
+	// hub — the multi-map hub. The overworld is `w`; building interiors are
+	// additional maps. Per-entity observation/action calls route through
+	// worldFor() so an agent that warped into an interior is served by that
+	// interior's World. nil-safe: falls back to single-world `w`.
+	hub *world.MultiMapHub
 
 	// Experiment-level flag. When false, the engine drops the
 	// `reasoning` field even if the agent opted in. Both must be true
@@ -152,14 +157,38 @@ func (c *agentConn) trySend(data []byte) bool {
 	}
 }
 
-func NewAgentHub(ctx context.Context, w *world.World) *AgentHub {
+func NewAgentHub(ctx context.Context, w *world.World, hub *world.MultiMapHub) *AgentHub {
 	h := &AgentHub{
 		w:        w,
+		hub:      hub,
 		registry: make(map[string]*agentRecord),
 		live:     make(map[string]*agentConn),
 	}
 	go h.observationLoop(ctx)
 	return h
+}
+
+// worldFor returns the World currently holding the entity (overworld or an
+// interior). Falls back to the overworld when the hub is absent or the entity
+// isn't found on any loaded map (caller handles a nil/gone entity).
+func (h *AgentHub) worldFor(entityID string) *world.World {
+	if h.hub != nil {
+		if w := h.hub.WorldOf(entityID); w != nil {
+			return w
+		}
+	}
+	return h.w
+}
+
+// isEntityGone reports whether the entity is absent from EVERY loaded map
+// (truly removed — death/loot cleanup), as opposed to merely having warped
+// off the overworld into an interior. Used to decide when to close a dead
+// agent's socket so the supervisor respawns it.
+func (h *AgentHub) isEntityGone(entityID string) bool {
+	if h.hub != nil {
+		return h.hub.WorldOf(entityID) == nil
+	}
+	return h.w.EntityByID(entityID) == nil
 }
 
 // HandleRegister responds to POST /api/v1/agent/register.
@@ -358,7 +387,9 @@ func (h *AgentHub) HandleWS(rw http.ResponseWriter, r *http.Request) {
 	c.readPump()
 	// Clear the flag on disconnect so the NPC resumes autonomous
 	// behavior (and so a subsequent bot can re-bind without races).
-	h.w.SetPlayerControlled(rec.EntityID, false)
+	// Route via worldFor in case the agent disconnected while inside an
+	// interior map.
+	h.worldFor(rec.EntityID).SetPlayerControlled(rec.EntityID, false)
 }
 
 // observationLoop ticks every 100 ms; for each live agent, if their
@@ -390,7 +421,7 @@ func (h *AgentHub) tickObservations() {
 		if now-int64(c.lastObs.Load()) < cad {
 			continue
 		}
-		obs := h.w.BuildObservationFor(c.rec.EntityID, c.lastObs.Load()+1, nil)
+		obs := h.worldFor(c.rec.EntityID).BuildObservationFor(c.rec.EntityID, c.lastObs.Load()+1, nil)
 		if obs == nil {
 			// No observation: either the entity was removed (death/loot
 			// cleanup) or the published snapshot is briefly behind a fresh
@@ -402,7 +433,7 @@ func (h *AgentHub) tickObservations() {
 			// respawned — the population bled out over a long run
 			// (sustain bug). Closing the conn ends observations() → run()
 			// returns → the supervisor registers a replacement.
-			if h.w.EntityByID(c.rec.EntityID) == nil && !c.closedAt.Load() {
+			if h.isEntityGone(c.rec.EntityID) && !c.closedAt.Load() {
 				c.conn.Close()
 			}
 			continue
@@ -542,7 +573,7 @@ func (c *agentConn) handleMessage(raw []byte) {
 			}
 		}
 		c.rec.infoMu.Unlock()
-		res := c.hub.w.SubmitAction(c.rec.EntityID, &env)
+		res := c.hub.worldFor(c.rec.EntityID).SubmitAction(c.rec.EntityID, &env)
 		// Diagnostic: log every rejection with the dispatcher's reason
 		// so the smoke + downstream analysis can see what verbs the
 		// agent attempted but the engine refused. Without this, an
