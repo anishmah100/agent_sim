@@ -102,7 +102,13 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 				// Distinct visual beat for starvation damage so the UI can
 				// show a hunger pang (amber) rather than a red combat hit.
 				// Fires at most once per damage interval (~5s), not spammy.
-				w.EmitSound(e.Pos(), "hunger_pang")
+				// Skip agents hidden inside a building: they aren't rendered
+				// on the overworld, so the "hungry" float would otherwise
+				// appear over an empty tile (the building's footprint) with
+				// no visible character beneath it.
+				if w.InsideBuilding(id) == "" {
+					w.EmitSound(e.Pos(), "hunger_pang")
+				}
 				// Only emit on the CROSSING (prev below → now above). The
 				// previous code fired every tick the entity was above the
 				// threshold — at scale (250 entities in Eldoria) this
