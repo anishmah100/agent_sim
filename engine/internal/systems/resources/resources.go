@@ -30,6 +30,10 @@ const (
 	// food source. A tree can be foraged again only after this many ticks
 	// (ripening), so it isn't an infinite apple spigot.
 	DefaultForageCooldown = 600 // ~10s at 60Hz
+	// Resource regrowth: partially-harvested trees/rocks slowly recover
+	// hardness so a forest isn't permanently stripped. +1 hardness every
+	// this many ticks (~30s), capped at the archetype's max. 0 disables.
+	DefaultResourceRegenInterval = 1800
 )
 
 // === Events ===
@@ -64,6 +68,7 @@ func (s *System) RegisterWith(r syscore.Registry) {
 	r.Verb("chop", s.handleChop)
 	r.Verb("mine", s.handleMine)
 	r.Verb("forage", s.handleForage)
+	r.OnTick(s.regen)
 	r.OnEntitySpawn(s.seedSpawn)
 	r.Manifest(s.manifest())
 }
@@ -102,6 +107,34 @@ func (s *System) handleMine(w syscore.World, e syscore.Entity, env *syscore.Acti
 //   - bad_params / unknown_target / target_too_far
 //   - not_forageable: target isn't a tree/bush
 //   - not_ripe: foraged too recently; wait for it to bear fruit again
+// regen slowly regrows hardness on partially-harvested (but not fully
+// depleted/removed) tree and rock nodes, capped at the archetype max, so a
+// forest recovers instead of being permanently stripped. 0 interval = off.
+func (s *System) regen(w syscore.World, tick uint64) {
+	interval := w.TuningInt("resource_regen_interval", DefaultResourceRegenInterval)
+	if interval < 1 || tick%uint64(interval) != 0 {
+		return
+	}
+	for _, id := range w.EntityIDs() {
+		e := w.EntityByID(id)
+		if e == nil {
+			continue
+		}
+		var max int
+		switch e.Archetype() {
+		case "tree":
+			max = w.TuningInt("tree_hardness", DefaultTreeHardness)
+		case "rock":
+			max = w.TuningInt("rock_hardness", DefaultRockHardness)
+		default:
+			continue
+		}
+		if h := intExtra(e, "hardness"); h > 0 && h < max {
+			w.MutateEntity(id, func(re syscore.Entity) { re.SetExtra("hardness", h+1) })
+		}
+	}
+}
+
 func (s *System) handleForage(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
 	res := syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb}
 	var p struct {
