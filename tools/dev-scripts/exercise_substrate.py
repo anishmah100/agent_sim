@@ -29,12 +29,20 @@ from typing import Optional
 
 from agent_sim_sdk import (
     Agent, ActionBatch, VisionMode, register_agent,
-    Move, Speak, Shout, Whisper, Interact, Wait,
+    Step, Speak, Shout, Whisper, Interact, Wait,
     WorkForPay, Pay, Give,
 )
 
 
 # Helpers ---------------------------------------------------------------
+
+
+def _compass(here, there):
+    dx = there[0] - here[0]
+    dy = there[1] - here[1]
+    if abs(dx) >= abs(dy):
+        return "E" if dx > 0 else "W"
+    return "S" if dy > 0 else "N"
 
 def tail_for_kind(events_path: Path, kind: str, after_seq: int,
                   timeout_s: float = 30.0) -> Optional[dict]:
@@ -152,7 +160,7 @@ async def main_async(args) -> None:
             if max(abs(cur[0] - door.pos[0]), abs(cur[1] - door.pos[1])) <= 1:
                 break
             tgt = step_toward(cur, door.pos)
-            await agent.act_batch(ActionBatch(actions=[Move(target=tgt)],
+            await agent.act_batch(ActionBatch(actions=[Step(dir=_compass(cur, tgt))],
                                               reasoning="walk to door"))
             try:
                 obs = await asyncio.wait_for(agent._inbox.get(), timeout=5.0)
@@ -187,7 +195,7 @@ async def main_async(args) -> None:
     seq0 = cur_max_seq(events_path)
     obs = await asyncio.wait_for(agent._inbox.get(), timeout=10.0)
     tgt = (obs.self.pos[0], obs.self.pos[1] + 1)
-    await agent.act_batch(ActionBatch(actions=[Move(target=tgt)],
+    await agent.act_batch(ActionBatch(actions=[Step(dir=_compass(obs.self.pos, tgt))],
                                       reasoning="exercise: move"))
     rec = tail_for_kind(events_path, "ActionAccepted", seq0, timeout_s=15.0)
     record("move -> ActionAccepted", ok=(rec is not None),
@@ -237,7 +245,7 @@ async def main_async(args) -> None:
                     break
                 step = step_toward(my_pos, nearest.pos)
                 await agent.act_batch(ActionBatch(
-                    actions=[Move(target=step)],
+                    actions=[Step(dir=_compass(my_pos, step))],
                     reasoning="walk to entity to pay",
                 ))
                 try:

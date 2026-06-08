@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio, json, urllib.request
 from agent_sim_sdk import (
     register_agent, Agent, ActionBatch, VisionMode,
-    Move, Speak, Shout, Whisper, Wait, Pickup, Eat, Equip, Drop,
+    Step, Speak, Shout, Whisper, Wait, Pickup, Eat, Equip, Drop,
     Give, Pay, Trade, Attack, ProposeTask, AcceptTask, CompleteTask, RejectTask,
 )
 
@@ -66,7 +66,7 @@ async def step_toward(a, tx, ty, maxsteps=40):
             return o
         dx = 1 if cx < tx else -1 if cx > tx else 0
         dy = 1 if cy < ty else -1 if cy > ty else 0
-        await a.act_batch(ActionBatch(actions=[Move(target=[cx + dx, cy + dy])]))
+        await a.act_batch(ActionBatch(actions=[Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N"))]))
         await asyncio.sleep(0.35)
         o = await first_obs(a)
     return o

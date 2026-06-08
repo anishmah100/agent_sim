@@ -15,7 +15,7 @@ import time
 
 from agent_sim_sdk import (
     register_agent, Agent, VisionMode,
-    ActionBatch, Move, Interact, Pay,
+    ActionBatch, Step, Interact, Pay,
 )
 
 from examples.claude_agent.harness import Harness
@@ -99,7 +99,7 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
                     "nudge OVERRIDE step-toward-door door=%s d=%d pos=%s -> %s",
                     nearest.object_id, nearest_d, pos, target)
                 return ActionBatch(
-                    actions=[Move(target=target)],
+                    actions=[Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N"))],
                     reasoning=(batch.reasoning or "") + " [nudge: closing on door]",
                 )
             elif nearest_d <= 6:
@@ -112,7 +112,7 @@ def _post_tactical_nudge(obs, batch: ActionBatch) -> ActionBatch:
                 dx = max(-1, min(1, nearest.pos[0] - pos[0]))
                 dy = max(-1, min(1, nearest.pos[1] - pos[1]))
                 target = (pos[0] + dx, pos[1] + dy)
-                actions.insert(0, Move(target=target))
+                actions.insert(0, Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N")))
                 _nudge_log.info(
                     "nudge SOFT step-toward-door door=%s d=%d pos=%s -> %s",
                     nearest.object_id, nearest_d, pos, target)

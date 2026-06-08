@@ -26,7 +26,7 @@ import random
 from typing import Optional
 
 from agent_sim_sdk import (
-    ActionBatch, Move, Observation, Pickup, Speak, VisionMode,
+    ActionBatch, Step, Observation, Pickup, Speak, VisionMode,
     register_and_connect, render_layered_observation,
 )
 
@@ -40,6 +40,13 @@ _MONEY_KINDS = {
     "gem_sapphire", "gem_emerald", "gem_ruby", "gem_diamond",
 }
 
+
+
+def _dir(dx, dy):
+    """Compass step (N/S/E/W) for a delta; dominant axis wins."""
+    if abs(dx) >= abs(dy):
+        return "E" if dx > 0 else "W"
+    return "S" if dy > 0 else "N"
 
 def _kind_of(sprite: str) -> str:
     s = sprite or ""
@@ -91,7 +98,7 @@ def pick_action(obs: Observation) -> tuple[ActionBatch, str]:
             step_y = me[1] + (1 if dy > 0 else -1 if dy < 0 else 0)
             return (
                 ActionBatch(
-                    actions=[Move(target=(step_x, step_y))],
+                    actions=[Step(dir=_dir(dx, dy))],
                     reasoning=f"hungry ({hunger:.2f}) → heading toward food at {target_pos}",
                 ),
                 f"WALK_TO_FOOD ({hunger:.2f})",
@@ -142,7 +149,7 @@ def pick_action(obs: Observation) -> tuple[ActionBatch, str]:
         step_y = me[1] + (1 if target.pos[1] > me[1] else -1 if target.pos[1] < me[1] else 0)
         return (
             ActionBatch(
-                actions=[Move(target=(step_x, step_y))],
+                actions=[Step(dir=_dir(target.pos[0] - me[0], target.pos[1] - me[1]))],
                 reasoning=f"walking toward {_kind_of(target.sprite)} at {tuple(target.pos)}",
             ),
             f"WALK_TO_COIN ({d} tiles)",
@@ -152,7 +159,7 @@ def pick_action(obs: Observation) -> tuple[ActionBatch, str]:
     dx, dy = random.choice([(-1, 0), (1, 0), (0, -1), (0, 1)])
     return (
         ActionBatch(
-            actions=[Move(target=(me[0] + dx, me[1] + dy))],
+            actions=[Step(dir=_dir(dx, dy))],
             reasoning="wandering",
         ),
         "WANDER",
