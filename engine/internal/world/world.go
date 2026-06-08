@@ -850,6 +850,15 @@ func dirDelta(dir string) (Tile, bool) {
 // isn't enterable. walkPath is cleared so the tick loop treats this as a
 // one-tile move and frees the from-tile when WalkProgress completes.
 func (w *World) stepOneTile(e *Entity, next Tile) bool {
+	// Busy only when the current tile's walk is less than half done. The
+	// LogicalTile already advanced when the walk started, so allowing a new
+	// step past the halfway point just continues movement smoothly. The
+	// <0.5 floor still prevents a very fast cadence from thrashing/resetting
+	// the lerp every tick, WITHOUT the cadence==walk-time resonance that
+	// froze agents whose decision interval matched the per-tile walk time.
+	if e.CurrentAction == "move" && e.WalkProgress < 0.5 {
+		return false
+	}
 	if !w.CanEnter(e, next) {
 		return false
 	}
@@ -1015,6 +1024,15 @@ func (w *World) Tick() {
 				e.WalkProgress += 1.0 / float64(TicksPerStep)
 				if e.WalkProgress >= 1 {
 					e.WalkProgress = 1
+					// Free the tile we walked OUT of. Without this, bot-
+					// controlled agents (which `continue` here and never reach
+					// the non-PlayerControlled freeing below) leave a permanent
+					// trail of "occupied" tiles that eventually fills the area
+					// and deadlocks ALL movement — the dist-3 cat/mouse freeze.
+					if e.WalkFromTile != e.LogicalTile &&
+						w.occupants[e.WalkFromTile] == e.EntityID {
+						delete(w.occupants, e.WalkFromTile)
+					}
 					if len(e.walkPath) > 0 {
 						next := e.walkPath[0]
 						e.walkPath = e.walkPath[1:]

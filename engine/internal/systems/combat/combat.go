@@ -173,8 +173,13 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 // have reach > 1; LOS check is NOT yet enforced (future P3 polish).
 func weaponStats(e syscore.Entity) (damage, reach int) {
 	const (
-		unarmedDmg   = 4
-		unarmedReach = 1
+		unarmedDmg = 4
+		// Reach 2 (Chebyshev): a predator can "lunge" and land a hit from
+		// one tile away, so combat connects against a same-speed fleeing
+		// target instead of perpetually trailing it by a tile. Also makes
+		// melee read more reliably on screen. (Damage uses the
+		// attack_damage tuning; this only sets range.)
+		unarmedReach = 2
 	)
 	eqRaw, ok := e.GetExtra("equipped")
 	if !ok {
@@ -217,13 +222,16 @@ type weaponStat struct {
 // weaponTable — D21 reference. Matches the ARCHETYPE_FSMS doc + the
 // rulebook item kinds. Damage is final HP loss before defend
 // multiplier. Reach is Chebyshev tiles.
+// Reach is Chebyshev tiles. Melee weapons must be >= the unarmed reach (2)
+// or equipping one would shorten your range (worse than fists); longer
+// weapons out-reach fists, ranged weapons far more.
 var weaponTable = map[string]weaponStat{
-	"dagger":      {damage: 10, reach: 1},
-	"sword_short": {damage: 12, reach: 1},
-	"sword_long":  {damage: 16, reach: 1},
-	"axe":         {damage: 18, reach: 1},
-	"club_wood":   {damage: 6, reach: 1},
-	"hammer":      {damage: 12, reach: 1},
+	"dagger":      {damage: 10, reach: 3},
+	"sword_short": {damage: 12, reach: 3},
+	"sword_long":  {damage: 16, reach: 4},
+	"axe":         {damage: 18, reach: 3},
+	"club_wood":   {damage: 6, reach: 3},
+	"hammer":      {damage: 12, reach: 3},
 	"bow":         {damage: 10, reach: 6},
 	"crossbow":    {damage: 14, reach: 6},
 }

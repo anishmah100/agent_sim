@@ -71,8 +71,8 @@ func TestLoadBundle_EldoriaCarriesRules(t *testing.T) {
 		t.Fatal("eldoria bundle declared rules.file but World.Rules is nil")
 	}
 	// Spot-check a tuning that eldoria's rules.star declares.
-	if got := w.Rules.GetInt("attack_damage", -1); got != 10 {
-		t.Fatalf("eldoria attack_damage: want 10, got %d", got)
+	if got := w.Rules.GetInt("attack_damage", -1); got != 20 {
+		t.Fatalf("eldoria attack_damage: want 20, got %d", got)
 	}
 	if got := w.Rules.GetFloat("hunger_per_tick", -1); got != 0.00001 {
 		t.Fatalf("eldoria hunger_per_tick: want 0.00001 (D4 calibration), got %v", got)
@@ -101,7 +101,7 @@ func TestLoadBundle_DevTestHasNoRules(t *testing.T) {
 }
 
 func TestLoadBundle_EldoriaTuningsReachAdapter(t *testing.T) {
-	// End-to-end test: eldoria's rules.star declares attack_damage=10
+	// End-to-end test: eldoria's rules.star declares attack_damage=20
 	// (vs the engine default of 12). After LoadBundle, that value must
 	// be visible through the WorldAdapter's Tuning API — that's the
 	// path systems (combat, money) take when applying gameplay rules.
@@ -114,8 +114,8 @@ func TestLoadBundle_EldoriaTuningsReachAdapter(t *testing.T) {
 	// real Bus + spatial.Index here because we only exercise the tuning
 	// methods.
 	a := NewWorldAdapter(w, nil, nil)
-	if got := a.TuningInt("attack_damage", 12); got != 10 {
-		t.Fatalf("eldoria attack_damage through adapter: want 10, got %d", got)
+	if got := a.TuningInt("attack_damage", 12); got != 20 {
+		t.Fatalf("eldoria attack_damage through adapter: want 20, got %d", got)
 	}
 	if got := a.TuningInt("starting_gold", 10); got != 25 {
 		t.Fatalf("eldoria starting_gold through adapter: want 25, got %d", got)
