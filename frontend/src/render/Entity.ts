@@ -868,7 +868,13 @@ export class EntityLayer {
       // attacker in front of them) so the hit reads as a knockback.
       re.flinchDir = flinchVector(next.facing);
       // BLK-1/FX: emit a floating damage number at the victim.
-      this.onDamage?.(next.pos, re.prevHp - nh);
+      // Anchor the damage number to the sprite's LIVE (interpolated) tile,
+      // not the raw engine tile — otherwise it floats ahead of a moving/
+      // lagging body. container.x/y are pixels; convert back to a fractional
+      // tile so tilePx() re-centers exactly on the rendered sprite.
+      this.onDamage?.(
+        [re.container.x / TILE_SIZE_PX, re.container.y / TILE_SIZE_PX],
+        re.prevHp - nh);
     }
     // Floating HP bar — show whenever the entity is below max HP.
     if (re.hpBar) {
