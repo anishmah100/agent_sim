@@ -999,9 +999,10 @@ only when the model itself changes. Not the design — the floor.)
 - `audible[]`: speech/shout/whisper/sound events in the last ~4 sec
   (240 ticks). The only social signal an agent has about another
   agent's intent.
-- `recent_self_results[]`: outcomes of submitted actions.
-- `known_map_summary`: static map context at world init.
-- `world_clock`: tick, day_phase, weather.
+- `recent_self_results[]`: present in the schema but currently always empty;
+  action outcomes arrive as separate `action_ack` frames.
+- `local_view`: egocentric ASCII terrain grid (radius 20) — the agent's map.
+- `world_clock`: tick, day_phase, weather (weather currently always "clear").
 - `view_image`: optional first-person raster for multimodal agents.
 
 Vision: 12 tiles Chebyshev (6 at night), line-of-sight blocked by walls.

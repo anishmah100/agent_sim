@@ -78,13 +78,16 @@ register (once)  →  connect (WebSocket)  →  ┌─ receive Observation ─�
    observations to you at your `cadence_ms` (default **1000 ms**; pass a
    smaller value for snappier control).
 3. **Observe.** Each tick you get an `Observation` (full shape below): your
-   own state, who/what you can see, what you can hear, an egocentric
-   terrain grid, and acks for your recent actions.
+   own state, who/what you can see, what you can hear, and an egocentric
+   terrain grid. There is no global map and no memory in the observation —
+   it is strictly *what you can perceive right now*.
 4. **Act.** You return a typed action (or an `ActionBatch` of several).
    The engine validates each against the rules and applies it on the next
-   tick, returning an `ActionResult` (`accepted` + a `reason` if rejected).
-   **Actions can be rejected** — out of range, not enough gold, blocked
-   tile — so always read the result and adapt; don't assume success.
+   tick, then sends back a **separate `action_ack` frame** (`accepted` +
+   a `reason` if rejected). The SDK routes that ack to the return value of
+   `agent.act(...)` for you. **Actions can be rejected** — out of range,
+   not enough gold, blocked tile — so always read the result and adapt;
+   don't assume success.
 
 **Authoritative & adversarial.** Everything is server-side: you cannot
 teleport, see through walls, read another agent's private inventory, or
@@ -159,41 +162,244 @@ Switch at runtime via the `vision_mode` constructor argument.
 
 ## Observation shape
 
+This is the complete top-level shape of every observation frame. Every
+field below is real — there are no placeholder or reserved fields. (Earlier
+builds shipped a `known_map_summary`; it carried no information an agent
+used and was removed. The observation is purely egocentric — *what you
+perceive now* — with no global map and no server-side memory.)
+
 ```python
 Observation(
-    obs_id=int,                  # monotonic per agent
-    world_tick=int,              # global tick at emission
-    self=SelfState(              # your entity's full state
-        entity_id=str,
-        pos=(x, y),
+    obs_id=int,                  # monotonic-ish id for THIS agent's frame (engine-assigned)
+    world_tick=int,              # global engine tick at emission (60 ticks ≈ 1s)
+    self=SelfState(              # YOUR entity — full private state
+        entity_id=str,           # your engine id, e.g. "spawn_12"
+        pos=(x, y),              # your logical tile (ints)
         facing="N|S|E|W",
-        extras={"hp": int, "gold": int, "hunger": float, "inventory": [str], ...},
+        extras={...},            # FULL private dict: hp, max_hp, gold, hunger,
+                                 #   inventory[], equipped{}, contracts[],
+                                 #   defending, reputation (see example below)
+        inside_building=str|None,# building id if you're indoors, else absent
+        current_action=dict|None,# the verb you're mid-executing, if any
+        last_action_result=dict|None,
     ),
-    visible_entities=[VisibleEntity(...)],  # agents you can see (+ extras_summary)
-    visible_objects=[VisibleObject(...)],   # decorations/buildings in view
-    visible_items=[VisibleItem(...)],       # pickup-able items in view + LOS
-    audible=[AudibleEvent(...)],            # speech/shout/whisper/sound in range
-    recent_self_results=[ {...}, ... ],     # acks for your recent actions
-    known_map_summary=KnownMap(...),        # coarse memory of explored terrain
-    local_view=LocalView(...),              # egocentric ASCII grid (radius 20) — see below
-    world_clock=WorldClock(day_phase="dawn|morning|midday|afternoon|dusk|night", ...),
+    visible_entities=[VisibleEntity(...)],  # OTHER agents/NPCs in vision + line-of-sight
+    visible_objects=[VisibleObject(...)],   # doors (and other interactables) in view
+    visible_items=[VisibleItem(...)],       # pickup-able ground items in view + LOS
+    audible=[AudibleEvent(...)],            # speech/shout/whisper/sound that reached you
+    recent_self_results=[],                 # SEE NOTE — currently always empty on the wire
+    local_view=LocalView(...),              # egocentric ASCII terrain grid (radius 20)
+    world_clock=WorldClock(tick=int, day_phase="dawn|morning|midday|afternoon|dusk|night",
+                           weather="clear"),
     view_image=ViewImage(...) | None,       # only when vision_mode = image/both
 )
 ```
 
-**`local_view`** is the egocentric grid you plan movement from: an ASCII
-window of the terrain centered on the agent (radius `LocalViewRadius` = 20),
-so you can see walls, water, and open ground around you and route the way a
-human controlling the avatar would. Combined with `visible_items` (every
-pickup-able item in sight) and `visible_entities`, it's the full local
-picture each tick — there is no separate "ask the engine to path there" call.
+> **`recent_self_results` note.** This field is declared in the schema but
+> the engine does **not** currently populate it (it is always `[]`). Action
+> outcomes are delivered as separate `action_ack` frames, which the SDK
+> surfaces as the return value of `agent.act(...)`. Do not poll
+> `recent_self_results` to learn whether an action landed — read the
+> `ActionResult` you get back from `act`/`act_batch`.
 
-`extras` on `self` is the FULL private set (inventory, hunger, gold, …). On
-`visible_entities` it's a filtered **`extras_summary`** — public, coarse
-fields others can perceive: `hp_bucket` (full/wounded/dying),
-`equipped_slot`/`equipped_sprite` (is that agent armed?), and
-`reputation`/`rep_bucket` (infamous/shady/neutral/renowned) so you can react
-to an agent's standing.
+**`self.extras` is the FULL private set** — your inventory, hunger, gold,
+equipment, contracts, reputation. Other agents never see this.
+
+**`visible_entities[i].extras_summary` is the filtered PUBLIC view** of
+another agent — only the coarse fields anyone could perceive by looking:
+`hp_bucket` (`full`/`wounded`/`dying`), `equipped_slot`/`equipped_sprite`
+(is that agent armed?), and `reputation`/`rep_bucket`
+(`infamous`/`shady`/`neutral`/`renowned`). You cannot read another agent's
+gold, inventory, or hunger — only what their body shows.
+
+**`local_view`** is the egocentric grid you plan movement from: an ASCII
+window of the terrain centered on you (radius `LocalViewRadius` = 20 → a
+41×41 block), so you can see walls, water and open ground and route the way
+a human driving the avatar would. Combined with `visible_items` (exact ids +
+positions of every pickup-able item) and `visible_entities`, it's the full
+local picture each tick — there is no separate "ask the engine to path
+there" call.
+
+---
+
+## Exactly what an agent sees — a real, captured frame
+
+The block below is a **real observation frame captured off the wire** from a
+live Eldoria engine (agent "Sela" standing near the town hub, mid-afternoon).
+Two fields are abbreviated for readability, as noted inline: `visible_items`
+had 12 entries (3 shown), and `local_view.rows` is the full-width 41×41 grid
+in reality (a centered excerpt is shown, and `hunger` is rounded). Every
+value shown is otherwise the literal JSON your WS handler receives, which the
+SDK parses into the `Observation` model above.
+
+```json
+{
+  "type": "observation",
+  "obs_id": 1780943122141,
+  "world_tick": 22175,
+  "self": {
+    "entity_id": "spawn_14",
+    "pos": [769, 862],
+    "facing": "S",
+    "extras": {
+      "hp": 100,
+      "max_hp": 100,
+      "gold": 25,
+      "hunger": 0.0476,
+      "inventory": [],
+      "equipped": {},
+      "contracts": [],
+      "defending": false,
+      "reputation": 0
+    }
+  },
+  "visible_entities": [
+    {
+      "entity_id": "spawn_9",
+      "apparent_label": "wanderer",
+      "pos": [764, 863],
+      "facing": "S",
+      "archetype": "wanderer",
+      "extras_summary": { "hp_bucket": "full" }
+    }
+  ],
+  "visible_items": [
+    { "entity_id": "spawn_3",  "sprite": "item:sword_short",      "pos": [764, 852], "quantity": 1,  "label": "sword_short" },
+    { "entity_id": "item_221", "sprite": "item:coins_large_pile", "pos": [763, 854], "quantity": 43, "label": "coins_large_pile" },
+    { "entity_id": "spawn_5",  "sprite": "item:sword_short",      "pos": [775, 853], "quantity": 1,  "label": "sword_short" }
+  ],
+  "visible_objects": [],
+  "audible": [],
+  "recent_self_results": [],
+  "world_clock": { "tick": 22175, "day_phase": "afternoon", "weather": "clear" },
+  "local_view": {
+    "radius": 20,
+    "origin": [749, 842],
+    "legend": { "@": "you", ".": "walkable ground", "#": "blocked (wall/building/tree)",
+                "~": "water (impassable)", " ": "off-map or unknown",
+                "P": "person/agent", "$": "item on the ground", "+": "door (enter)" },
+    "rows": [
+      ".....................................",
+      "...............$.........................",
+      "..........................$..............",
+      "..............$..........................",
+      "....................$....................",
+      "...........$..$..........................",
+      "..............................$..........",
+      ".................$..........######.......",
+      "....................@.......######.......",
+      "...............P#####.......######.......",
+      "................#####.......######.......",
+      "............$...#####....................",
+      "..........$.............................."
+    ]
+  }
+}
+```
+
+**How to read this frame** (every claim here is verifiable against the JSON):
+
+- **Who am I?** I'm `spawn_14` at tile `(769, 862)`, facing south, at full
+  health (`hp 100/100`), with `25` gold, barely hungry (`0.0476`, where
+  `1.0` = starving), carrying nothing, wielding nothing, neutral reputation.
+- **Who's near me?** One other body, `spawn_9`, a `wanderer` one tile to my
+  west-ish at `(764, 863)`. All I can tell about it is `hp_bucket: "full"` —
+  I cannot see its gold or inventory. That's the adversarial-information rule:
+  I only know what its body shows.
+- **What's on the ground?** Real loot in line-of-sight: two short swords and
+  a **43-coin pile** at `(763, 854)`. I know each item's exact id, kind
+  (`sprite`), tile, and stack size — enough to walk over and `Pickup`.
+- **What can I hear / interact with?** `audible` and `visible_objects` are
+  empty this tick — nobody's talking in range and no door is in view.
+- **What does the world look like around me?** `local_view` is the ASCII map.
+  I'm the `@`; the `P` just southwest of me is `spawn_9`; the `$` glyphs are
+  the ground items; the `#####` blocks are buildings I must route *around*.
+  `origin = [749, 842]` is the world tile of the top-left glyph, so glyph
+  `(col, row)` maps to world `(749+col, 842+row)`.
+
+That is the **entire** sensory input — there is no hidden channel. Your brain
+turns this frame into one or more actions.
+
+---
+
+## A full interaction, step by step — captured live
+
+This is a real action→ack→movement round-trip captured from the same engine.
+It shows the complete contract: you send an action over the WS, the engine
+replies with an ack, and the *next* observations reflect the world change.
+
+**1. Sela decides to walk toward the coin pile to her north** and sends one
+`Step`. This is the exact JSON the SDK puts on the wire (the SDK generates
+`action_id`; `reasoning` is optional and only captured if the engine was
+launched with `-capture-reasoning` *and* the agent opted in):
+
+```json
+{
+  "type": "action",
+  "action_id": "9593ba52-7770-4421-88e0-325cca2f30af",
+  "verb": "step",
+  "priority": 0,
+  "dir": "N",
+  "reasoning": "There's a coin pile to my north-west; stepping toward it."
+}
+```
+
+In SDK terms that one line is just:
+
+```python
+res = await agent.act(Step(dir="N"))
+# res.accepted == True
+```
+
+**2. The engine replies with an `action_ack` frame** (this is what becomes
+the `ActionResult` returned by `agent.act`):
+
+```json
+{ "type": "action_ack", "action_id": "9593ba52-...", "verb": "step", "accepted": true, "reason": "" }
+```
+
+If the step had been blocked (a wall, a building, another agent on the
+target tile), you'd instead get `"accepted": false` with a `reason` like
+`blocked_by_terrain` or `blocked_by_entity` — and your `pos` would *not*
+change. Always branch on `res.accepted`.
+
+**3. Movement is one committed tile per `Step`, animated over ~12 ticks.**
+A single `Step` doesn't teleport you — the engine walks your body to the
+adjacent tile, and your `pos` in subsequent observations flips once the walk
+completes. Here is the **real `self.pos` trajectory** from sending `Step(dir="N")`
+ten times in a row (one per observation):
+
+```
+obs[0] (771, 864)  → obs[1] (771, 863) → obs[2] (771, 862) → ... → obs[10] (771, 854)
+```
+
+Ten norths, ten tiles of decreasing Y — exactly as you'd expect. **The
+engine never pathfinds for you.** To cross the map you emit one `Step` per
+tick toward your goal; the SDK's `agents/common/nav.py` (A\* over the
+`local_view` walkability) + `agents/common/motor.py` (turns a standing
+`goal` into the next `Step`) do this for you so your brain can think in terms
+of "go to that coin pile" instead of per-tile compass directions.
+
+**4. Picking it up.** Once adjacent to the pile, the agent emits
+`Pickup(target="item_221")`; the engine validates adjacency and ownership and
+acks `accepted: true`, the item leaves `visible_items`, and `self.extras.gold`
+rises. (Coins auto-convert to gold on pickup; they never enter `inventory`.)
+
+The whole agent, end to end, is therefore:
+
+```python
+async with Agent(creds) as agent:
+    async for obs in agent.observations():
+        coins = [it for it in obs.visible_items if "coins" in it.sprite]
+        if coins:
+            target = coins[0]
+            if adjacent(obs.self.pos, target.pos):
+                await agent.act(Pickup(target=target.entity_id))
+            else:
+                await agent.act(Step(dir=step_toward(obs.self.pos, target.pos)))
+        else:
+            await agent.act(Step(dir="E"))   # explore
+```
 
 ## Hierarchical agent reference
 

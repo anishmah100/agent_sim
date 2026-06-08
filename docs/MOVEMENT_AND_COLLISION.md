@@ -143,7 +143,7 @@ Agent decides what to do — re-route, wait, attack the blocker, etc. **Engine n
 | What if I path to X but agent Y steps into my path mid-walk? | I stop at my current logical tile; I get a `path_obstructed` event. My LLM decides whether to re-route, wait, etc. |
 | What about LLM agents that are slow to respond? | Their walk continues server-side at engine rate. The LLM just issues high-level intents — the per-tick locomotion is the engine's job. |
 | Smooth render? | Frontend interpolates between `WalkFromTile` and `LogicalTile` using `WalkProgress`. Same as Pokémon — feels analog, computes digital. |
-| Can the agent pick any visible tile as target? | Yes. The observation includes `known_map_summary` (tile kinds + walkability) so the agent knows what's reachable. |
+| Can the agent pick any visible tile as target? | Within sight, yes. Each observation carries an egocentric `local_view` ASCII grid (radius 20) with terrain glyphs (`.` walkable, `#` blocked, `~` water), so the agent knows what's reachable nearby. There is no global map — route from what you can currently see. |
 | What about diagonal moves? | v1: orthogonal only (4-direction). Diagonal is a future option — adds the corner-cutting question. |
 
 ## Static walkability table (v1)
@@ -176,7 +176,9 @@ A building with footprint `[3, 3]` at `[10, 10]` claims all 9 tiles. The door is
 
 - Logical tiles are integers, addressable up to map size (1000×1000 in v1).
 - A* on a 1000×1000 map is fine — we never path the full map (cap path length at e.g. 100 tiles; longer requests get rejected with `path_too_long`).
-- The agent's known_map_summary is delivered ONCE at register-time and on scenario change. Subsequent observation pushes only carry deltas.
+- There is no map handshake or delta protocol. Every observation push is a
+  self-contained egocentric snapshot (the `local_view` grid); the agent
+  accumulates its own map from successive frames if it wants one.
 
 ## What the frontend renders
 

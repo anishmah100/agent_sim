@@ -206,15 +206,9 @@ Full state every push (Q53). Cadence = whatever the bot configured (default 1000
     { "event_id": "...", "kind": "speech", "from_entity": "merchant_bob", "from_pos": [12,5], "text": "hi traveler!", "tick": 12340 },
     { "event_id": "...", "kind": "sound", "sound_kind": "sword_clang", "from_pos": [20, 5], "tick": 12338 }
   ],
-  "recent_self_results": [
-    { "action_id": "abc", "verb": "speak", "accepted": true }
-  ],
-  "known_map_summary": {
-    "map_id": "oak_hollow",
-    "map_dims": [60, 40],
-    "named_regions": [ {"name": "plaza", "center": [30, 10], "kind": "town"} ],
-    "portals": [ {"at": [30, 16], "to_map": "interior:tavern_v1"} ]
-  },
+  "recent_self_results": [],
+  // ^ DECLARED BUT CURRENTLY ALWAYS EMPTY. Action outcomes arrive as
+  //   separate `action_ack` frames (see below); do not poll this.
   "local_view": {
     "radius": 20,
     "origin": [-10, -15],          // world (x,y) of rows[0][0]; rows[0] is NORTHMOST
@@ -372,6 +366,8 @@ Researchers get the pattern out of the box; can swap their own brain logic.
 
 - **Does NOT track bot memory.** Bots remember their own conversations + plans.
 - **Does NOT track relationships** between agents. If you want to know who's a friend, your bot does that.
-- **Does NOT track interior layouts** in the known_map_summary. Walk in and remember.
+- **Does NOT give you a global map.** Every observation is egocentric: the
+  per-tick `local_view` ASCII grid (radius 20) is all the terrain you get.
+  No interior layouts, no fog-of-war memory — walk in, look, and remember.
 - **Does NOT enforce quests.** propose_task / accept_task are public UI annotations only (Q34).
 - **Does NOT verify backend identity.** Users describe their architecture in their bio (Q33).

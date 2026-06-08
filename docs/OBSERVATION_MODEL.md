@@ -72,38 +72,26 @@ Observation {
     }
   ]
 
-  recent_self_results: [                  # results of THIS agent's own recent actions
-    {
-      verb: string
-      accepted: bool
-      reason: string?                     # e.g. "target_too_far", "not_enough_gold"
-      tick: uint64
-    }
-  ]
-
-  known_map_summary: {                    # the static world map the agent "knows"
-    map_id: string                        # which sub-map they're currently in
-    map_dims: [w, h]
-    named_regions: [                      # places they could navigate to
-      { name: string, center: [x, y], kind: string }
-    ]
-    portals: [                            # door/transition tiles they're aware of
-      { at: [x, y], to_map: string }
-    ]
-  }
+  recent_self_results: []                 # DECLARED BUT CURRENTLY ALWAYS EMPTY.
+                                          # The engine does not populate this; action
+                                          # outcomes are delivered as separate
+                                          # `action_ack` frames (see §4 / SDK README).
+                                          # Read the ack returned by agent.act() instead.
 
   world_clock: {
     tick: uint64
     day_phase: enum(dawn|morning|midday|afternoon|dusk|night)
-    weather: string                       # scenario-defined, e.g. "clear", "rain"
+    weather: string                       # currently hard-coded "clear" (no weather model yet)
   }
-
-  persona_reminder: bytes                 # the agent's own persona block, repeated here
-                                          # so the prompt template doesn't need to
-                                          # remember it separately. (Engine just echoes
-                                          # what the agent set at register time.)
 }
 ```
+
+> **Removed fields.** Earlier builds also emitted `known_map_summary`
+> (map_id/map_dims/named_regions/portals) and `persona_reminder`. Neither
+> was consumed by any agent — `named_regions`/`portals` were never even
+> populated — and both have been removed. The observation is strictly
+> egocentric: there is no global map and no server-side memory in it. An
+> agent that wants a map builds one from the `local_view` grids it has seen.
 
 ## §3 — What is NOT in the observation
 

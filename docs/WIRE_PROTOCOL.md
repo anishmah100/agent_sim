@@ -144,7 +144,8 @@ table Observation {
   world_tick: uint64;
   self_state: SelfState;
   visible_entities: [VisibleEntity];
-  // ... visible_objects, audible, recent_self_results, known_map_summary, world_clock, persona_reminder
+  // ... visible_objects, visible_items, audible, local_view, world_clock, view_image
+  //     (recent_self_results is present in the schema but currently always empty)
 }
 
 root_type Observation;
