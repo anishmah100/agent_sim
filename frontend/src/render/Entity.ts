@@ -504,10 +504,19 @@ export class EntityLayer {
     this.selectionRing.visible = true;
   }
 
-  setAll(entities: EntityState[]): void {
+  setAll(entitiesRaw: EntityState[]): void {
     // Render every entity (characters + world objects). Characters
     // use animated character sprites; world-object archetypes get a
     // static sprite from the v2 master sheets via worldObjectSprite().
+    //
+    // Drop husks parked at the world corner (0,0): a dead/disconnected
+    // body the snapshot still carries at HP 0. No live entity is ever
+    // legitimately at (0,0) (the hub is at ~764,864), so rendering them
+    // would put a stray sprite in the corner and let a stale selection
+    // lock onto empty space. input.ts already skips (0,0) for hit-tests;
+    // this keeps them out of the scene entirely (and out of removal/
+    // dying bookkeeping below).
+    const entities = entitiesRaw.filter((e) => !(e.pos[0] === 0 && e.pos[1] === 0));
     const incoming = new Set(entities.map((e) => e.entity_id));
     // Remove anything that disappeared.
     for (const [id, re] of this.items) {

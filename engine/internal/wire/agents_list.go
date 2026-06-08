@@ -54,7 +54,15 @@ func AgentsListHandler(hub *AgentHub, w *world.World) http.HandlerFunc {
 			// which DOES appear in the snapshot, so the live one still
 			// lists. Inside-building agents stay in the snapshot, so they
 			// are not affected.
-			if _, alive := entityPos[c.rec.EntityID]; !alive {
+			pos, alive := entityPos[c.rec.EntityID]
+			if !alive || (pos[0] == 0 && pos[1] == 0) {
+				// Husk: either the entity was removed (absent from snapshot)
+				// or it's parked at the world-corner (0,0) — a dead/
+				// disconnected body the snapshot still carries at HP 0 (e.g.
+				// an NPC-bound wanderer that never got cleaned up). No live
+				// agent is ever legitimately at (0,0) (the hub is at ~764,864),
+				// so listing it just lets the picker fling the camera to the
+				// empty corner ("clicked an agent, nothing in sight").
 				continue
 			}
 			info := agentInfo{
