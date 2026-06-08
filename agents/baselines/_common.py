@@ -85,6 +85,21 @@ def has_weapon_equipped(ent: VisibleEntity) -> bool:
     return False
 
 
+def reputation_of(ent: VisibleEntity) -> float:
+    """Other agent's social standing as seen in its extras_summary.
+    Negative = infamous (killer/aggressor). 0 when unknown."""
+    es = ent.extras_summary or {}
+    r = es.get("reputation")
+    return float(r) if isinstance(r, (int, float)) else 0.0
+
+
+def is_infamous(ent: VisibleEntity) -> bool:
+    """True for an agent with a notably bad reputation — a known killer/
+    aggressor others avoid or move against."""
+    es = ent.extras_summary or {}
+    return es.get("rep_bucket") == "infamous" or reputation_of(ent) <= -8.0
+
+
 def chebyshev(a: Pos, b: Pos) -> int:
     return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
 

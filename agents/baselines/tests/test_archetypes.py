@@ -156,6 +156,36 @@ def test_survivor_cannot_buy_food_when_broke():
     assert not isinstance(act, BuyFood), act
 
 
+def test_survivor_flees_infamous_unarmed_agent():
+    bot = Survivor(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.1, "inventory": []},
+        entities=[vent("killer-9", "killer", (12, 10),
+                       extras_summary={"rep_bucket": "infamous"})],  # unarmed but notorious
+    )
+    act = bot.decide(obs)
+    assert bot.state == "FLEEING", bot.state
+    assert act is None
+    assert bot.goal.kind == "flee" and bot.goal.entity_id == "killer-9"
+
+
+def test_avenger_moves_on_infamous_without_witnessing():
+    from agent_sim_sdk import Attack
+    bot = Avenger(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.0, "inventory": [],
+                "equipped": {"weapon": "item:sword_short#1"}},
+        entities=[vent("villain-1", "killer", (11, 10),
+                       extras_summary={"rep_bucket": "infamous"})],
+    )
+    act = bot.decide(obs)
+    assert bot.state == "AVENGING", bot.state
+    assert bot.grudge_target == "villain-1"
+    assert isinstance(act, Attack) and act.target == "villain-1", act
+
+
 def test_survivor_desperate_when_starving_no_food():
     bot = Survivor(creds=make_creds())
     obs = make_obs(extras={

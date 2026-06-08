@@ -35,6 +35,7 @@ from ._common import (
     forage_or_roam,
     has_weapon_equipped,
     is_food,
+    is_infamous,
     is_money,
     item_kind,
     nearest,
@@ -57,7 +58,11 @@ class Survivor(ArchetypeBot):
         hunger = float(extras.get("hunger", 0.0) or 0.0)
         inv = list(extras.get("inventory") or [])
 
-        threats = [e for e in obs.visible_entities if has_weapon_equipped(e)]
+        # Threats = the armed AND the infamous (a known killer is dangerous
+        # even unarmed — reputation makes the survivor wary of notorious
+        # agents it has heard about / can see).
+        threats = [e for e in obs.visible_entities
+                   if has_weapon_equipped(e) or is_infamous(e)]
         foods = [it for it in obs.visible_items if is_food(it)]
 
         # FLEEING wins over everything except ongoing transitions.

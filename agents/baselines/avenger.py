@@ -32,6 +32,7 @@ from ._common import (
     WEAPON_KINDS,
     chebyshev,
     forage_or_roam,
+    is_infamous,
     is_money,
     item_kind,
     nearest,
@@ -111,6 +112,27 @@ class Avenger(ArchetypeBot):
                 if self.grudge_pos is not None:
                     self.goal = Goal.goto(*self.grudge_pos)
                     return None
+
+        # 3b) No grudge from a witnessed kill, but a known-infamous agent
+        #     (notorious killer, by reputation) is in sight — move against it
+        #     anyway. This is the gossip/reputation channel: an avenger acts
+        #     on an agent's standing even without personally seeing the deed.
+        if self.state != "AVENGING":
+            infamous = [e for e in obs.visible_entities
+                        if e.entity_id != s.entity_id and is_infamous(e)]
+            if infamous:
+                tgt = nearest(infamous, here)
+                self.grudge_target = tgt.entity_id
+                self.grudge_pos = tuple(tgt.pos)
+                self._grudge_ticks = GRUDGE_TTL
+                self.state = "AVENGING"
+                armed = self._arm_up(s, obs, here)
+                if armed is not None:
+                    return armed
+                if chebyshev(here, tuple(tgt.pos)) <= 1:
+                    return Attack(target=self.grudge_target)
+                self.goal = Goal.pursue(self.grudge_target)
+                return None
 
         # 4) Nothing to avenge: behave like ordinary townsfolk — grab loose
         #    gold, forage, or roam. Never just stand.
