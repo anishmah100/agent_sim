@@ -17,10 +17,11 @@ import (
 
 const (
 	DefaultMaxHP = 100
-	// DefaultAttackDamage — D21 changed this from 12 to 4 to match the
-	// unarmed weapon stat (weaponStats's unarmedDmg). Verbs that don't
-	// resolve a weapon still see this default via the fallback path.
-	DefaultAttackDamage = 4
+	// DefaultAttackDamage — kept in lockstep with weaponStats'
+	// unarmedDmg (currently 7; raised from 4 so predation reads on
+	// screen without decimating the town). Verbs that don't resolve a
+	// weapon still see this default via the fallback path.
+	DefaultAttackDamage = 7
 	DefaultHealAmount   = 25
 )
 
