@@ -8,31 +8,31 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/combat/combat.go:367-444`
 - **why:** DealDamage's death branch claims to "drop full inventory + gold + equipped at corpse tile" (comment line 367) but only spawns ground entities for inventory items (386-401) and the equipped weapon (403-424). Gold (stored in entity.extras["gold"], see money.go:84/263) is never dropped. Immediately after, line 443 calls w.RemoveEntity(targetID), which deletes the entity from w.entities entirely (observation.go:663). The separate `loot` system is the intended way to recover a corpse's gold (loot.go:55-62 calls money.Pay from the corpse), but it does w.EntityByID(target) and rejects with target_alive/unknown_target — and the corpse no longer exists the instant it died, so loot ALWAYS returns unknown_target. Net effect: 100% of a victim's gold balance is destroyed on every kill, the economy is a sink that leaks gold on combat death, and the entire loot system is dead code that can never succeed. This corrupts any economic-emergence metric over a long run.
 - **repro:** Agent A (gold>0) is killed by agent B via attack. A is removed from the world same tick. A's inventory items + weapon spawn as ground entities, but A's gold simply vanishes (no GoldTransferred event, no drop entity). B then tries `loot {target: A}` and gets unknown_target because A no longer exists.
-- **status:** [ ] open
+- **status:** [x] FIXED @75bfd26
 
 ## [1] HIGH · resources — harvest() and forage() append to inventory directly, bypassing the DefaultMaxSlots=10 inventory cap (unbounded inventory growth + slot-cap exploit)
 - **file:** `engine/internal/systems/resources/resources.go` :227
 - **why:** inventory.go enforces a hard 10-slot cap on pickup (inventory.go:283 'if len(inv) >= DefaultMaxSlots { reason="inventory_full" }', documented as D20). resources harvest (lines 227-231) and forage (lines 167-170) SetExtra("inventory", append(cur, ...)) with no cap check at all. An agent can chop/mine/forage indefinitely and carry far more than 10 items, defeating the design constraint that the cap forces trade/storage decisions. forage is renewable (no hardness cost) so it is effectively an unbounded item spigot once an apple tree is adjacent. Also harvest mints len(yields) items per hit, so a multi-yield node can push inventory over the cap in one action even if a check were added naively.
 - **repro:** Stand adjacent to a tree; issue chop repeatedly (or forage every cooldown). hero inventory grows past 10 entries; no "inventory_full" is ever returned, unlike pickup.
-- **status:** [ ] open
+- **status:** [x] FIXED @75bfd26
 
 ## [2] HIGH · construction — blueprint ID is non-unique within a tick → SpawnEntity silently clobbers an existing entity
 - **file:** `engine/internal/systems/construction/construction.go` :172 (id format), spawn at 173; collision sink at engine/internal/world/observation.go:670-678
 - **why:** place_blueprint builds the blueprint id as fmt.Sprintf("bp_%s_%d_%s", kind, w.Tick(), e.ID()) — kind + tick + builder. None of those vary across two place_blueprint actions of the same kind issued by the same agent on the same tick. World.SpawnEntity does w.entities[e.EntityID] = e with NO collision guard, so the second spawn overwrites the first blueprint in the entity map (and the spatial index is re-added at possibly a different tile). The agent paid initial materials for BOTH blueprints (inv.Consume runs before spawn) but only one entity survives — materials destroyed, blueprint lost. The downstream building id (line 265: "bld_"+target) inherits the same non-uniqueness, so the same collision can clobber a building on completion. The system even declares an idCounter field (line 112) that is never used — the unique-id mechanism it was meant to provide was never wired in.
 - **repro:** Issue two place_blueprint {kind:cottage, at:[..]} actions for the same builder within one tick (action batches allow multiple actions per entity per tick). Both pass precondition checks and both call inv.Consume; the second SpawnEntityFromSpec overwrites the first in w.entities. Net: 2x materials consumed, 1 blueprint exists.
-- **status:** [ ] open
+- **status:** [x] FIXED @e5e72e8
 
 ## [3] HIGH · construction — material resolution only matches resource-minted ids; picked-up/given/dropped 'item:wood#..' ids never match the 'wood' prefix
 - **file:** `engine/internal/systems/construction/construction.go` :381-410 (resolveMaterials/hasPrefix); cf. inventory.go:297 invID format
 - **why:** resolveMaterials matches inventory item ids by raw prefix against the abstract kind (hasPrefix(id, "wood")). The resources system mints ids as "wood_<tick>_<i>_<j>" (resources.go:219), which DO match. But inventory.handlePickup stores carried items as "item:<kind>#<entityid>" (inventory.go:297), and give/drop preserve that form. So wood obtained by picking up a dropped log, or received via give, is stored as "item:wood#..." and hasPrefix("item:wood#...", "wood") is false. Such materials are invisible to construction → place/advance returns missing_materials even though the agent visibly holds wood. The two id conventions in the same codebase aren't reconciled here; construction silently assumes the resource-minted shape.
 - **repro:** Agent A harvests wood (id wood_10_0_0), drops it; agent B picks it up (now stored as item:wood#<id>); B tries place_blueprint cottage. resolveMaterials can't match 'wood' against 'item:wood#..' → reason='missing_materials' despite B holding wood.
-- **status:** [ ] open
+- **status:** [x] FIXED @e5e72e8
 
 ## [4] HIGH · quests — kill_target quest auto-completes when the target entity does not exist (free reward)
 - **file:** `engine/internal/systems/quests/quests.go:100-104`
 - **why:** In advance() for "kill_target", if w.EntityByID(tid)==nil the code sets q["done"]=true and returns, which causes reward() to fire. A quest whose target id is a typo, a never-spawned id, or an entity that despawned for ANY reason (left vision, removed, respawned with a new id) is treated as a kill and pays out gold/item/hp. Combined with the fact that quests are seeded from extras with no validation that the target ever existed, a scenario author (or any path that can write extras.quests) gets a free reward by pointing at a bogus id. There is also no check that the quest holder was the killer — any entity dropping to hp<=0 completes everyone's kill_target quest on it.
 - **repro:** Seed quest {"kind":"kill_target","target":"does_not_exist","reward":{"gold":1000}}. On the next 60-tick boundary EntityByID returns nil, q is marked done, and reward() credits 1000 gold to the holder despite no kill having occurred.
-- **status:** [ ] open
+- **status:** [x] FIXED @e5e72e8
 
 ## [5] MEDIUM · combat — attack returns rejection reasons not declared in its manifest (out_of_range, not_a_target); declared target_too_far is never returned
 - **file:** `engine/internal/systems/combat/combat.go:131,145,304`
@@ -62,7 +62,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/resources/resources.go` :219
 - **why:** harvest() builds inventory item IDs as fmt.Sprintf("%s_%d_%d_%d", kind, tick, i, len(mintedIDs)) -> e.g. "wood_300_0_0". The rest of the engine assumes the canonical inventory id format "item:<kind>#<seq>" (see inventory.go:287/297 invID := "item:"+kind+"#"+target, itemKindFromID inventory.go:401, spriteFromItemID observation.go:482). Consequences: (1) Rendering: spriteFromItemID("wood_300_0_0") sees no ':' -> returns "item:wood_300_0_0", a sprite that does not exist (sprites.json only has item:wood_log/item:wood_plank/item:stone_block, NOT item:wood/item:stone), so chopped/mined goods render as a broken/missing icon in inventory. (2) Kind resolution: itemKindFromID("wood_300_0_0") strips nothing (no 'item:' prefix, no '#') and returns the whole string "wood_300_0_0" rather than "wood". forage() does it correctly (item:apple#<tick>, line 166) which proves the intended format and makes chop/mine the clear outlier. The header comment even claims construction consumes these via the standard InventoryService; it only works by luck because construction matches by raw prefix (hasPrefix(id,"wood")), but every kind/sprite consumer is wrong.
 - **repro:** Boot world, chop a tree, inspect hero inventory item id: it is "wood_<tick>_0_0". Pass it through spriteFromItemID -> "item:wood_<tick>_0_0" (no asset) and itemKindFromID -> "wood_<tick>_0_0" (not "wood"). Compare to forage which yields "item:apple#<tick>".
-- **status:** [ ] open
+- **status:** [x] FIXED @75bfd26
 
 ## [10] MEDIUM · construction — place_blueprint does not check tile occupancy — blueprints stack on entities / each other / existing buildings
 - **file:** `engine/internal/systems/construction/construction.go` :149-152; IsWalkable at engine/internal/world/world.go:812-817
