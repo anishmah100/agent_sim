@@ -173,12 +173,12 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 // have reach > 1; LOS check is NOT yet enforced (future P3 polish).
 func weaponStats(e syscore.Entity) (damage, reach int) {
 	const (
-		// 12 (was 4): an unarmed kill landed in ~25 hits, so a predator
-		// spent most of a run closing distance between rare, barely-visible
-		// kills. 12 fells a 100-hp target in ~9 hits — predation reads on
-		// screen as actual killing, not endless chasing. Weapons still hit
-		// harder via the weapon table.
-		unarmedDmg = 12
+		// 7 (was 4, briefly 12): 4 dmg = ~25 hits = kills too rare/slow to
+		// see; 12 = ~9 hits decimated the whole population in seconds (a
+		// churning massacre, nobody left to form a lively crowd). 7 ≈ 15
+		// hits ≈ ~6s of sustained adjacency per kill — visible predation
+		// that doesn't wipe the town. Weapons still hit harder.
+		unarmedDmg = 7
 		// Reach 2 (Chebyshev): a predator can "lunge" and land a hit from
 		// one tile away, so combat connects against a same-speed fleeing
 		// target instead of perpetually trailing it by a tile. Also makes
