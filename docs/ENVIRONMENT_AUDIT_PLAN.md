@@ -331,3 +331,16 @@ For EACH verb, a row in `tools/audit/verb_matrix.py` that:
   healthy after adversarial input. · PASS.
 - 2026-06-08 · run_all now covers S1/S2/S4/S5/S6/S12 — ALL GREEN on a fresh
   engine (tools/audit/restart_sidecar.sh + run_all.py).
+
+- 2026-06-08 · S10 (archetype scale soak) · run_p7_real, 13 rule-based agents
+  (killer:3/avenger:2/survivor:4/scavenger:2/manipulator:2), no LLM, 150s on a
+  fresh engine · CLEAN: engine stable 171s/tick 40938, NO panics, population
+  stable at 13 (60 spawns = deaths+respawns). Emergent: 21 kills / 356 damage
+  (a dominant killer spawn_5 with 4 kills), 92 GoldTransferred + 117 ItemPicked
+  with wealth differentiation (top 437 vs start 25), 17 contracts proposed, 92
+  speech. Validates fix [0] at scale (gold conserved across 21 deaths). · PASS.
+- 2026-06-08 · S7 (SDK parity) · sdk_parity.py — engine/Python/TS all 37 verbs
+  + matching observation fields after catching up the stale TS Action union
+  (@016d4ae). · PASS. run_all now covers S1/S2/S3/S4/S5/S6/S7/S12.
+- AUDIT STATUS: 10/12 plan suites automated-green (S1-S7,S9,S10,S12); S8 (UI)
+  verified via smoke+screenshots+live interior capture; S11 (docs) done.

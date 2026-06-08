@@ -231,7 +231,7 @@ def digest_text(d: dict) -> str:
     L.append("CONFLICT")
     L.append(f"  kills: {d['kills']}   damage events: {d['damage_events']}")
     if d.get("kill_pairs"):
-        pairs = ", ".join(f"{k}->{v}" for k, v in d["kill_pairs"][:5])
+        pairs = ", ".join(f"{p.get('killer','?')}->{p.get('victim','?')}" for p in d["kill_pairs"][:5])
         L.append(f"  kill pairs: {pairs}")
     # Economy
     L.append("")
