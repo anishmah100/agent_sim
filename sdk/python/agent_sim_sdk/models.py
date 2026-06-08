@@ -167,6 +167,10 @@ class _Action(BaseModel):
 
 
 class Move(_Action):
+    """DEPRECATED — the engine no longer pathfinds for agents and REJECTS the
+    `move` verb (unknown_verb). Movement is now single-tile `Step` (N/S/E/W),
+    with the agent owning navigation via agents.common.nav. Kept only so the
+    legacy examples/ still import; do not use in new agents."""
     verb: Literal["move"] = "move"
     target: Pos
     jog: bool = False

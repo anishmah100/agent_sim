@@ -84,29 +84,6 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 		return h(w, e, env)
 	}
 	switch env.Verb {
-	case "move":
-		var p struct {
-			Target [2]int `json:"target"`
-			Jog    bool   `json:"jog"`
-		}
-		if err := json.Unmarshal(env.Raw, &p); err != nil {
-			res.Reason = "bad_params"
-			return res
-		}
-		t := Tile{p.Target[0], p.Target[1]}
-		if !w.IsWalkable(t) {
-			res.Reason = "unreachable"
-			return res
-		}
-		// BLK-3: for a WALKABLE but currently-unreachable target (behind a
-		// wall, ringed by occupants), startMove → findPath now returns a
-		// best-effort path that gets the agent as close as possible instead
-		// of failing outright — so agents stop wedging on "no_path".
-		if !w.startMove(e, t) {
-			res.Reason = "no_path"
-			return res
-		}
-		res.Accepted = true
 	case "step":
 		// Single-tile compass step. The AGENT owns navigation (A* on its
 		// known terrain); the engine just executes one committed tile.

@@ -114,36 +114,9 @@ func TestHearing_SpeakLocal(t *testing.T) {
 	}
 }
 
-func TestDispatch_Move(t *testing.T) {
-	w := loadTestWorld(t)
-	a := w.entities["a"]
-	env := &ActionEnvelope{
-		ActionID: "act_1",
-		Verb:     "move",
-		Raw:      []byte(`{"verb":"move","target":[3,1]}`),
-	}
-	res := w.Dispatch(a, env)
-	if !res.Accepted {
-		t.Fatalf("move should be accepted; got reason=%q", res.Reason)
-	}
-}
-
-func TestDispatch_MoveIntoWallRejected(t *testing.T) {
-	w := loadTestWorld(t)
-	a := w.entities["a"]
-	env := &ActionEnvelope{
-		ActionID: "act_2",
-		Verb:     "move",
-		Raw:      []byte(`{"verb":"move","target":[2,2]}`),
-	}
-	res := w.Dispatch(a, env)
-	if res.Accepted {
-		t.Fatal("move into wall should be rejected")
-	}
-	if res.Reason != "unreachable" {
-		t.Fatalf("unexpected reason %q", res.Reason)
-	}
-}
+// Movement is the single-tile `step` verb now (the multi-tile engine-
+// pathfinding `move` verb was removed in the movement redesign). Step
+// behaviour is covered by step_test.go.
 
 func TestObservationBuilder(t *testing.T) {
 	w := loadTestWorld(t)

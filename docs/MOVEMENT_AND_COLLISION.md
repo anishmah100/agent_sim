@@ -1,4 +1,21 @@
-# Movement, collision, and the move API
+# Movement, collision, and the step API
+
+> ⚠️ **PARTLY SUPERSEDED — read this first.** The discrete-tile / render-lerp
+> collision model below is still exactly how the engine works. But the
+> **movement API and who pathfinds changed** (the "Agent movement & perception
+> redesign", see `docs/AGENT_MOVEMENT_REDESIGN.md`):
+> - The engine no longer pathfinds for agents. The old `move {target:[x,y]}`
+>   verb (engine-side A*) and `findPath`/`startMove` were **removed**.
+> - Agents move one tile at a time via the **`step {dir:N|S|E|W}`** verb and
+>   own navigation themselves: A* on the static walkability grid
+>   (`GET /api/v1/world/walkability`, `agents/common/nav.py`), with a
+>   two-rate motor layer turning a standing goal (pursue/flee/goto) into one
+>   step per tick (`agents/common/motor.py`).
+> - Terrain is fully known to agents; observations carry a `local_view`
+>   egocentric ASCII tilemap so the agent sees walls/water like the screen.
+> Wherever this file says "the engine pathfinds" or "`move(target)`", read
+> "the agent pathfinds and emits `step`". The collision/occupancy/render-lerp
+> sections remain accurate.
 
 > Synthesized from field-tested patterns: Pokémon HeartGold (DS), Link to the Past (SNES), Stardew Valley, Tibia, and the cooperative-pathfinding literature (Silver's WHCA\*, conflict-based search). Sources at the bottom.
 

@@ -237,7 +237,7 @@ Full state every push (Q53). Cadence = whatever the bot configured (default 1000
 {
   "type": "action_ack",
   "action_id": "...",
-  "verb": "move",
+  "verb": "step",
   "accepted": true,
   "reason": ""  // populated only on reject
 }
@@ -265,10 +265,9 @@ High-priority push (taking damage; being addressed by name). Same shape as an au
   "type": "action",
   "action_id": "...",
   "in_response_to_obs": 42,
-  "verb": "move",
+  "verb": "step",
   "priority": 0,  // 0 normal, 1 urgent (cancels current_action)
-  "target": [11, 5],
-  "jog": false
+  "dir": "E"      // one cardinal tile; agent owns its own A* routing
 }
 ```
 
@@ -308,15 +307,15 @@ Bots can pattern-match on these:
 ## SDK shape
 
 ```python
-from agent_sim_sdk import Agent, Move, Speak, Wait
-from agent_sim_sdk.combat import Attack, Defend, Heal
-from agent_sim_sdk.money import Pay, Trade
+from agent_sim_sdk import Agent, Step, Speak, Wait, Attack, Pay, Trade
 
 async def brain(obs):
     if any(e.archetype == "wolf" and e.hp < 20 for e in obs.visible_entities):
         wolf = next(e for e in obs.visible_entities if e.archetype == "wolf")
         return Attack(target=wolf.entity_id)
-    return Move(target=(obs.self.pos[0]+1, obs.self.pos[1]))
+    # Movement is one cardinal tile (the agent owns navigation). Use
+    # agents.common.nav for A* routing, or step toward obs.local_view.
+    return Step(dir="E")
 
 agent = await register_and_connect(
     "https://world.example.com",
@@ -335,27 +334,36 @@ Each composable system ships a submodule: `agent_sim_sdk.combat`, `agent_sim_sdk
 
 `examples/hello_hierarchical.py` ships as the recommended baseline architecture (Q38):
 
+This is the **two-rate motor model** the harness already implements
+(`agents/common/motor.py`, `agents/llm/motor_loop.py`): a slow LLM
+deliberation sets a standing goal; a fast reflex loop turns it into one
+`step` per tick via agent-side A*.
+
 ```python
 import asyncio
-from agent_sim_sdk import Agent, Move, Speak
+from agent_sim_sdk import Agent, Step, Speak
+from agents.common.nav import NavGrid
 
 class HierarchicalBot:
-    def __init__(self):
-        self.target = None  # set by strategist
+    def __init__(self, engine_url):
+        self.goal = None  # (x, y) tile, set by strategist
         self.latest_obs = None
+        self.nav = NavGrid.fetch(engine_url)  # static terrain, once
 
     async def strategist(self):
-        # Slow loop: every 5s, run heavy LLM to set self.target
+        # Slow loop: every 5s, run heavy LLM to set self.goal
         while True:
             if self.latest_obs:
-                self.target = await self.choose_target(self.latest_obs)
+                self.goal = await self.choose_goal(self.latest_obs)
             await asyncio.sleep(5)
 
     async def controller(self, obs):
-        # Fast loop: react to obs immediately; just move toward self.target
+        # Fast loop (every obs): one A*-routed step toward the goal.
         self.latest_obs = obs
-        if self.target:
-            return Move(target=self.target)
+        if self.goal:
+            d = self.nav.next_dir(tuple(obs.self.pos), self.goal)
+            if d:
+                return Step(dir=d)
 ```
 
 Researchers get the pattern out of the box; can swap their own brain logic.

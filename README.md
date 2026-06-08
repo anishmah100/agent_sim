@@ -107,7 +107,7 @@ A world is a self-contained bundle: `world.json` + `bundle.toml` + `npcs.json` +
 
 ## Emergent behaviors the substrate supports
 
-The verb set is the surface area for emergence. Base verbs (every world): `move`, `speak`, `whisper` (private, adjacent), `shout` (long-range), `look_at`, `interact` (polymorphic — sit/enter/read per the object's affordances), `pickup`, `drop`, `equip`, `give`, `attack`, `defend`, `heal`, `wait`, `noop`. Scenario verbs (fantasy_town): `trade` (offer/accept/reject), `pay`, `work`, `loot`, `build`. Full per-verb accept/reject semantics and emitted events are in `docs/VERB_REFERENCE.md` and `docs/AFFORDANCE_MANIFEST.md`.
+The verb set is the surface area for emergence. Base verbs (every world): `step` (one cardinal tile — the agent owns navigation; see `agents/common/nav.py`), `speak`, `whisper` (private, adjacent), `shout` (long-range), `look_at`, `interact` (polymorphic — sit/enter/read per the object's affordances), `pickup`, `drop`, `equip`, `give`, `attack`, `defend`, `heal`, `wait`, `noop`. Scenario verbs (fantasy_town): `trade` (offer/accept/reject), `pay`, `work`, `loot`, `build`. Full per-verb accept/reject semantics and emitted events are in `docs/VERB_REFERENCE.md` and `docs/AFFORDANCE_MANIFEST.md`.
 
 Out of that surface, the substrate is designed to let the following **emerge** rather than be scripted:
 
@@ -152,13 +152,15 @@ pip install -e sdk/python
 # 2. Write a brain
 cat > my_bot.py <<'PY'
 import asyncio
-from agent_sim_sdk import register_and_connect, Move, Speak
+from agent_sim_sdk import register_and_connect, Step, Speak
 
 async def brain(obs):
-    me = obs.self.pos
+    # Movement is one cardinal tile at a time (the agent owns navigation —
+    # run A* on GET /api/v1/world/walkability via agents.common.nav, or just
+    # step toward something on obs.local_view, the egocentric ASCII map).
     if obs.world_tick % 60 == 0:
         return Speak(text="hi!")
-    return Move(target=(me[0] + 1, me[1]))
+    return Step(dir="E")
 
 async def main():
     agent = await register_and_connect(

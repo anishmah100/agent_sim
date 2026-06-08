@@ -6,21 +6,28 @@ The full action vocabulary for v1. Base verbs live in the engine. Scenario verbs
 
 These are universal. The engine itself validates and executes them.
 
-### `move`
+### `step`
 
-Walk to a destination tile. The engine handles pathfinding.
+Move exactly ONE tile in a compass direction. The AGENT owns navigation: it
+computes its own route (A* on the static walkability grid — fetch once from
+`GET /api/v1/world/walkability`, see `agents/common/nav.py`) and feeds the
+engine one `step` per tick. The engine does **no** pathfinding; it just
+executes the committed tile. See docs/AGENT_MOVEMENT_REDESIGN.md.
 
 ```
 params {
-  target: [x, y]        # tile coords on current map
-  jog: bool             # optional, true = faster move (scenario may restrict)
+  dir: "N" | "S" | "E" | "W"   # one cardinal tile
 }
 ```
 
-- The engine validates the target is reachable on the current map.
-- Rejected if no path exists, target out of map, or target is non-walkable.
-- Sets `current_action = move`, `eta_tick` based on path length and movement speed.
-- An `urgent` `move` cancels the current action.
+- Rejected `blocked_by_terrain` if the target tile is off-map or non-walkable.
+- Rejected `blocked` if the tile is currently occupied by another entity.
+- Sets `current_action = move` for the ~0.4s the single-tile walk lerps.
+
+> The old multi-tile `move {target:[x,y]}` verb (engine-side A*) was **removed**.
+> Higher-level harnesses express movement as a standing goal
+> (pursue/flee/goto) and let a reflex loop emit one `step` per tick — see
+> `agents/common/motor.py`.
 
 ### `speak`
 
@@ -290,7 +297,8 @@ Standardized so agents can pattern-match:
 - `entity_busy` — current_action conflicts (only for normal-priority verbs).
 - `forbidden` — scenario rule rejection (e.g. "you can't attack inside the temple").
 - `not_enough_gold` — scenario verb economic rejection.
-- `cannot_path` — move target unreachable.
+- `blocked_by_terrain` — step target off-map or non-walkable.
+- `blocked` — step target tile is currently occupied.
 - `out_of_map` — coordinate not on this map.
 
 ## Examples
@@ -298,14 +306,21 @@ Standardized so agents can pattern-match:
 ### Walk to the tavern, then greet the bartender:
 
 ```python
-# T=0
-await agent.move(target=(47, 30))     # tavern interior portal
-# T=2 — engine pushes obs with portal-entered event
-# T=2.5 — agent is now in tavern interior
-await agent.move(target=(8, 12))      # next to bartender
-# T=4
-await agent.speak("Evening. Pint of ale, please.")
+from agent_sim_sdk import Step, Speak
+from agents.common.nav import NavGrid
+
+nav = NavGrid.fetch(engine_url)          # static walkability, fetched once
+# Each tick: compute the next cardinal step toward the goal and send it.
+d = nav.next_dir(here, (8, 12))          # A* on known terrain → "N"/"S"/...
+if d:
+    await agent.act(Step(dir=d))
+# ...repeat until adjacent, then:
+await agent.act(Speak(text="Evening. Pint of ale, please."))
 ```
+
+> Higher-level agents skip the per-tile bookkeeping by setting a motor goal
+> (`Goal.goto(8, 12)`) and letting the reflex loop emit the steps — see
+> `agents/common/motor.py` and `agents/baselines/_common.py`.
 
 ### Buy bread from the baker:
 

@@ -152,21 +152,29 @@ func TestVerb_LookAt_AlwaysAccepted(t *testing.T) {
 	}
 }
 
-func TestVerb_Move_ToAdjacentWalkable(t *testing.T) {
+func TestVerb_Step_ToAdjacentWalkable(t *testing.T) {
 	vc := newVCTest(t)
-	// a is at (1,1); (2,1) is walkable.
-	res := vc.submit("a", "move", `{"target":[2,1]}`)
+	// a is at (1,1); stepping E to (2,1) is walkable.
+	res := vc.submit("a", "step", `{"dir":"E"}`)
 	if !res.Accepted {
-		t.Fatalf("move adjacent should accept; got reason=%q", res.Reason)
+		t.Fatalf("step E should accept; got reason=%q", res.Reason)
 	}
 }
 
-func TestVerb_Move_ToWallRejected(t *testing.T) {
+func TestVerb_Step_IntoWallRejected(t *testing.T) {
 	vc := newVCTest(t)
-	// Wall row at y=2, columns 2-5.
-	res := vc.submit("a", "move", `{"target":[2,2]}`)
+	// a is at (1,1); wall row at y=2, so stepping S onto (1,2)... (1,2) is
+	// walkable (wall is cols 2-5). Move a next to the wall first: from (2,1)
+	// stepping S would hit (2,2) the wall. Re-place for a deterministic check.
+	a := vc.world.entities["a"]
+	a.LogicalTile = Tile{2, 1}
+	a.WalkProgress = 1
+	res := vc.submit("a", "step", `{"dir":"S"}`)
 	if res.Accepted {
-		t.Fatalf("move into wall should reject; got accepted")
+		t.Fatalf("step into wall (2,2) should reject; got accepted")
+	}
+	if res.Reason != "blocked_by_terrain" {
+		t.Fatalf("reason=%q want blocked_by_terrain", res.Reason)
 	}
 }
 

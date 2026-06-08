@@ -43,7 +43,6 @@ type Entity struct {
 	LogicalTile  Tile    `json:"-"`
 	WalkFromTile Tile    `json:"-"`
 	WalkProgress float64 `json:"-"`
-	walkPath     []Tile  // queued path; first elem = next tile to enter
 
 	Facing        Facing `json:"facing"`
 	CurrentAction string `json:"current_action,omitempty"`
@@ -69,10 +68,6 @@ type Entity struct {
 	// origin so the frontend can route renders to the right interior.
 	InsideBuilding string `json:"inside_building,omitempty"`
 	insideTicks    int    // remaining ticks until automatic exit
-
-	// targetTile is the original move-target; emitted in observations so
-	// the agent can confirm what it's walking toward.
-	targetTile Tile
 
 	// Computed render position broadcast on the wire.
 	renderPos [2]float64
@@ -802,39 +797,6 @@ func (w *World) pickWanderTarget(e *Entity, radius int) (Tile, bool) {
 	return Tile{}, false
 }
 
-// startMove kicks off an A*-pathed move toward target. Returns true if
-// a path was found and the first step has been committed.
-func (w *World) startMove(e *Entity, target Tile) bool {
-	if !w.IsWalkable(target) {
-		return false
-	}
-	if target == e.LogicalTile {
-		return true
-	}
-	// BLK-3: findPath now returns a best-effort path toward an unreachable
-	// (walkable) target — gets the agent as close as it can rather than
-	// returning nil, so agents stop wedging retrying the same blocked move.
-	path := w.findPath(e.LogicalTile, target, e)
-	if len(path) < 2 {
-		return false
-	}
-	// path[0] is current. Step to path[1].
-	next := path[1]
-	if !w.CanEnter(e, next) {
-		return false
-	}
-	// Claim the next tile.
-	w.occupants[next] = e.EntityID
-	e.WalkFromTile = e.LogicalTile
-	e.LogicalTile = next
-	e.WalkProgress = 0
-	e.walkPath = path[2:]
-	e.targetTile = target
-	e.CurrentAction = "move"
-	e.Facing = stepFacing(e.WalkFromTile, next)
-	return true
-}
-
 // dirDelta maps a compass direction to a one-tile offset. ok=false for an
 // unrecognized direction string.
 func dirDelta(dir string) (Tile, bool) {
@@ -856,8 +818,8 @@ func dirDelta(dir string) (Tile, bool) {
 // occupancy, set WalkFromTile/LogicalTile/WalkProgress, facing). NO
 // pathfinding — the AGENT owns navigation now; the engine only executes a
 // single committed step. Returns false (caller → "blocked") when the tile
-// isn't enterable. walkPath is cleared so the tick loop treats this as a
-// one-tile move and frees the from-tile when WalkProgress completes.
+// isn't enterable. The tick loop frees the from-tile when WalkProgress
+// completes.
 func (w *World) stepOneTile(e *Entity, next Tile) bool {
 	// Busy only when the current tile's walk is less than half done. The
 	// LogicalTile already advanced when the walk started, so allowing a new
@@ -875,8 +837,6 @@ func (w *World) stepOneTile(e *Entity, next Tile) bool {
 	e.WalkFromTile = e.LogicalTile
 	e.LogicalTile = next
 	e.WalkProgress = 0
-	e.walkPath = nil
-	e.targetTile = next
 	e.CurrentAction = "move"
 	e.Facing = stepFacing(e.WalkFromTile, next)
 	return true
@@ -893,96 +853,6 @@ func stepFacing(from, to Tile) Facing {
 		return FacingS
 	}
 	return FacingN
-}
-
-// findPath: BFS bounded by max manhattan distance. If the goal is too
-// far from start we reject early — agents requesting moves across a
-// 1000×1000 world would otherwise BFS through ~1M tiles per attempt and
-// block the tick.
-//
-// The 64-tile cap (~5× vision radius) is well above any single-step
-// move the engine itself initiates; long-haul paths must be requested as
-// a sequence of intermediate targets by the agent.
-const maxPathDistance = 64
-
-func (w *World) findPath(start, goal Tile, e *Entity) []Tile {
-	if start == goal {
-		return []Tile{start}
-	}
-	// Cheap manhattan reject before allocating BFS state.
-	if absInt(goal[0]-start[0])+absInt(goal[1]-start[1]) > maxPathDistance {
-		return nil
-	}
-	type node struct {
-		t      Tile
-		parent int // index into visited
-	}
-	visited := []node{{t: start, parent: -1}}
-	seen := map[Tile]int{start: 0}
-	queue := []int{0}
-	dirs := []Tile{{1, 0}, {-1, 0}, {0, 1}, {0, -1}}
-	// BUG FIX (BLK-3): track the explored tile CLOSEST to the goal so
-	// that when the exact goal is unreachable (blocked by a wall, sitting
-	// on a non-walkable decoration tile, or occupied), we still return a
-	// best-effort path that makes progress toward it — instead of nil,
-	// which left agents wedged retrying the same blocked move ("no_path"
-	// was the #1 logged failure). Distance is manhattan-to-goal.
-	bestIdx := 0
-	bestDist := absInt(goal[0]-start[0]) + absInt(goal[1]-start[1])
-	reconstruct := func(idx int) []Tile {
-		// B14: append then reverse (O(n)) instead of prepend-in-loop (O(n²)).
-		path := []Tile{}
-		for i := idx; i != -1; i = visited[i].parent {
-			path = append(path, visited[i].t)
-		}
-		for l, r := 0, len(path)-1; l < r; l, r = l+1, r-1 {
-			path[l], path[r] = path[r], path[l]
-		}
-		return path
-	}
-	// Visit cap as a second safety net — diagonals + obstacles can blow
-	// past manhattan in pathological maps. 4096 tiles ≈ 64² area covered.
-	const maxNodes = 4096
-	for len(queue) > 0 && len(visited) < maxNodes {
-		idx := queue[0]
-		queue = queue[1:]
-		cur := visited[idx].t
-		if cur == goal {
-			return reconstruct(idx)
-		}
-		for _, d := range dirs {
-			n := Tile{cur[0] + d[0], cur[1] + d[1]}
-			if _, ok := seen[n]; ok {
-				continue
-			}
-			if !w.IsWalkable(n) {
-				continue
-			}
-			// Allow path through tiles occupied by OTHERS at planning
-			// time — they may move by the time we arrive. But block our
-			// path through trees / walls.
-			if occ, occupied := w.occupants[n]; occupied && occ != e.EntityID && n == goal {
-				// Dest is currently occupied; reject so the agent gets
-				// target_occupied at submission. (BFS allows transit but
-				// not stopping ON an occupant.)
-				continue
-			}
-			seen[n] = len(visited)
-			visited = append(visited, node{t: n, parent: idx})
-			queue = append(queue, len(visited)-1)
-			if d := absInt(n[0]-goal[0]) + absInt(n[1]-goal[1]); d < bestDist {
-				bestDist = d
-				bestIdx = len(visited) - 1
-			}
-		}
-	}
-	// Goal unreachable: return the best-effort path toward it (empty if
-	// we couldn't get any closer than where we started — caller treats
-	// len<2 as no_path).
-	if bestIdx != 0 {
-		return reconstruct(bestIdx)
-	}
-	return nil
 }
 
 func (w *World) Tick() {
@@ -1042,13 +912,7 @@ func (w *World) Tick() {
 						w.occupants[e.WalkFromTile] == e.EntityID {
 						delete(w.occupants, e.WalkFromTile)
 					}
-					if len(e.walkPath) > 0 {
-						next := e.walkPath[0]
-						e.walkPath = e.walkPath[1:]
-						w.startMove(e, next)
-					} else {
 						e.CurrentAction = ""
-					}
 				}
 				e.recomputeRenderPos()
 			}
@@ -1094,7 +958,6 @@ func (w *World) Tick() {
 				if w.occupants[e.LogicalTile] == e.EntityID {
 					delete(w.occupants, e.LogicalTile)
 				}
-				e.walkPath = nil
 				e.CurrentAction = ""
 				continue
 			}
@@ -1109,37 +972,9 @@ func (w *World) Tick() {
 		// any other agent. If a non-PlayerControlled entity exists at
 		// all, it idles in place.
 
-		// Advance walk.
-		if e.CurrentAction == "move" && e.WalkProgress < 1 {
-			e.WalkProgress += 1.0 / float64(TicksPerStep)
-			if e.WalkProgress >= 1 {
-				e.WalkProgress = 1
-				// Release the from-tile.
-				if w.occupants[e.WalkFromTile] == e.EntityID {
-					delete(w.occupants, e.WalkFromTile)
-				}
-				e.WalkFromTile = e.LogicalTile
-				// Take the next step if path has more tiles.
-				if len(e.walkPath) > 0 {
-					next := e.walkPath[0]
-					if !w.CanEnter(e, next) {
-						// Blocked mid-path. Stop and notify (event
-						// emission lands with the agent wire path).
-						e.walkPath = nil
-						e.CurrentAction = ""
-					} else {
-						w.occupants[next] = e.EntityID
-						e.WalkFromTile = e.LogicalTile
-						e.LogicalTile = next
-						e.WalkProgress = 0
-						e.walkPath = e.walkPath[1:]
-						e.Facing = stepFacing(e.WalkFromTile, next)
-					}
-				} else {
-					e.CurrentAction = ""
-				}
-			}
-		}
+		// Non-PlayerControlled entities (items, idle NPCs) don't move: the
+		// engine no longer pathfinds and the demo-wander loop was removed
+		// (D3). They just idle in place; only their render pos refreshes.
 
 		e.recomputeRenderPos()
 	}

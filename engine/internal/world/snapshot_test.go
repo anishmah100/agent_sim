@@ -105,22 +105,7 @@ func TestSnapshot_BuildObservationLockFree(t *testing.T) {
 	}
 }
 
-func TestFindPath_BoundedByManhattan(t *testing.T) {
-	w := loadTestWorld(t)
-	a := w.entities["a"]
-	// Within bound: (1,1) → (8,5). manhattan = 11 ≤ 64. Should succeed.
-	near := w.findPath(Tile{1, 1}, Tile{8, 5}, a)
-	if len(near) < 2 {
-		t.Fatal("near path should resolve (manhattan 11 well below cap)")
-	}
-	// At the boundary on a fake giant world: bump cap-test. We don't
-	// have a giant world here, so test the OTHER side — that an
-	// unreachable goal also returns nil rather than blowing the budget.
-	w.visionBlocks[2][2] = true // doesn't matter for IsWalkable here
-	_ = w.visionBlocks
-	// Far enough that the cap kicks in — but our world is only 10x6,
-	// so we synthesise a manhattan-distance check directly.
-	if dx := 100; absInt(dx) <= maxPathDistance {
-		t.Fatalf("test assumption broken: expected 100 > %d", maxPathDistance)
-	}
-}
+// (TestFindPath_BoundedByManhattan removed: the engine no longer pathfinds
+// for agents — navigation moved into the agent harness (agents/common/nav.py)
+// and the engine only executes single-tile `step` actions. See
+// docs/AGENT_MOVEMENT_REDESIGN.md.)

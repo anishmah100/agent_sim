@@ -87,7 +87,7 @@ Movement redesign slices: 1 step verb ✓ · 2a walkability endpoint ✓ ·
 loop + pursue/flee standing goals ✓ · 5 last-seen tracker ✓ · 6 LLM harness on
 new view+nav (try map-to-LLM vs harness-A*; Claude vs Qwen) ✓ · 7 scripted
 Hunter + LLM prey scenario · 8 remove old move/engine-pathfinding + update
-ALL docs/README/CLAUDE.md/comments · 9 re-run experiments (tag old regime).
+ALL docs/README/CLAUDE.md/comments ✓ · 9 re-run experiments (tag old regime).
 - **Update ALL agents** rule-based (deterministic test bots) + LLM; all must work. ✓
   (killer/survivor/scavenger/manipulator + raiders all on goal+motor; old
   greedy step_toward/step_away + ArchetypeBot.step_to/flee removed.)
