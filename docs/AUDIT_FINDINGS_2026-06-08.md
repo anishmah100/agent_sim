@@ -38,7 +38,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/combat/combat.go:131,145,304`
 - **why:** The manifest for `attack` declares RejectionReasons: ["bad_params","unknown_target","target_too_far"] (line 304). But handleAttack actually returns "not_a_target" (line 131) and "out_of_range" (line 145), neither of which is in the declared set, and it NEVER returns the declared "target_too_far". The manifest is the contract LLM agents read to know how a verb can fail and how to react; an agent that handles target_too_far will never see it, and will receive out_of_range/not_a_target that aren't documented. Same class of defect in heal (line 322 declares ["unknown_target","target_too_far"] but the handler returns "not_a_target" at 268 and "target_dead" at 279, both undeclared).
 - **repro:** Submit attack at distance 3 with unarmed (reach 2): handler returns reason="out_of_range", which is absent from the manifest's declared rejection_reasons for attack. Submit attack on a non-agent (item/building) target: returns "not_a_target", also undeclared. heal on a corpse returns "target_dead", undeclared.
-- **status:** [ ] open
+- **status:** [x] FIXED (manifest)
 
 ## [6] MEDIUM · inventory — give bypasses the 10-slot inventory cap (DefaultMaxSlots) — recipient can be pushed past the documented limit
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :491-495
@@ -152,7 +152,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :104-110 (returns), 225 (manifest declares only bad_params/unknown_target/target_too_far/not_enough_gold)
 - **why:** handlePay can return Reason="not_a_target" (line 105, target is not an agent archetype) and Reason="self_target" (line 109, paying yourself), but the manifest's RejectionReasons for pay (line 225) lists only [bad_params, unknown_target, target_too_far, not_enough_gold]. This manifest is rendered into the agent-facing rulebook (worlds/eldoria/rulebook.json lines 458-463 confirm only the 4 declared reasons are published, and AGENT_API.md/WorldRulebook.tsx surface it to agents). An adversarial or even cooperative LLM agent that hits self_target or not_a_target receives an undocumented failure code it cannot reason about, breaking the affordance contract the whole system is built around. The svc.Pay path can also return "unknown_target" again which IS declared, so the gap is specifically the two handler-level reasons.
 - **repro:** Agent submits pay{target=<own id>, amount=1} -> handler returns Reason="self_target" (line 109), a code absent from the published pay rejection_reasons. Likewise pay{target=<a non-agent entity id>, amount=1} -> Reason="not_a_target" (line 105).
-- **status:** [ ] open
+- **status:** [x] FIXED (manifest)
 
 ## [25] LOW · money — pay manifest precondition 'target within 1 tile' contradicts the configurable pay_max_range_tiles (eldoria uses 3)
 - **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :117-124 (range logic), 224 (static precondition string)
@@ -170,13 +170,13 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :272 (returned) vs 511 (declared)
 - **why:** handlePickup can return Reason="money_service_missing" (line 272) when the money service is absent, but the pickup VerbDeclaration only declares RejectionReasons {bad_params, not_an_item, target_too_far, inventory_full} (line 511). The manifest is the contract the agent SDK and LLM use to interpret rejections; an undeclared reason is unmappable by clients and violates the manifest-completeness invariant the audit checks for.
 - **repro:** Run pickup on a coin/gem kind in a world where no 'money' service is registered; the handler returns a reason not present in the manifest.
-- **status:** [ ] open
+- **status:** [x] FIXED (manifest)
 
 ## [28] LOW · inventory — give returns reasons 'not_a_target' and 'self_target' that are not in the manifest's declared RejectionReasons
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :463 and 467 (returned) vs 525 (declared)
 - **why:** handleGive can return Reason="not_a_target" (target not an agent archetype, line 463) and Reason="self_target" (line 467), but the give VerbDeclaration only declares {bad_params, unknown_target, target_too_far, not_in_inventory} (line 525). These two reasons are undeclared, so clients consuming the manifest cannot map them. Same manifest-contract violation as the pickup case.
 - **repro:** give with target = a non-agent entity returns not_a_target; give with target == self returns self_target. Neither is in the declared list.
-- **status:** [ ] open
+- **status:** [x] FIXED (manifest)
 
 ## [29] LOW · inventory — handleCook can mint duplicate inventory item IDs (item:<kind>#<tick>) that collide across entities, breaking the unique-id invariant
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :221
@@ -194,7 +194,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/property/property.go:147,163 vs 293,299` :property.go:147
 - **why:** handleEnter can return Reason="enter_failed" (line 147) and handleExit can return Reason="exit_failed" (line 163), but the manifest's RejectionReasons lists only [bad_params, unknown_target, not_a_building, target_too_far, already_inside, locked] for enter (line 293) and only [not_inside] for exit (line 299). The manifest aggregator (manifest.go:121) does not auto-populate reasons from handlers, so these codes are real code/manifest drift. An agent that relies on the declared affordance contract to interpret rejections will receive an undocumented reason, breaking introspection/recovery logic and any test that asserts manifest completeness.
 - **repro:** Force EnterBuilding/ExitBuilding to return false (e.g. an interior-membership edge), or inspect: the literal strings "enter_failed"/"exit_failed" appear in property.go but not in manifest() RejectionReasons.
-- **status:** [ ] open
+- **status:** [x] FIXED (manifest)
 
 ## [32] LOW · property — transfer_ownership accepts any entity (including buildings/items) as new_owner and does not reset lock state
 - **file:** `engine/internal/systems/property/property.go:271-278` :property.go:271
@@ -218,7 +218,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/trade/trade.go` :49, 52, 73-76, 120
 - **why:** The manifest's RejectionReasons (line 120) is the documented contract the LLM agent reads to know how a verb can fail. handleTrade can return three reasons absent from that list: "not_a_target" (line 49), "self_target" (line 52), and "not_enough_gold" (returned by mon.Pay at line 73-76 and propagated via res.Reason = reason). The declared set is only {bad_params, unknown_target, target_too_far, not_in_inventory, target_not_enough_gold}. An agent that whitelists/parses rejection reasons against the manifest will see undeclared failure codes; conversely the manifest under-documents the verb. (Note: pay's pre-check at line 67 returns target_not_enough_gold, but if balance changes nothing under the same lock, the only way to surface Pay's not_enough_gold is the from/to ordering — here Pay is called as Pay(target -> e), and target_not_enough_gold already gates it, so not_enough_gold is largely shadowed, but unknown_target from Pay can also surface and is at least declared.)
 - **repro:** Send trade with target = a tree/rock/item id (archetype in objectArchetypes): returns not_a_target, which is not in manifest. Send trade targeting self: returns self_target, not in manifest. Diff handler return strings against manifest RejectionReasons.
-- **status:** [ ] open
+- **status:** [x] FIXED (manifest)
 
 ## [36] LOW · loot — Loot verb is unreachable dead code: every dead entity is removed before it can be looted
 - **file:** `engine/internal/systems/loot/loot.go:51-65`

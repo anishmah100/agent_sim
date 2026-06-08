@@ -301,7 +301,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Description:      "Damage an adjacent target.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target must be within 1 tile (chebyshev)"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "target_too_far", "out_of_range"},
 				EmitsEvents:      []string{"DamageDealt", "EntityDied"},
 				Examples: []manifest.VerbExample{
 					{Params: json.RawMessage(`{"target":"goblin_3"}`), Result: "deals 12 dmg to goblin_3 (or 6 if defending)"},

@@ -124,7 +124,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 					"self has `item` in inventory",
 					"target has at least `price` gold",
 				},
-				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_in_inventory", "target_not_enough_gold", "inventory_full"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "self_target", "target_too_far", "not_in_inventory", "target_not_enough_gold", "inventory_full"},
 				EmitsEvents:      []string{"GoldTransferred", "ItemTransferred"},
 			},
 		},
