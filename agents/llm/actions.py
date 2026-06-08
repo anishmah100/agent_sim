@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 from agent_sim_sdk import (
     Action, Step, Speak, Whisper, Shout, Eat, Pickup, Equip, Give,
-    Pay, Trade, Attack, ProposeTask, AcceptTask, CompleteTask, RejectTask, Wait,
+    Pay, BuyFood, Trade, Attack, ProposeTask, AcceptTask, CompleteTask, RejectTask, Wait,
     Enter, Exit,
 )
 from agents.common.motor import Goal
@@ -77,6 +77,8 @@ def to_action(d: dict[str, Any]) -> Optional[Action]:
             return Give(target=str(d["target"]), item=str(d["item"]))
         if verb == "pay":
             return Pay(target=str(d["target"]), amount=int(d["amount"]))
+        if verb == "buy_food":
+            return BuyFood()
         if verb == "trade":
             return Trade(target=str(d["target"]), item=str(d["item"]),
                          price=int(d["price"]))

@@ -24,6 +24,7 @@ Actions you can take (pick 1-3 per turn):
 - equip {"verb":"equip","item":"<item_id>","slot":"weapon"} — wield a weapon from inventory
 - give {"verb":"give","target":"<entity_id>","item":"<item_id>"} — hand an item to an adjacent agent
 - pay {"verb":"pay","target":"<entity_id>","amount":N} — give gold to an adjacent agent
+- buy_food {"verb":"buy_food"} — spend a little gold to eat a meal and cut your hunger (use when hungry and you have gold but no food on hand)
 - trade {"verb":"trade","target":"<entity_id>","item":"<item_id>","price":N} — sell an item to an adjacent agent
 - attack {"verb":"attack","target":"<entity_id>"} — strike an adjacent agent
 - propose_task {"verb":"propose_task","target":"<entity_id>","terms":"...","reward":"..."} — offer a deal/contract to ANY agent you can see (no need to be near them)

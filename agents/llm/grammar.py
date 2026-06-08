@@ -23,7 +23,7 @@ action-list ::= "[" ws action ws ("," ws action ws)* "]"
 action ::= goto-action | pursue-action | flee-action | step-action
          | speak-action | whisper-action | shout-action
          | eat-action | pickup-action | equip-action | give-action
-         | pay-action | trade-action | attack-action
+         | pay-action | buyfood-action | trade-action | attack-action
          | propose-action | accept-action | complete-action | reject-action
          | enter-action | exit-action | wait-action
 
@@ -40,6 +40,7 @@ pickup-action  ::= "{" ws "\"verb\":" ws "\"pickup\"" "," ws "\"target\":" ws st
 equip-action   ::= "{" ws "\"verb\":" ws "\"equip\"" "," ws "\"item\":" ws string ("," ws "\"slot\":" ws string)? ws "}"
 give-action    ::= "{" ws "\"verb\":" ws "\"give\"" "," ws "\"target\":" ws string "," ws "\"item\":" ws string ws "}"
 pay-action     ::= "{" ws "\"verb\":" ws "\"pay\"" "," ws "\"target\":" ws string "," ws "\"amount\":" ws integer ws "}"
+buyfood-action ::= "{" ws "\"verb\":" ws "\"buy_food\"" ws "}"
 trade-action   ::= "{" ws "\"verb\":" ws "\"trade\"" "," ws "\"target\":" ws string "," ws "\"item\":" ws string "," ws "\"price\":" ws integer ws "}"
 attack-action  ::= "{" ws "\"verb\":" ws "\"attack\"" "," ws "\"target\":" ws string ws "}"
 propose-action ::= "{" ws "\"verb\":" ws "\"propose_task\"" "," ws "\"target\":" ws string "," ws "\"terms\":" ws string ("," ws "\"reward\":" ws string)? ws "}"
