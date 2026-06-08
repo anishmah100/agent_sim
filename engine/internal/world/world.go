@@ -873,23 +873,34 @@ func (w *World) stepOneTile(e *Entity, next Tile) bool {
 		// also keeps movement working at 100s–1000s of agents. We only swap
 		// with an idle (not mid-step), overworld, agent body.
 		other := w.entities[occ]
-		if other == nil || !isAgentArchetype(other.Archetype) ||
-			other.InsideBuilding != "" || other.WalkProgress < 1 {
-			return false
+		// CRITICAL: only swap with an entity that is ACTUALLY standing on
+		// `next`. A STALE occupants entry — other moved away or was removed
+		// without the map catching up, so other.LogicalTile != next — must
+		// NOT trigger a swap: swapping would set other.LogicalTile = cur and
+		// teleport that distant/ghost agent across the map onto e's tile
+		// (the "two far-apart agents rapidly swap places" teleport). For a
+		// stale/ghost entry we fall through to the normal claim below, which
+		// reclaims `next` for e and self-heals the corrupt map entry.
+		if other != nil && other.LogicalTile == next {
+			if !isAgentArchetype(other.Archetype) ||
+				other.InsideBuilding != "" || other.WalkProgress < 1 {
+				return false // genuinely occupied by a non-swappable body
+			}
+			other.WalkFromTile = next
+			other.LogicalTile = cur
+			other.WalkProgress = 0
+			other.CurrentAction = "move"
+			other.Facing = stepFacing(next, cur)
+			w.occupants[cur] = other.EntityID
+			e.WalkFromTile = cur
+			e.LogicalTile = next
+			e.WalkProgress = 0
+			e.CurrentAction = "move"
+			e.Facing = stepFacing(cur, next)
+			w.occupants[next] = e.EntityID
+			return true
 		}
-		other.WalkFromTile = next
-		other.LogicalTile = cur
-		other.WalkProgress = 0
-		other.CurrentAction = "move"
-		other.Facing = stepFacing(next, cur)
-		w.occupants[cur] = other.EntityID
-		e.WalkFromTile = cur
-		e.LogicalTile = next
-		e.WalkProgress = 0
-		e.CurrentAction = "move"
-		e.Facing = stepFacing(cur, next)
-		w.occupants[next] = e.EntityID
-		return true
+		// else: stale/ghost occupants entry → fall through to reclaim `next`.
 	}
 	w.occupants[next] = e.EntityID
 	e.WalkFromTile = cur
