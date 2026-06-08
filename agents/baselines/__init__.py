@@ -15,5 +15,6 @@ from .survivor import Survivor
 from .scavenger import Scavenger
 from .killer import Killer
 from .manipulator import Manipulator
+from .avenger import Avenger
 
-__all__ = ["Survivor", "Scavenger", "Killer", "Manipulator"]
+__all__ = ["Survivor", "Scavenger", "Killer", "Manipulator", "Avenger"]

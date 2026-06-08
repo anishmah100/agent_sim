@@ -17,7 +17,7 @@ from agent_sim_sdk import (
     SelfState, VisibleEntity, VisibleItem, WorldClock, AgentCredentials,
 )
 
-from agents.baselines import Killer, Manipulator, Scavenger, Survivor
+from agents.baselines import Avenger, Killer, Manipulator, Scavenger, Survivor
 
 # Movement is now a standing GOAL the motor executes, not a one-shot action:
 # a bot that wants to move sets self.goal (pursue/flee/goto) and decide()
@@ -277,6 +277,80 @@ def test_killer_retreats_low_hp():
     # Flees the only visible threat (the victim) via a flee goal.
     assert act is None
     assert bot.goal.kind == "flee" and bot.goal.entity_id == "victim-3"
+
+
+# ----- Avenger -------------------------------------------------------
+
+def _kill_witnessed(killer, victim, pos):
+    from agent_sim_sdk import AudibleEvent
+    import json
+    return AudibleEvent(
+        event_id="kw1", kind="sound", from_entity="",
+        from_pos=list(pos), sound_kind="kill_witnessed",
+        text=json.dumps({"killer": killer, "victim": victim}), tick=100,
+    )
+
+
+def test_avenger_idle_forages():
+    bot = Avenger(creds=make_creds())
+    obs = make_obs(extras={"hp": 100, "hunger": 0.0, "inventory": []})
+    act = bot.decide(obs)
+    assert bot.state == "IDLE", bot.state
+    assert act is None or isinstance(act, Step)
+
+
+def test_avenger_holds_grudge_and_pursues_killer_on_witness():
+    bot = Avenger(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.0, "inventory": [],
+                "equipped": {"weapon": "item:sword_short#1"}},  # already armed
+        entities=[vent("hunter-1", "killer", (14, 10))],
+        audible=[_kill_witnessed("hunter-1", "poor-soul", (16, 10))],
+    )
+    act = bot.decide(obs)
+    assert bot.state == "AVENGING", bot.state
+    assert bot.grudge_target == "hunter-1"
+    # Killer visible but not adjacent → pursue via standing goal.
+    assert act is None
+    assert bot.goal.kind == "pursue" and bot.goal.entity_id == "hunter-1"
+
+
+def test_avenger_attacks_killer_in_range():
+    bot = Avenger(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.0, "inventory": [],
+                "equipped": {"weapon": "item:sword_short#1"}},
+        entities=[vent("hunter-2", "killer", (11, 10))],
+        audible=[_kill_witnessed("hunter-2", "poor-soul", (11, 10))],
+    )
+    act = bot.decide(obs)
+    assert bot.state == "AVENGING", bot.state
+    assert isinstance(act, Attack) and act.target == "hunter-2", act
+
+
+def test_avenger_grudge_decays_back_to_idle():
+    bot = Avenger(creds=make_creds())
+    # Witness a kill, but the killer is never visible again.
+    obs0 = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.0, "inventory": [],
+                "equipped": {"weapon": "item:sword_short#1"}},
+        audible=[_kill_witnessed("ghost", "victim", (40, 40))],
+    )
+    bot.decide(obs0)
+    assert bot.state == "AVENGING", bot.state
+    # No more sightings; pump past the grudge TTL.
+    clean = make_obs(pos=(10, 10),
+                     extras={"hp": 100, "hunger": 0.0, "inventory": [],
+                             "equipped": {"weapon": "item:sword_short#1"}})
+    for _ in range(200):
+        bot.decide(clean)
+        if bot.state == "IDLE":
+            break
+    assert bot.state == "IDLE", bot.state
+    assert bot.grudge_target is None
 
 
 # ----- Manipulator ---------------------------------------------------

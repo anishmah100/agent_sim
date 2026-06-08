@@ -41,7 +41,7 @@ from typing import Optional
 
 from agent_sim_sdk import AgentCredentials, VisionMode, register_agent
 
-from agents.baselines import Killer, Manipulator, Scavenger, Survivor
+from agents.baselines import Avenger, Killer, Manipulator, Scavenger, Survivor
 from agents.llm.qwen_focal import QwenFocalAgent, FocalConfig
 from tools.metrics.score_run import load_events, score_events
 
@@ -151,6 +151,7 @@ def preflight(engine: str) -> bool:
 ARCHETYPES = {
     "survivor": Survivor, "scavenger": Scavenger,
     "killer": Killer, "manipulator": Manipulator,
+    "avenger": Avenger,
 }
 
 
@@ -271,6 +272,18 @@ async def main_run(args) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     start_tick = int(http_json(engine, "/api/v1/world/info").get("tick", 0))
+
+    # Canned set-pieces override the cast with a scripted line-up.
+    if getattr(args, "setpiece", None) == "deranged_killer":
+        # One relentless armed hunter, a ring of avengers who'll mob it once
+        # they witness a kill, a few survivors as prey, plus the LLM focal
+        # agents as the cat-and-mouse quarry. The arc: hunter chases prey ->
+        # nearby agents notice the kill -> they flee or close in -> the
+        # avengers gang up on the murderer.
+        args.cast = "killer:1,avenger:5,survivor:3"
+        if args.llm == 0:
+            args.llm = 3
+        log.info("set-piece 'deranged_killer': cast=%s llm=%d", args.cast, args.llm)
 
     # Build cast.
     handles: list[Handle] = []
@@ -563,6 +576,10 @@ def parse_args(argv):
                    help="LLM brain for focal agents (qwen=local, claude=Anthropic API)")
     p.add_argument("--cast", default="survivor:2,killer:1,manipulator:1",
                    help="rule-based cast e.g. survivor:2,killer:1,manipulator:1")
+    p.add_argument("--setpiece", default=None, choices=["deranged_killer"],
+                   help="canned scenario: override --cast/--llm with a scripted "
+                        "set-piece. 'deranged_killer' = 1 armed hunter + a ring of "
+                        "avengers + LLM prey (chase -> notice -> flee -> gang up).")
     p.add_argument("--narrator", action="store_true")
     p.add_argument("--max-claude", type=int, default=3)
     p.add_argument("--out", default=f".runlog/p7_real/{ts}")
