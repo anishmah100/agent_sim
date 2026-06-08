@@ -44,7 +44,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :491-495
 - **why:** DefaultMaxSlots (=10) is documented as a hard cap (lines 43-47) and pickup is the only verb that enforces it (line 283 returns inventory_full). handleGive appends to the recipient's inventory unconditionally with no length check and never returns inventory_full. An adversarial or cooperating agent can give items to a target that already holds 10, growing inventories without bound. Two agents can also ping-pong items to defeat the cap. This breaks the slot-cap invariant the rest of the system (and the LLM's mental model / render_self) assumes, and is an unbounded-growth hazard over long runs. The manifest for give doesn't even list inventory_full as a possible reason, confirming the gate was never wired here.
 - **repro:** Agent A (inventory at 10) cannot pickup more, but Agent B standing within pay_max_range can give A an 11th, 12th, ... item; each succeeds with Accepted=true and no inventory_full rejection.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [7] MEDIUM · property — Auto-exit on insideTicks countdown never emits ExitedBuilding (event-pairing desync)
 - **file:** `engine/internal/world/world.go:1031-1043 (+ property.go:146-150)` :world.go:1038
@@ -80,7 +80,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/trade/trade.go` :93-97
 - **why:** pickup enforces the hard 10-slot cap (inventory.go line 283, DefaultMaxSlots=10, reason inventory_full) per D20. trade's receive path (lines 93-97) unconditionally appends p.Item to the target's inventory with no slot-count check, so a target's inventory can grow past the documented hard cap. This lets an adversarial pair (or one agent steering both halves) push a target's inventory arbitrarily large, defeating the cap that pickup relies on and growing the extras.inventory slice unbounded over a long run. (inventory.go give at lines 491-495 shares the same unchecked-append behavior, so the cap is bypassable through both verbs, not just pickup-gated.)
 - **repro:** Fill a target to 10 items, then have an adjacent agent trade an 11th item to it for price 0. The trade is accepted and the target now holds 11 items; pickup of a 12th would still be rejected as inventory_full, proving the cap is real but trade ignores it.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [13] MEDIUM · loot — loot claims to 'take everything' but destroys the corpse's inventory instead of transferring it
 - **file:** `engine/internal/systems/loot/loot.go:61-63`
@@ -110,19 +110,19 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/vitals/vitals.go:108-113`
 - **why:** When hunger drives newHP <= 0, vitals sets hp=0, emits a death scream, and calls w.RemoveEntity(id) — it never drops the dead agent's carried items or equipped weapon. The combat death path (combat/combat.go:367-424) deliberately spawns a dropped `item` entity per inventory item AND per equipped slot at the corpse tile ("so loot is recoverable") before removing the body. So a sword/loot held by an agent that dies in combat re-enters the world economy, but the SAME items held by an agent that starves are silently annihilated. This is an item sink that only triggers on one death cause, desyncing the economy: in a long run where starvation is the dominant death cause (eldoria sets hunger_per_tick=0.0008, hunger_damage_above=0.9, rate=1), every item an agent was carrying when it starved is permanently destroyed, draining circulating items and undermining loot-driven emergence. An adversarial agent could also avoid ever dropping loot to rivals by letting itself starve instead of being killed.
 - **repro:** Give an agent inventory items / an equipped weapon; let its hunger reach >hunger_damage_above and hp drain to 0 via the vitals tick. Body is removed with no `item` drops spawned at its tile. Compare to killing the same agent via the attack verb, which spawns the drops.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [18] MEDIUM · vitals — Starvation death never emits EntityDied; only combat deaths do (manifest/contract divergence + invisible to EntityDied subscribers)
 - **file:** `engine/internal/systems/vitals/vitals.go:111-112`
 - **why:** Combat's death path queues combat.EntityDied{...} (combat/combat.go:366), which is the canonical 'an entity died' event (reputation subscribes at reputation/reputation.go:49, and combat declares EmitsEvents:["DamageDealt","EntityDied"] at combat.go:305). Vitals' starvation death emits ONLY EmitDeathScream + removes the entity; it never queues EntityDied. Any subscriber that drives off EntityDied (death tallies, future historian/leaderboard/quest hooks) will silently miss every starvation death, so death metrics undercount and only count combat. Reputation itself happens to early-return on killer=='' so it isn't broken today, but the event-contract gap is real and will bite the next subscriber. The vitals manifest also declares no events at all, so HungerSpike / this death are entirely undeclared.
 - **repro:** Subscribe a probe to "EntityDied". Kill an agent via attack -> event fires. Starve an agent to death via the vitals tick -> no EntityDied fires, only a death_scream audible.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [19] MEDIUM · vitals — hp read uses a bare `hpRaw.(int)` assertion; fails (treats hp as 0) when hp is float64 (JSON-loaded entities)
 - **file:** `engine/internal/systems/vitals/vitals.go:96-98`
 - **why:** vitals does `hpRaw, _ := e.GetExtra("hp"); hp, _ := hpRaw.(int)`. Extras loaded from the world bundle JSON are unmarshalled via json.Unmarshal into map[string]any (world/world.go:677-695), so any numeric extra such as hp arrives as float64, not int. The bare type assertion then yields 0, so `if hp > 0` is false and the ENTIRE starvation damage/death/HungerSpike/sound path is skipped for that entity — a starving agent simply never takes hunger damage and becomes immortal-to-hunger. Combat correctly tolerates this with the extrasInt() helper (int/int64/float64 switch, combat.go:488). In live eldoria hp is currently seeded as int by combat.seedSpawn so the bug is latent, but it triggers for any world that ships hp in entity extras JSON or any future extras round-trip through JSON.
 - **repro:** Load/spawn an agent whose extras come from JSON with "hp": 100 (becomes float64). Drive hunger above the threshold. hpRaw.(int) returns 0, the `hp > 0` guard fails, and the agent takes no starvation damage. Contrast with combat's extrasInt which would read 100.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [20] MEDIUM · quests — walk_distance quests can never complete — no system ever writes the `steps` extra
 - **file:** `engine/internal/systems/quests/quests.go:112-118`

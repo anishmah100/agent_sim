@@ -64,6 +64,13 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 		res.Reason = "not_in_inventory"
 		return res
 	}
+	// AUDIT FIX (medium/[12]): respect the buyer's 10-slot cap (D20) BEFORE
+	// any gold moves — trade could push a recipient past the cap. Checked
+	// before payment so a failed trade leaves both sides untouched.
+	if len(inv.Items(w, target.ID())) >= inventory.DefaultMaxSlots {
+		res.Reason = "inventory_full"
+		return res
+	}
 	if mon.Balance(w, target.ID()) < p.Price {
 		res.Reason = "target_not_enough_gold"
 		return res
@@ -117,7 +124,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 					"self has `item` in inventory",
 					"target has at least `price` gold",
 				},
-				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_in_inventory", "target_not_enough_gold"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_in_inventory", "target_not_enough_gold", "inventory_full"},
 				EmitsEvents:      []string{"GoldTransferred", "ItemTransferred"},
 			},
 		},

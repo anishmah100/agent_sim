@@ -484,6 +484,12 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 		res.Reason = "not_in_inventory"
 		return res
 	}
+	// AUDIT FIX (medium/[6]): respect the recipient's 10-slot cap (D20) —
+	// give could push a target past the cap that pickup enforces.
+	if len(extrasStrSlice(target, "inventory")) >= DefaultMaxSlots {
+		res.Reason = "inventory_full"
+		return res
+	}
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
 		cur := extrasStrSlice(real, "inventory")
 		real.SetExtra("inventory", removeAt(cur, idx))
@@ -522,7 +528,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 			},
 			{Verb: "give", Description: "Give an inventory item to an adjacent target.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"item":{"type":"string"}},"required":["target","item"]}`),
-				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_in_inventory"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_in_inventory", "inventory_full"},
 				EmitsEvents:      []string{"ItemTransferred"},
 			},
 			{Verb: "eat", Description: "Consume a food item from inventory; subtracts its satiety from hunger (clamped at 0).",

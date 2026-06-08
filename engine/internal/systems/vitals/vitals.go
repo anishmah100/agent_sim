@@ -18,7 +18,22 @@ import (
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
 	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/combat"
 )
+
+// toInt tolerantly reads a numeric extra that may be int (code-set) or
+// float64 (JSON-loaded).
+func toInt(v any, _ bool) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	}
+	return 0
+}
 
 const (
 	DefaultHungerPerTick           = 0.0
@@ -93,23 +108,30 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 		// Damage path. Only apply on tick boundaries of `interval`,
 		// so 60 Hz × interval 324 ≈ 1 HP per 5.4 sec at rate=1.
 		if next > above && rate > 0 && damageThisTick {
-			hpRaw, _ := e.GetExtra("hp")
-			hp, _ := hpRaw.(int)
+			// AUDIT FIX (medium/[19]): hp may be int (code-set) OR float64
+			// (JSON-loaded); the bare .(int) assertion silently read 0 and
+			// disabled starvation damage for world.json entities. Read it
+			// tolerantly.
+			hp := toInt(e.GetExtra("hp"))
 			if hp > 0 {
 				newHP := hp - rate
 				if newHP <= 0 {
-					// Starved to death. Remove the body — before this,
-					// starvation only set hp and left a 0-HP entity lingering
-					// on screen, and those husks accumulated and gridlocked
-					// the hub, turning a long-running world inert. Anonymous
-					// death scream (no killer), then remove. The agent's WS
-					// then closes (BuildObservationFor->nil) so the supervisor
-					// respawns it, keeping the population stable.
-					w.MutateEntity(id, func(real syscore.Entity) {
-						real.SetExtra("hp", 0)
-					})
-					w.EmitDeathScream(e.Pos(), id, "", false)
-					w.RemoveEntity(id)
+					// Starved to death. AUDIT FIX (medium/[17]+[18]): route
+					// the kill through the combat service so it goes down the
+					// SAME death path as combat — dropping the victim's gold +
+					// inventory + equipped at the corpse tile (was destroyed)
+					// AND emitting EntityDied (starvation previously emitted
+					// neither). Falls back to a bare removal if no combat
+					// system is loaded (keeps husks from gridlocking the hub).
+					if svc, ok := w.GetService("combat").(combat.CombatService); ok {
+						svc.DealDamage(w, id, hp, "starvation", "")
+					} else {
+						w.MutateEntity(id, func(real syscore.Entity) {
+							real.SetExtra("hp", 0)
+						})
+						w.EmitDeathScream(e.Pos(), id, "", false)
+						w.RemoveEntity(id)
+					}
 					continue
 				}
 				w.MutateEntity(id, func(real syscore.Entity) {
