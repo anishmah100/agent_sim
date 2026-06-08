@@ -184,6 +184,20 @@ async def register_llm(engine: str, idx: int, brain: str = "qwen") -> Handle:
     return Handle(name, "llm", creds, bot)
 
 
+# Movement speed = step cadence (the motor emits one tile per observation, so
+# a shorter cadence = faster movement). Predators get a deliberate edge so a
+# pursuit actually CLOSES instead of being an un-catchable equal-speed tail
+# chase — without it, "lots of killing" never emerges in an open world (prey
+# and hunter drift apart at the same rate). Matches the cat-and-mouse smoke
+# test where the faster cat reliably catches the mouse.
+PREDATOR_CADENCE_MS = 240
+PREY_CADENCE_MS = 350
+
+
+def _cadence_for(arch: str) -> int:
+    return PREDATOR_CADENCE_MS if arch in ("killer", "raider") else PREY_CADENCE_MS
+
+
 async def register_archetype(engine: str, arch: str, idx: int) -> Handle:
     cls = ARCHETYPES[arch]
     name = f"{arch}_{idx}"
@@ -192,9 +206,7 @@ async def register_archetype(engine: str, arch: str, idx: int) -> Handle:
         persona={"name": name, "bio": f"rule-based {arch}",
                  "archetype_tag": arch},
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
-        # Match the LLM cadence so the rule-based bots' motor reflex moves at
-        # the same rate (they decide every obs; movement is one step/tick).
-        cadence_ms=350)
+        cadence_ms=_cadence_for(arch))
     bot = cls(creds=creds, archetype_name=arch, engine_url=engine)
     return Handle(name, arch, creds, bot)
 
