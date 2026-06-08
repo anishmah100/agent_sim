@@ -77,6 +77,12 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			return r
 		}
 	}
+	// Exit from a building interior (HeartGold model): the agent is on an
+	// interior sub-map; warp it back to the overworld door tile. Interiors
+	// carry no property system, so this is handled in core dispatch.
+	if env.Verb == "exit" && w.hub != nil && strings.HasPrefix(w.MapID, "interior:") {
+		return w.tryExitInterior(e, env)
+	}
 	// Scenario handlers take precedence — a scenario can override base
 	// verb semantics (e.g. attack with HP rules) or implement entirely
 	// scenario-custom verbs (trade, pay).
@@ -264,6 +270,8 @@ func (w *World) tryEnterDecorationBuilding(e *Entity, env *ActionEnvelope) (Acti
 		return res, true
 	}
 	hasBuilding, adjacent := false, false
+	var doorTile Tile
+	var doorRef buildingRef
 	for tile, ref := range w.buildingDoors {
 		if ref.Sprite != bid {
 			continue
@@ -271,6 +279,8 @@ func (w *World) tryEnterDecorationBuilding(e *Entity, env *ActionEnvelope) (Acti
 		hasBuilding = true
 		if chebyshev(e.LogicalTile, tile) <= 1 {
 			adjacent = true
+			doorTile = tile
+			doorRef = ref
 			break
 		}
 	}
@@ -282,11 +292,6 @@ func (w *World) tryEnterDecorationBuilding(e *Entity, env *ActionEnvelope) (Acti
 		res.Reason = "target_too_far"
 		return res, true
 	}
-	e.InsideBuilding = bid
-	e.insideTicks = 240 + w.rng.IntN(360)
-	if w.onBuildingEntered != nil {
-		w.onBuildingEntered(e.EntityID, bid, w.tick)
-	}
 	w.SetEntityAction(e.EntityID, "interact", 20)
 	w.audibleAppend(AudibleEvent{
 		EventID:   nextEventID(&w.eventSeq),
@@ -296,8 +301,74 @@ func (w *World) tryEnterDecorationBuilding(e *Entity, env *ActionEnvelope) (Acti
 		Tick:      w.tick,
 		radius:    8,
 	})
+
+	// HeartGold model: warp into a real interior sub-map when a hub is
+	// present. Lazily generate the building's interior (keyed by its door
+	// tile so each building instance is its own room), then queue the
+	// cross-map move for after the tick (Warp can't run under this lock).
+	if w.hub != nil {
+		interiorID := InteriorMapID(bid, doorTile)
+		iw := w.hub.Get(interiorID)
+		if iw == nil {
+			// Footprint dims aren't on buildingRef; use sensible defaults.
+			gen, err := GenerateInterior(bid, doorTile, 4, 3)
+			if err == nil {
+				iw = gen
+				w.hub.Add(iw)
+			}
+		}
+		if iw != nil {
+			e.interiorReturnMap = w.MapID
+			e.interiorReturnTile = e.LogicalTile
+			w.pendingWarps = append(w.pendingWarps, pendingWarp{
+				EntityID: e.EntityID,
+				ToMapID:  interiorID,
+				Target:   iw.interiorEntrance(),
+			})
+			if w.onBuildingEntered != nil {
+				w.onBuildingEntered(e.EntityID, bid, w.tick)
+			}
+			res.Accepted = true
+			return res, true
+		}
+		_ = doorRef // (footprint lookup is a future refinement)
+	}
+
+	// Fallback (no hub, e.g. unit tests): the legacy phase-out flag.
+	e.InsideBuilding = bid
+	e.insideTicks = 240 + w.rng.IntN(360)
+	if w.onBuildingEntered != nil {
+		w.onBuildingEntered(e.EntityID, bid, w.tick)
+	}
 	res.Accepted = true
 	return res, true
+}
+
+// tryExitInterior queues a warp back to the overworld door tile the agent
+// entered from. Called from core Dispatch for `exit` on an interior map.
+func (w *World) tryExitInterior(e *Entity, env *ActionEnvelope) ActionResult {
+	res := ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	if e.interiorReturnMap == "" {
+		res.Reason = "not_inside"
+		return res
+	}
+	w.pendingWarps = append(w.pendingWarps, pendingWarp{
+		EntityID:   e.EntityID,
+		ToMapID:    e.interiorReturnMap,
+		Target:     e.interiorReturnTile,
+		unloadFrom: w.MapID,
+	})
+	w.SetEntityAction(e.EntityID, "interact", 20)
+	w.audibleAppend(AudibleEvent{
+		EventID:   nextEventID(&w.eventSeq),
+		Kind:      "sound",
+		SoundKind: "building_enter",
+		FromPos:   e.LogicalTile,
+		Tick:      w.tick,
+		radius:    4,
+	})
+	res.Accepted = true
+	return res
 }
 
 // normalizeBuildingTarget maps an agent-supplied enter target to a bld:

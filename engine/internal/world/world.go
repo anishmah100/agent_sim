@@ -69,6 +69,12 @@ type Entity struct {
 	InsideBuilding string `json:"inside_building,omitempty"`
 	insideTicks    int    // remaining ticks until automatic exit
 
+	// interiorReturnMap / interiorReturnTile — where to put the entity back
+	// when it exits a building interior (the overworld map + the tile it
+	// stood on when it entered). Set on warp-in, used on warp-out.
+	interiorReturnMap  string
+	interiorReturnTile Tile
+
 	// CurrentMap — the map_id of the World this entity currently lives on.
 	// The overworld bundle map id at spawn; set to an "interior:<id>" map
 	// when the entity warps into a building interior (HeartGold multi-map
@@ -237,6 +243,24 @@ type World struct {
 	// Source path the world was loaded from. PersistTileEdits writes a
 	// sidecar overlay file next to it so a restart sees the edits.
 	sourcePath string
+
+	// hub — back-reference to the multi-map hub, set when this World is
+	// registered (overworld at NewMultiMapHub; interiors at Add). Lets the
+	// decoration enter handler create/look-up a building's interior map.
+	// nil for standalone worlds (tests) — enter then falls back to the old
+	// InsideBuilding phase-out behavior.
+	hub *MultiMapHub
+
+	// interiorExitTile — for interior maps, the tile an agent appears on when
+	// it enters and steps on / submits `exit` from to leave. Zero value on
+	// the overworld.
+	interiorExitTile Tile
+
+	// pendingWarps — cross-map moves requested during a tick (e.g. an agent
+	// entering/leaving a building). Recorded under the world lock inside
+	// Dispatch; drained and executed by the hub AFTER the tick releases the
+	// lock (Warp takes both maps' locks, so it can't run under this one).
+	pendingWarps []pendingWarp
 
 	// Decoration list as loaded (read-only after init).
 	decorations []DecorationRef
@@ -483,7 +507,14 @@ func Load(path string) (*World, error) {
 	if err := json.Unmarshal(data, &fw); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	return buildWorld(fw, path)
+}
 
+// buildWorld constructs a fully-initialized World from an in-memory spec.
+// Factored out of Load so interiors (and tests) can build a World without a
+// file on disk. `path` is the source path for overlay lookups; "" for
+// synthetic worlds (interiors) that have no editor overlays.
+func buildWorld(fw fileWorld, path string) (*World, error) {
 	w := &World{
 		MapID:         fw.MapID,
 		WidthTiles:    fw.WidthTiles,

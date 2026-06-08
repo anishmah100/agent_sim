@@ -310,3 +310,11 @@ For EACH verb, a row in `tools/audit/verb_matrix.py` that:
   inventory/reputation; **no private field (gold/inventory/hunger/contracts)
   leaks into another agent's extras_summary** and no 'doing'; summary keys all
   known-public. · PASS.
+
+- 2026-06-08 · S5 (interiors e2e) · tools/audit/building_e2e.py vs live —
+  enter door:bld:000 -> agent WARPED to a separate interior map (pos (3,6),
+  walled room) -> WALKED inside (3,6)->(3,5) -> exit -> back on overworld at
+  the door (766,867). The original 'no walkable interior' gap is CLOSED for
+  the engine/observation side. · PASS (frontend map-switch = phase 4, pending).
+  (Caught + fixed a stale-engine trap mid-test: a 48-min-old binary held :8090
+  so relaunches silently failed to bind — killed by exact pid, verified uptime.)

@@ -23,13 +23,73 @@ type MultiMapHub struct {
 	primary string                   // the overworld's map_id
 }
 
+// pendingWarp — a cross-map move requested during a tick, executed after the
+// tick by ProcessWarps. ToMapID/Target is where the entity goes; the return
+// info is stored on the entity itself (interiorReturnMap/Tile).
+type pendingWarp struct {
+	EntityID string
+	ToMapID  string
+	Target   Tile
+	// unloadFrom — if non-empty, attempt to GC this (interior) map after the
+	// warp if it has no remaining entities.
+	unloadFrom string
+}
+
 func NewMultiMapHub(primary *World) *MultiMapHub {
 	h := &MultiMapHub{
 		maps:    make(map[string]*World),
 		primary: primary.MapID,
 	}
 	h.maps[primary.MapID] = primary
+	primary.hub = h
 	return h
+}
+
+// Add registers an already-built World (e.g. a generated interior) under its
+// MapID and gives it the hub back-reference.
+func (h *MultiMapHub) Add(w *World) {
+	h.mu.Lock()
+	h.maps[w.MapID] = w
+	w.hub = h
+	h.mu.Unlock()
+}
+
+// Unload removes a map from the hub (used to GC an empty interior). The
+// overworld (primary) is never unloaded.
+func (h *MultiMapHub) Unload(id string) {
+	h.mu.Lock()
+	if id != h.primary {
+		delete(h.maps, id)
+	}
+	h.mu.Unlock()
+}
+
+// ProcessWarps drains every map's pending cross-map moves and executes them.
+// Called by TickAll AFTER all maps have ticked, so no world lock is held when
+// Warp (which locks both source and destination) runs. An interior left empty
+// after an exit is GC'd.
+func (h *MultiMapHub) ProcessWarps() {
+	h.mu.RLock()
+	ms := make([]*World, 0, len(h.maps))
+	for _, w := range h.maps {
+		ms = append(ms, w)
+	}
+	h.mu.RUnlock()
+	for _, w := range ms {
+		w.mu.Lock()
+		reqs := w.pendingWarps
+		w.pendingWarps = nil
+		fromID := w.MapID
+		w.mu.Unlock()
+		for _, r := range reqs {
+			h.Warp(r.EntityID, fromID, r.ToMapID, r.Target)
+			if r.unloadFrom != "" {
+				if iw := h.Get(r.unloadFrom); iw != nil && iw.EntityCount() == 0 {
+					h.Unload(r.unloadFrom)
+				}
+			}
+		}
+	}
 }
 
 // LoadInterior loads an interior sub-map (small JSON file) and
@@ -42,6 +102,7 @@ func (h *MultiMapHub) LoadInterior(path string) (*World, error) {
 	w.MapID = "interior:" + w.MapID + ":" + filepath.Base(path)
 	h.mu.Lock()
 	h.maps[w.MapID] = w
+	w.hub = h
 	h.mu.Unlock()
 	return w, nil
 }
@@ -136,4 +197,7 @@ func (h *MultiMapHub) TickAll() {
 	for _, w := range ms {
 		w.Tick()
 	}
+	// Execute cross-map moves requested during the ticks (enter/exit
+	// building). Done after all ticks so no world lock is held.
+	h.ProcessWarps()
 }

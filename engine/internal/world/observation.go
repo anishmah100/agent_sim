@@ -531,6 +531,14 @@ func (w *World) EntityByIDUnlocked(id string) *Entity {
 	return w.entities[id]
 }
 
+// EntityCount returns the number of entities currently on this map (locked).
+// Used to GC an interior once its last occupant exits.
+func (w *World) EntityCount() int {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return len(w.entities)
+}
+
 // EntityIDs returns the live entity ID set.
 func (w *World) EntityIDs() []string {
 	w.mu.RLock()
