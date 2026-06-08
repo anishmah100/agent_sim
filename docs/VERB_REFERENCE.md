@@ -77,7 +77,7 @@ params {
 
 ### `interact`
 
-Polymorphic verb for "do the thing this object affords." The object's `affordances` field in the observation lists what `interact` will do (e.g. for a chair: `["sit"]`; for a door: `["enter"]`; for a sign: `["read"]`).
+Polymorphic verb for "do the thing this object affords." The object's `affordances` field in the observation lists what `interact` will do. In Eldoria the live affordance is `["enter"]` on door objects (`interact{target, affordance:"enter"}` is equivalent to the `enter` verb). Other affordances (sit/read/etc.) are not implemented in v1.
 
 ```
 params {
@@ -86,7 +86,7 @@ params {
 }
 ```
 
-The engine dispatches to a per-affordance handler. If the affordance is a portal-enter, the engine moves the agent to the target sub-map. If it's a "sit", the engine sets a `seated` state and reduces movement.
+The engine dispatches to a per-affordance handler. If the affordance is a portal-enter, the engine moves the agent to the target sub-map. (Other affordance handlers like "sit" are not implemented in v1.)
 
 ### `pickup`
 
@@ -182,82 +182,121 @@ params {
 }
 ```
 
-### `noop`
+> There is no separate `noop` verb. To idle, use `wait` (above) — `wait {ticks: N}`.
 
-Explicit "do nothing." Useful in heartbeat loops.
+## Composable-system verbs
 
-```
-params { }
-```
+These are registered by composable systems (combat / money / inventory /
+property / resources / construction / trade / loot / verbalquests), not the
+core engine. The authoritative, always-current list — with each verb's
+parameter schema, rejection reasons, and emitted events — is served live at
+`GET /api/v1/world/affordances`. The table below is a hand-written reference;
+when in doubt, trust the endpoint. (Verified against the live manifest +
+`tools/audit/verb_matrix.py` on 2026-06-08: 30 system verbs, all rejection
+contracts confirmed.)
 
-## Scenario verbs (fantasy_town v1)
+### Economy — `money` system
 
-These are layered on top by `scenarios/fantasy_town/`. Engine doesn't know about them; the scenario pack registers them at startup.
+#### `pay` — `{ target, amount }`
+Transfer `amount` gold to an adjacent agent (chebyshev ≤ 1). No reciprocity is
+enforced — repayment is emergent. Emits `GoldTransferred`.
+Rejections: `bad_params`, `unknown_target`, `target_too_far`, `not_enough_gold`.
 
-### `trade`
+#### `work_for_pay` — `{}`
+Earn a wage. **Gated on a worksite**: a building must be within
+`worksite_radius` (default **6** tiles) — otherwise `no_worksite_nearby`. This
+makes work happen at real places, not anywhere. Emits `GoldTransferred`.
+Rejections: `no_worksite_nearby`.
 
-Open a trade with an adjacent entity.
+#### `buy_food` — `{}`
+Spend `food_price` gold (default **6**) to cut hunger by `food_relief`
+(default **0.5**). The economy's gold sink + survival loop. Optional spatial
+gate: when `market_radius` > 0 a market stall (`bld:stall*`) must be within
+range; **Eldoria currently sets `market_radius = 0`, so food is buyable
+anywhere** with gold + hunger > 0. Emits `GoldSpent`.
+Rejections: `not_hungry` (hunger already 0), `not_enough_gold`, `no_market_nearby`.
 
-```
-params {
-  target: entity_id
-  offer: [item_id]         # items I'm offering
-  request: [item_id]       # items I want in return
-  gold_offer: int          # gold I'm offering
-  gold_request: int        # gold I want
-}
-```
+### Survival / inventory — `inventory` + `vitals`
 
-The target's agent receives a `trade_offer` event in their next observation; they can accept or reject by submitting `trade_accept` or `trade_reject`.
+Hunger (`vitals`) rises every tick; above a threshold it drains HP, and at 0 HP
+the agent dies (a death scream fires and the body is removed). Counter it with
+food:
 
-### `pay`
+#### `eat` — `{ item }`
+Consume a food item from inventory; subtracts its satiety from hunger (clamped
+at 0). Instant, no cooldown. Emits `AteFood`.
+Rejections: `bad_params`, `not_in_inventory`, `not_food` (item has no satiety).
 
-Direct gold transfer to an adjacent entity.
+#### `cook` — `{ item }`
+Turn a raw food item into its cooked form (higher satiety), e.g.
+`fish_raw → fish_cooked`. Recipes are world-tuned.
+Rejections: `bad_params`, `not_in_inventory`, `not_cookable`.
 
-```
-params {
-  target: entity_id
-  amount: int
-}
-```
+#### `pickup` / `drop` / `equip` / `give`
+`pickup {target}` — take an adjacent ground item (emits `ItemPicked`). **Coins
+auto-convert to gold on pickup; they never enter inventory.**
+`drop {item}` — drop from inventory (emits `ItemDropped`).
+`equip {item, slot?}` — wield a weapon from inventory.
+`give {target, item}` — hand an item to an adjacent agent (emits `ItemTransferred`).
+Rejections include `not_an_item`, `inventory_full`, `not_in_inventory`, `target_too_far`.
 
-### `work`
+### Resources — `resources` system
 
-Perform a labor at a designated work object (e.g. chop wood at a stump, fish at a dock, craft at an anvil).
+#### `chop {target}` / `mine {target}`
+Fell an adjacent tree (wood) / break an adjacent rock (stone). Yields item
+entities into inventory; the source depletes and **regenerates** after
+`resource_regen_interval` (default **1800** ticks). Emits `ResourceHarvested`,
+then `ResourceDepleted` when exhausted.
+Rejections: `not_a_tree`/`not_a_rock`, `target_too_far`, `no_yield`, `depleted`.
 
-```
-params {
-  target: object_id     # the work object
-  duration_ticks: int   # how long to work
-}
-```
+#### `forage {target}` — renewable food gathering
+Gather fruit (a food item) from an adjacent tree/bush **without felling it**.
+The source ripens again after `forage_cooldown` (default **600** ticks), so
+forage before that returns `not_ripe`. Emits `ResourceHarvested`.
+Rejections: `bad_params`, `unknown_target`, `not_forageable`, `target_too_far`, `not_ripe`.
 
-The engine plays the appropriate animation; on completion, the scenario applies the reward (e.g. +1 wood to inventory, +5 gold).
+### Trade & loot
 
-### `loot`
+#### `trade` — `{ target, item, price }`
+**Atomic** item-for-gold swap with an adjacent agent: the item moves one way
+and `price` gold the other, or neither moves. Emits `GoldTransferred` +
+`ItemTransferred`.
+Rejections: `unknown_target`, `target_too_far`, `not_in_inventory`, `target_not_enough_gold`.
 
-Take items from a dead or container entity.
+#### `loot` — `{ target }`
+Take gold + clear inventory from an adjacent **corpse** (HP 0). Emits
+`GoldTransferred`. Rejections: `target_alive`, `target_too_far`, `unknown_target`.
 
-```
-params {
-  target: entity_id | object_id
-  items: [item_id]      # subset of what's available
-}
-```
+### Combat — `combat` system
 
-### `build`
+`attack {target}` (adjacent; emits `DamageDealt`, and `EntityDied` on a kill),
+`defend {}` (halves the next incoming hit), `heal {target?}` (default self).
 
-(post-launch / late-v1) Construct a new structure from materials in inventory.
+### Property & buildings — `property` system + interiors
 
-```
-params {
-  blueprint: string       # e.g. "small_hut", "stone_wall_segment"
-  position: [x, y]
-  rotation: int?
-}
-```
+`enter {target}` / `exit {}` — step into / out of a building. For Eldoria's
+**decoration buildings** the target is the door object id from
+`visible_objects` (`door:bld:NNN:x,y`); entering **warps the agent into a
+separate interior sub-map** (HeartGold model — see
+`docs/INTERIORS_MULTIMAP_PLAN.md`) where it can walk around; `exit` warps it
+back to the door. Entity-backed buildings (from construction) use the same
+verbs with a building entity id. Emits `EnteredBuilding` / `ExitedBuilding`.
+`lock`/`unlock`/`claim_ownership`/`transfer_ownership {target,...}` — ownership
++ access control (owner-gated). Emits `BuildingLocked`/`Unlocked`/`OwnershipChanged`.
 
-Scenario validates materials are present and position is buildable.
+### Construction — `construction` system
+
+`place_blueprint {kind, at}` (spends materials up front; emits
+`ConstructionStarted`), `advance_construction {target}` (spends the next batch;
+emits `ConstructionAdvanced`, then `ConstructionCompleted` at 100%), `demolish
+{target}` (removes an owned blueprint/building; emits `Demolished`).
+
+### Verbal contracts — `verbalquests` system
+
+`propose_task {target, terms, reward?}` → `accept_task`/`reject_task`/
+`complete_task {id}`. The engine records the contract ledger on both parties'
+`contracts` extras and emits `TaskProposed`/`Accepted`/`Rejected`/`Completed`,
+but does **not** enforce completion — fulfilment is emergent.
 
 ## Verb dispatch
 
@@ -280,26 +319,37 @@ type VerbHandler struct {
 
 ## Action priorities
 
-- `normal`: queues for the next tick. If the agent has a current_action, the new action waits until current_action finishes (UNLESS the verb is "instant" — speak/whisper/shout/noop, which fire immediately without canceling current_action).
+- `normal`: queues for the next tick. If the agent has a current_action, the new action waits until current_action finishes (UNLESS the verb is "instant" — speak/whisper/shout, which fire immediately without canceling current_action).
 - `urgent`: cancels the current action and runs immediately. Useful for "abort walk, attack the wolf that just appeared."
 
 ## Rejection reasons (canonical strings)
 
-Standardized so agents can pattern-match:
+Each verb's exact rejection set is in its `/api/v1/world/affordances` entry
+(and listed per-verb above). These are the strings the engine ACTUALLY returns
+in `action_ack.reason` — verified live by `tools/audit/verb_matrix.py`
+(2026-06-08). Agents should branch on these:
 
-- `unknown_verb` — engine has no handler for this name.
-- `invalid_params` — params don't parse against verb schema.
-- `target_not_found` — target_id doesn't exist or is out of range.
-- `target_too_far` — target is out of action range.
-- `not_adjacent` — verb requires adjacency.
-- `inventory_full` — pickup/give failed.
-- `not_in_inventory` — item not in agent inventory.
-- `entity_busy` — current_action conflicts (only for normal-priority verbs).
-- `forbidden` — scenario rule rejection (e.g. "you can't attack inside the temple").
-- `not_enough_gold` — scenario verb economic rejection.
-- `blocked_by_terrain` — step target off-map or non-walkable.
-- `blocked` — step target tile is currently occupied.
-- `out_of_map` — coordinate not on this map.
+- `bad_params` — params missing/malformed for the verb.
+- `unknown_target` — target entity id not found.
+- `target_too_far` — target outside the verb's range (most are chebyshev ≤ 1).
+- `not_enough_gold` / `target_not_enough_gold` — payer/partner can't afford it.
+- `not_in_inventory` — item not held; `inventory_full` — pickup with no room.
+- `not_an_item` / `not_a_tree` / `not_a_rock` / `not_a_building` / `not_a_structure`
+  / `not_a_blueprint` — target is the wrong archetype for the verb.
+- `not_food` (eat) / `not_cookable` (cook) / `not_forageable` / `not_ripe` (forage)
+  / `no_yield` / `depleted` (chop/mine).
+- `not_hungry` / `no_market_nearby` (buy_food); `no_worksite_nearby` (work_for_pay).
+- `already_inside` / `not_inside` / `locked` (enter/exit); `not_owner`
+  / `already_owned` / `unknown_new_owner` (property).
+- `unknown_blueprint` / `missing_materials` / `unwalkable` / `broken_blueprint`
+  / `spawn_failed` / `no_inventory_service` (construction).
+- `target_alive` (loot a living target); `unknown_contract` / `bad_status`
+  / `not_authorized` / `self_target` / `empty_terms` (verbal contracts).
+- `rate_limited` — too many actions too fast (per-connection token bucket).
+
+Movement (`step`) returns `accepted:false` with no reason string when the target
+tile is blocked (wall/water/off-map/occupied); the agent's `pos` simply doesn't
+change. Read `local_view` to avoid blocked tiles.
 
 ## Examples
 
