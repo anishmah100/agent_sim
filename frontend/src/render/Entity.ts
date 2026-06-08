@@ -165,6 +165,10 @@ interface RenderedEntity {
   targetX: number;
   targetY: number;
   interp: boolean;                 // true for agents (smooth); false for static items
+  snapBlinkUntil: number;          // ms — when a >SNAP_PX jump snaps the body,
+                                   // blink alpha in over this window so the rare
+                                   // discontinuity reads as a clean fade-in at
+                                   // the new spot, not a jarring pop across screen.
   movingSince: number;             // ms — for idle detection
   hitFlashUntil: number;           // BLK-1: ms timestamp; red tint while > now
   flinchStart: number;             // ms timestamp of last hit, for flinch nudge
@@ -195,6 +199,7 @@ const FLINCH_PX = 2.2;
 // and snaps instantly rather than gliding a body across the map.
 const INTERP_MS = 90;
 const SNAP_PX = TILE_SIZE_PX * 4;
+const SNAP_BLINK_MS = 200;        // fade-in window after a teleport snap
 
 // BLK-1: read an entity's hp from its public extras, or null if it has
 // none (world objects / items). Used to detect damage between snapshots.
@@ -425,6 +430,10 @@ export class EntityLayer {
           if (Math.abs(dx) > SNAP_PX || Math.abs(dy) > SNAP_PX) {
             re.container.x = re.targetX;
             re.container.y = re.targetY;
+            // Rare discontinuity (snapshot stall / engine relocate): blink
+            // the body in at the new spot over BLINK_MS so it reads as a
+            // clean fade-in instead of a jarring pop across the screen.
+            re.snapBlinkUntil = now + SNAP_BLINK_MS;
           } else {
             const k = Math.min(1, (deltaMs || 16) / INTERP_MS);
             re.container.x += dx * k;
@@ -433,6 +442,13 @@ export class EntityLayer {
             if (Math.abs(re.targetY - re.container.y) < 0.5) re.container.y = re.targetY;
           }
           re.container.zIndex = re.container.y + FOOTPRINT_H;
+        }
+        // Blink-in after a snap: ramp alpha 0.2 → 1 over SNAP_BLINK_MS.
+        if (re.snapBlinkUntil > now) {
+          const t = 1 - (re.snapBlinkUntil - now) / SNAP_BLINK_MS;
+          re.container.alpha = 0.2 + 0.8 * Math.max(0, Math.min(1, t));
+        } else if (re.container.alpha !== 1) {
+          re.container.alpha = 1;
         }
       }
     }
@@ -676,6 +692,7 @@ export class EntityLayer {
       targetX: wrap.x,
       targetY: wrap.y,
       interp: true,
+      snapBlinkUntil: 0,
       movingSince: performance.now(),
       hitFlashUntil: 0,
       flinchStart: 0,
@@ -786,6 +803,7 @@ export class EntityLayer {
       targetX: wrap.x,
       targetY: wrap.y,
       interp: false,                   // items don't walk; snap in place
+      snapBlinkUntil: 0,
       movingSince: performance.now(),
       hitFlashUntil: 0,
       flinchStart: 0,
