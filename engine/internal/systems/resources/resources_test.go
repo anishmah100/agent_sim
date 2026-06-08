@@ -3,6 +3,7 @@ package resources_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
@@ -82,8 +83,10 @@ func TestChopAddsWood(t *testing.T) {
 	if len(inv) != 1 {
 		t.Fatalf("expected 1 item, got %v", inv)
 	}
-	if got := inv[0][:4]; got != "wood" {
-		t.Fatalf("expected wood prefix, got %q", inv[0])
+	// Canonical item id format is "item:<kind>#<unique>" (so eat/equip/render
+	// can resolve the kind). Audit fix [9].
+	if !strings.HasPrefix(inv[0], "item:wood#") {
+		t.Fatalf("expected item:wood# prefix, got %q", inv[0])
 	}
 }
 
@@ -126,8 +129,8 @@ func TestMineYieldsStone(t *testing.T) {
 	hero := wa.EntityByID("hero")
 	v, _ := hero.GetExtra("inventory")
 	inv, _ := v.([]string)
-	if len(inv) != 1 || inv[0][:5] != "stone" {
-		t.Fatalf("expected stone item, got %v", inv)
+	if len(inv) != 1 || !strings.HasPrefix(inv[0], "item:stone#") {
+		t.Fatalf("expected item:stone# item, got %v", inv)
 	}
 }
 

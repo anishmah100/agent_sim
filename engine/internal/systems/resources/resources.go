@@ -34,6 +34,9 @@ const (
 	// hardness so a forest isn't permanently stripped. +1 hardness every
 	// this many ticks (~30s), capped at the archetype's max. 0 disables.
 	DefaultResourceRegenInterval = 1800
+	// maxInventorySlots mirrors inventory.DefaultMaxSlots (D20). Harvest/
+	// forage enforce it so they can't bypass the cap that pickup enforces.
+	maxInventorySlots = 10
 )
 
 // === Events ===
@@ -162,6 +165,12 @@ func (s *System) handleForage(w syscore.World, e syscore.Entity, env *syscore.Ac
 		res.Reason = "not_ripe"
 		return res
 	}
+	// AUDIT FIX (high/[1]): enforce the 10-slot cap (D20) — forage was an
+	// unbounded item spigot (renewable, no cost) that bypassed the cap.
+	if len(stringSlice(e, "inventory")) >= maxInventorySlots {
+		res.Reason = "inventory_full"
+		return res
+	}
 	cooldown := w.TuningInt("forage_cooldown_ticks", DefaultForageCooldown)
 	itemID := fmt.Sprintf("item:apple#%d", tick)
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
@@ -209,14 +218,23 @@ func (s *System) harvest(w syscore.World, e syscore.Entity, env *syscore.ActionE
 		res.Reason = "depleted"
 		return res
 	}
+	// AUDIT FIX (high/[1]): enforce the 10-slot inventory cap (D20) that
+	// pickup enforces — harvest previously appended with no bound, an
+	// unbounded-inventory exploit. Reject the whole hit if it wouldn't fit.
+	if len(stringSlice(e, "inventory"))+len(yields) > maxInventorySlots {
+		res.Reason = "inventory_full"
+		return res
+	}
 
 	// Mint a fresh item entity per yield kind, drop into actor inventory.
-	// IDs are deterministic-ish within a run (yieldKind#tick) so they
-	// remain visible in event traces without needing a global counter.
+	// AUDIT FIX (medium/[9]): use the canonical "item:<kind>#<unique>" id
+	// format. The old "<kind>_<tick>_<i>" form had no "item:" prefix and
+	// used "_" not "#", so eat/equip/render kind-resolution (which strips
+	// "item:" + "#") couldn't read it — harvested wood/stone was unusable.
 	tick := w.Tick()
 	mintedIDs := make([]string, 0, len(yields))
 	for i, kind := range yields {
-		id := fmt.Sprintf("%s_%d_%d_%d", kind, tick, i, len(mintedIDs))
+		id := fmt.Sprintf("item:%s#%d_%d", kind, tick, i)
 		mintedIDs = append(mintedIDs, id)
 		w.QueueEvent(ResourceHarvested{By: e.ID(), Source: src.ID(), YieldItem: id})
 	}
@@ -252,19 +270,19 @@ func (s *System) manifest() manifest.SystemDeclaration {
 			{Verb: "chop", Description: "Chop an adjacent tree. Yields wood item IDs; depletes after N hits.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target is archetype=tree", "target within 1 tile", "target hardness > 0"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_tree", "target_too_far", "no_yield", "depleted"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_tree", "target_too_far", "no_yield", "depleted", "inventory_full"},
 				EmitsEvents:      []string{"ResourceHarvested", "ResourceDepleted"},
 			},
 			{Verb: "forage", Description: "Gather fruit (apple) from an adjacent tree/bush without felling it. Renewable food source; the source ripens again after forage_cooldown_ticks.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target is archetype=tree or bush", "target within 1 tile", "target is ripe (cooldown elapsed)"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "not_forageable", "target_too_far", "not_ripe"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_forageable", "target_too_far", "not_ripe", "inventory_full"},
 				EmitsEvents:      []string{"ResourceHarvested"},
 			},
 			{Verb: "mine", Description: "Mine an adjacent rock. Yields stone item IDs; depletes after N hits.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target is archetype=rock", "target within 1 tile", "target hardness > 0"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_rock", "target_too_far", "no_yield", "depleted"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_rock", "target_too_far", "no_yield", "depleted", "inventory_full"},
 				EmitsEvents:      []string{"ResourceHarvested", "ResourceDepleted"},
 			},
 		},

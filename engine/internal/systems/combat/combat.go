@@ -422,6 +422,29 @@ func (s *service) DealDamage(w syscore.World, targetID string, amount int, cause
 				})
 			}
 		}
+		// AUDIT FIX (high/[0]): drop the victim's GOLD at the corpse tile so
+		// it is conserved + recoverable. Previously only inventory + equipped
+		// dropped; gold (extras["gold"]) was destroyed on every kill because
+		// RemoveEntity (below) deletes the entity before the loot system —
+		// which targets the corpse entity — could ever run. Decompose the
+		// balance into coin-pile items (each auto-converts back to gold on
+		// pickup, see inventory coinValues) so gold conservation holds.
+		if gold := extrasInt(target, "gold"); gold > 0 {
+			for _, denom := range goldDropDenoms(gold) {
+				_, _ = w.SpawnEntityFromSpec(syscore.EntitySpec{
+					Archetype:   "item",
+					Pos:         target.Pos(),
+					DisplayName: denom,
+					Extras: map[string]any{
+						"sprite": "item:" + denom,
+						"source": "death_drop",
+					},
+				})
+			}
+			w.MutateEntity(targetID, func(real syscore.Entity) {
+				real.SetExtra("gold", 0)
+			})
+		}
 		// D10 audible: anonymous scream + targeted witness events.
 		muffled := false
 		if ib, ok := target.GetExtra("inside_building"); ok {
@@ -483,6 +506,31 @@ func itemKindFromID(id string) string {
 		}
 	}
 	return id
+}
+
+// goldDropDenoms decomposes a gold amount into coin-pile item kinds (largest
+// first) that match the inventory coinValues table, so a dropped balance is
+// recoverable exactly on pickup. e.g. 67 -> [jumbo(50), pouch(10), small(5),
+// single, single].
+func goldDropDenoms(gold int) []string {
+	denoms := []struct {
+		kind string
+		val  int
+	}{
+		{"coins_jumbo_pile", 50},
+		{"coins_large_pile", 25},
+		{"coin_pouch", 10},
+		{"coins_small_pile", 5},
+		{"coin_single", 1},
+	}
+	var out []string
+	for _, d := range denoms {
+		for gold >= d.val {
+			out = append(out, d.kind)
+			gold -= d.val
+		}
+	}
+	return out
 }
 
 func extrasInt(e syscore.Entity, k string) int {
