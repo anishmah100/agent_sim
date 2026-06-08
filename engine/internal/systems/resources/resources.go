@@ -26,6 +26,10 @@ import (
 const (
 	DefaultTreeHardness = 3
 	DefaultRockHardness = 5
+	// forage: gather fruit from a tree without felling it — a renewable
+	// food source. A tree can be foraged again only after this many ticks
+	// (ripening), so it isn't an infinite apple spigot.
+	DefaultForageCooldown = 600 // ~10s at 60Hz
 )
 
 // === Events ===
@@ -59,6 +63,7 @@ func (s *System) Name() string { return "resources" }
 func (s *System) RegisterWith(r syscore.Registry) {
 	r.Verb("chop", s.handleChop)
 	r.Verb("mine", s.handleMine)
+	r.Verb("forage", s.handleForage)
 	r.OnEntitySpawn(s.seedSpawn)
 	r.Manifest(s.manifest())
 }
@@ -88,6 +93,55 @@ func (s *System) handleChop(w syscore.World, e syscore.Entity, env *syscore.Acti
 
 func (s *System) handleMine(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
 	return s.harvest(w, e, env, "rock")
+}
+
+// handleForage — gather fruit from an adjacent tree/bush without felling
+// it. Yields a food item (apple) into the actor's inventory and arms a
+// ripening cooldown on the source so it can't be spammed. A renewable
+// food source that deepens the survival economy. Reasons:
+//   - bad_params / unknown_target / target_too_far
+//   - not_forageable: target isn't a tree/bush
+//   - not_ripe: foraged too recently; wait for it to bear fruit again
+func (s *System) handleForage(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
+	res := syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	var p struct {
+		Target string `json:"target"`
+	}
+	if err := json.Unmarshal(env.Raw, &p); err != nil {
+		res.Reason = "bad_params"
+		return res
+	}
+	src := w.EntityByID(p.Target)
+	if src == nil {
+		res.Reason = "unknown_target"
+		return res
+	}
+	if src.Archetype() != "tree" && src.Archetype() != "bush" {
+		res.Reason = "not_forageable"
+		return res
+	}
+	if w.Chebyshev(e.Pos(), src.Pos()) > 1 {
+		res.Reason = "target_too_far"
+		return res
+	}
+	tick := w.Tick()
+	if ready := intExtra(src, "forage_ready_tick"); uint64(ready) > tick {
+		res.Reason = "not_ripe"
+		return res
+	}
+	cooldown := w.TuningInt("forage_cooldown_ticks", DefaultForageCooldown)
+	itemID := fmt.Sprintf("item:apple#%d", tick)
+	w.MutateEntity(e.ID(), func(real syscore.Entity) {
+		cur := stringSlice(real, "inventory")
+		real.SetExtra("inventory", append(cur, itemID))
+	})
+	w.MutateEntity(src.ID(), func(real syscore.Entity) {
+		real.SetExtra("forage_ready_tick", int(tick)+cooldown)
+	})
+	w.QueueEvent(ResourceHarvested{By: e.ID(), Source: src.ID(), YieldItem: itemID})
+	w.SetEntityAction(e.ID(), "interact", 18)
+	res.Accepted = true
+	return res
 }
 
 func (s *System) harvest(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope, wantArch string) syscore.ActionResult {
@@ -167,6 +221,12 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Preconditions:    []string{"target is archetype=tree", "target within 1 tile", "target hardness > 0"},
 				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_tree", "target_too_far", "no_yield", "depleted"},
 				EmitsEvents:      []string{"ResourceHarvested", "ResourceDepleted"},
+			},
+			{Verb: "forage", Description: "Gather fruit (apple) from an adjacent tree/bush without felling it. Renewable food source; the source ripens again after forage_cooldown_ticks.",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
+				Preconditions:    []string{"target is archetype=tree or bush", "target within 1 tile", "target is ripe (cooldown elapsed)"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_forageable", "target_too_far", "not_ripe"},
+				EmitsEvents:      []string{"ResourceHarvested"},
 			},
 			{Verb: "mine", Description: "Mine an adjacent rock. Yields stone item IDs; depletes after N hits.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
