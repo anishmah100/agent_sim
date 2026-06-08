@@ -162,6 +162,17 @@ class ClaudeClient:
             messages=[{"role": "user", "content": prompt}],
         )
         self.calls += 1
+        # Record Anthropic spend against the $25 cap (#232). Best-effort:
+        # never let accounting break narration.
+        try:
+            from tools.budget_log import record
+            u = getattr(msg, "usage", None)
+            if u is not None:
+                record(self.model,
+                       in_tok=getattr(u, "input_tokens", 0) or 0,
+                       out_tok=getattr(u, "output_tokens", 0) or 0)
+        except Exception:
+            pass
         # Concatenate all text blocks.
         parts = []
         for block in (msg.content or []):
