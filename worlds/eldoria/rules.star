@@ -74,7 +74,7 @@ register_tuning("respawn_batch",          12)
 # 6 pays vs run14: 0 contracts, same config). Match the spawn radius (14)
 # so loot stays in the cluster and agents remain in mutual vision —
 # proximity is the precondition for the propose/trade/pay loop to fire.
-register_tuning("respawn_radius",         40)
+register_tuning("respawn_radius",         30)
 register_tuning("respawn_hub_x",          764)    # == spawn_hub_x
 register_tuning("respawn_hub_y",          864)    # == spawn_hub_y
 
