@@ -88,7 +88,9 @@ loop + pursue/flee standing goals ✓ · 5 last-seen tracker ✓ · 6 LLM harnes
 new view+nav (try map-to-LLM vs harness-A*; Claude vs Qwen) ✓ · 7 scripted
 Hunter + LLM prey scenario · 8 remove old move/engine-pathfinding + update
 ALL docs/README/CLAUDE.md/comments · 9 re-run experiments (tag old regime).
-- **Update ALL agents** rule-based (deterministic test bots) + LLM; all must work.
+- **Update ALL agents** rule-based (deterministic test bots) + LLM; all must work. ✓
+  (killer/survivor/scavenger/manipulator + raiders all on goal+motor; old
+  greedy step_toward/step_away + ArchetypeBot.step_to/flee removed.)
 - **Cat-and-mouse rule-based smoke test** (cat catches+kills mouse) + visual.
 - **Visual-beauty pass** (parallelized): combat hit/death FX, damage numbers,
   hunger amber, building enter/exit FX, HP bars, relationship lines — clear,

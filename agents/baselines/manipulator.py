@@ -19,13 +19,14 @@ from agent_sim_sdk import (
     Action,
     Attack,
     Give,
-    Move,
     Observation,
     ProposeTask,
     Speak,
 )
 
 from agent_sim_sdk import Pickup
+
+from agents.common.motor import Goal
 
 from ._common import (
     ArchetypeBot,
@@ -35,8 +36,6 @@ from ._common import (
     item_kind,
     nearest,
     random_walk,
-    step_away,
-    step_toward,
 )
 
 
@@ -95,7 +94,8 @@ class Manipulator(ArchetypeBot):
                 return random_walk(self, here)
             self.flee_clear_ticks = 0
             t = nearest(threats, here)
-            return Move(target=list(step_away(here, tuple(t.pos))))
+            self.goal = Goal.flee(t.entity_id)
+            return None
 
         # SCOUTING — pick a target by score.
         if self.state == "SCOUTING":
@@ -116,16 +116,20 @@ class Manipulator(ArchetypeBot):
                     pickup_target = nearest(money_items, here)
                     if chebyshev(here, tuple(pickup_target.pos)) <= 1:
                         return Pickup(target=pickup_target.entity_id)
-                    return Move(target=list(step_toward(here, tuple(pickup_target.pos))))
+                    self.goal = Goal.goto(*pickup_target.pos)
+                    return None
                 return random_walk(self, here)
 
         # APPROACHING — walk to target until adjacent.
         if self.state == "APPROACHING":
             target = self._find_target(obs.visible_entities)
             if target is None:
-                # Target faded out of vision. Walk to last known.
-                if self.last_target_pos is not None:
-                    return Move(target=list(step_toward(here, self.last_target_pos)))
+                # Target faded out of vision — pursue keeps heading to its
+                # last-seen tile (motor's memory) instead of guessing.
+                if self.target_id is not None and \
+                        self._motor and self._motor.target_pos(self.target_id, obs) is not None:
+                    self.goal = Goal.pursue(self.target_id)
+                    return None
                 self.state = "SCOUTING"
                 self.target_id = None
                 return random_walk(self, here)
@@ -133,7 +137,8 @@ class Manipulator(ArchetypeBot):
             if chebyshev(here, tuple(target.pos)) <= 1:
                 self.state = "BUILDING_TRUST"
             else:
-                return Move(target=list(step_toward(here, tuple(target.pos))))
+                self.goal = Goal.pursue(target.entity_id)  # close to adjacent
+                return None
 
         # BUILDING_TRUST — gift then speak friendly.
         if self.state == "BUILDING_TRUST":
@@ -196,10 +201,12 @@ class Manipulator(ArchetypeBot):
         if self.state == "DEFECTING_SILENT":
             target = self._find_target(obs.visible_entities)
             if target is not None:
-                return Move(target=list(step_away(here, tuple(target.pos))))
+                self.goal = Goal.flee(target.entity_id)  # slip away after betrayal
+                return None
             # Target gone; head back to scouting.
             self.state = "SCOUTING"
             self.target_id = None
+            self.goal = Goal.idle()
             return random_walk(self, here)
 
         if self.state == "DEFECTING_ACTIVE":
@@ -209,7 +216,8 @@ class Manipulator(ArchetypeBot):
                 self.target_id = None
                 return None
             if chebyshev(here, tuple(target.pos)) > 1:
-                return Move(target=list(step_toward(here, tuple(target.pos))))
+                self.goal = Goal.pursue(target.entity_id)  # close for the strike
+                return None
             # First tick in this state: speak the betrayal line; next
             # tick: attack. The `_betrayal_spoken` instance bit tracks
             # whether the warning line landed already.

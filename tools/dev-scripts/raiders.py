@@ -17,8 +17,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 
-from agent_sim_sdk import Agent, Attack, Move, Observation, VisionMode, register_agent
-from agents.baselines._common import ArchetypeBot, chebyshev, nearest, random_walk, step_toward
+from agent_sim_sdk import Agent, Attack, Observation, VisionMode, register_agent
+from agents.baselines._common import ArchetypeBot, chebyshev, nearest, random_walk
+from agents.common.motor import Goal
 
 # Shared across the squad: entity ids of all living raiders, so each one
 # preferentially attacks a peer (keeps the brawl together).
@@ -44,7 +45,8 @@ class Raider(ArchetypeBot):
         self.state = "BRAWL"
         if chebyshev(here, tuple(t.pos)) <= 1:
             return Attack(target=t.entity_id)
-        return Move(target=list(t.pos))  # full target — engine pathfinds around obstacles
+        self.goal = Goal.pursue(t.entity_id)  # motor closes on the peer
+        return None
 
 
 async def run_one(engine: str, i: int):

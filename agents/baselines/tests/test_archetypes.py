@@ -13,11 +13,16 @@ Each archetype gets:
 from __future__ import annotations
 
 from agent_sim_sdk import (
-    Attack, Eat, Give, Move, Observation, Pickup, ProposeTask, Speak,
+    Attack, Eat, Give, Step, Observation, Pickup, ProposeTask, Speak,
     SelfState, VisibleEntity, VisibleItem, WorldClock, AgentCredentials,
 )
 
 from agents.baselines import Killer, Manipulator, Scavenger, Survivor
+
+# Movement is now a standing GOAL the motor executes, not a one-shot action:
+# a bot that wants to move sets self.goal (pursue/flee/goto) and decide()
+# returns None (the harness motor steps toward the goal). So movement tests
+# assert on bot.goal, not on a returned Move action.
 
 
 # ----- builders ---------------------------------------------------------
@@ -77,10 +82,10 @@ def vent(eid, archetype, pos, extras_summary=None):
 def test_survivor_idle_does_nothing_or_walks():
     bot = Survivor(creds=make_creds())
     obs = make_obs(extras={"hp": 100, "hunger": 0.1, "inventory": []})
-    # IDLE may emit a random walk or no action; either is fine.
+    # IDLE may emit a random walk (Step) or no action; either is fine.
     act = bot.decide(obs)
     assert bot.state == "IDLE"
-    assert act is None or isinstance(act, Move)
+    assert act is None or isinstance(act, Step)
 
 
 def test_survivor_hungry_eats_from_inventory():
@@ -101,9 +106,9 @@ def test_survivor_hungry_walks_toward_visible_food():
         items=[vit("apple-1", "item:apple", (15, 10))],
     )
     act = bot.decide(obs)
-    assert isinstance(act, Move)
-    # First step is one tile east toward the apple.
-    assert tuple(act.target) == (11, 10)
+    # Sets a goto goal toward the apple; motor walks there.
+    assert act is None
+    assert bot.goal.kind == "goto" and tuple(bot.goal.pos) == (15, 10)
     assert bot.state == "HUNGRY"
 
 
@@ -129,9 +134,9 @@ def test_survivor_flees_armed_entity():
     )
     act = bot.decide(obs)
     assert bot.state == "FLEEING"
-    assert isinstance(act, Move)
-    # Step is AWAY from the threat (decreasing x).
-    assert act.target[0] < 10
+    # Sets a flee goal on the armed threat; motor steps away.
+    assert act is None
+    assert bot.goal.kind == "flee" and bot.goal.entity_id == "killer-1"
 
 
 def test_survivor_desperate_when_starving_no_food():
@@ -152,7 +157,8 @@ def test_survivor_chases_visible_coins_when_idle():
     )
     act = bot.decide(obs)
     assert bot.state == "IDLE", bot.state
-    assert isinstance(act, Move) and tuple(act.target) == (11, 10), act
+    assert act is None
+    assert bot.goal.kind == "goto" and tuple(bot.goal.pos) == (13, 10)
 
 
 def test_survivor_picks_up_adjacent_gem():
@@ -184,8 +190,9 @@ def test_scavenger_races_on_death_scream():
     )
     act = bot.decide(obs)
     assert bot.state == "RACING", bot.state
-    assert isinstance(act, Move)
-    assert tuple(act.target) == (11, 10)  # one step east
+    # Races to the scream tile via a goto goal.
+    assert act is None
+    assert bot.goal.kind == "goto" and tuple(bot.goal.pos) == (30, 10)
 
 
 def test_scavenger_loots_when_at_corpse():
@@ -218,7 +225,8 @@ def test_scavenger_retreats_when_armed_agent_at_corpse():
     )
     act = bot.decide(obs)
     assert bot.state == "RETREATING", bot.state
-    assert isinstance(act, Move) and act.target[0] < 11
+    assert act is None
+    assert bot.goal.kind == "flee" and bot.goal.entity_id == "k"
 
 
 # ----- Killer --------------------------------------------------------
@@ -233,7 +241,9 @@ def test_killer_pursues_unarmed_target():
     act = bot.decide(obs)
     assert bot.state == "PURSUING", bot.state
     assert bot.target_id == "victim-1"
-    assert isinstance(act, Move) and tuple(act.target) == (11, 10)
+    # Pursues via a standing goal; motor closes the gap (not adjacent yet).
+    assert act is None
+    assert bot.goal.kind == "pursue" and bot.goal.entity_id == "victim-1"
 
 
 def test_killer_attacks_in_range():
@@ -264,8 +274,9 @@ def test_killer_retreats_low_hp():
     )
     act = bot.decide(obs)
     assert bot.state == "RETREATING", bot.state
-    # Step is AWAY from the only visible threat (the victim).
-    assert isinstance(act, Move) and act.target[0] < 10
+    # Flees the only visible threat (the victim) via a flee goal.
+    assert act is None
+    assert bot.goal.kind == "flee" and bot.goal.entity_id == "victim-3"
 
 
 # ----- Manipulator ---------------------------------------------------
@@ -279,7 +290,9 @@ def test_manipulator_approaches_target():
     act = bot.decide(obs)
     assert bot.state == "APPROACHING", bot.state
     assert bot.target_id == "mark-1"
-    assert isinstance(act, Move) and tuple(act.target) == (11, 10)
+    # Approaches the mark via a pursue goal; motor closes to adjacent.
+    assert act is None
+    assert bot.goal.kind == "pursue" and bot.goal.entity_id == "mark-1"
 
 
 def test_manipulator_gifts_then_speaks_when_adjacent():

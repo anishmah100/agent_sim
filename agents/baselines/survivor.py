@@ -16,11 +16,12 @@ from typing import Optional
 from agent_sim_sdk import (
     Action,
     Eat,
-    Move,
     Observation,
     Pay,
     Pickup,
 )
+
+from agents.common.motor import Goal
 
 from ._common import (
     ArchetypeBot,
@@ -30,8 +31,6 @@ from ._common import (
     item_kind,
     nearest,
     random_walk,
-    step_away,
-    step_toward,
 )
 
 
@@ -58,12 +57,14 @@ class Survivor(ArchetypeBot):
             self.state = "FLEEING"
             self.clear_streak = 0
             t = nearest(threats, here)
-            return Move(target=list(step_away(here, tuple(t.pos))))
+            self.goal = Goal.flee(t.entity_id)  # motor steps away each tick
+            return None
 
         if self.state == "FLEEING":
             self.clear_streak += 1
             if self.clear_streak >= 5:
                 self.state = "IDLE"
+                self.goal = Goal.idle()
             else:
                 # No threat in vision this tick, but be cautious: random walk.
                 return random_walk(self, here)
@@ -89,8 +90,9 @@ class Survivor(ArchetypeBot):
                 f = nearest(foods, here)
                 if max(abs(f.pos[0] - here[0]), abs(f.pos[1] - here[1])) <= 1:
                     return Pickup(target=f.entity_id)
-                # (c) walk toward closest food.
-                return Move(target=list(step_toward(here, tuple(f.pos))))
+                # (c) walk toward closest food (motor navigates).
+                self.goal = Goal.goto(*f.pos)
+                return None
             # (d-f) elaborate fallbacks (chop tree, trade at stall) are
             # left for a later pass — without them, DESPERATE → death
             # is the failure mode that flags "food economy is too tight".
@@ -112,7 +114,8 @@ class Survivor(ArchetypeBot):
             if max(abs(target.pos[0] - here[0]),
                    abs(target.pos[1] - here[1])) <= 1:
                 return Pickup(target=target.entity_id)
-            return Move(target=list(step_toward(here, tuple(target.pos))))
+            self.goal = Goal.goto(*target.pos)  # motor navigates to the coin
+            return None
 
         # No money or food visible: wander occasionally so we
         # explore + discover new spawns.

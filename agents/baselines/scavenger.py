@@ -10,7 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
-from agent_sim_sdk import Action, Move, Observation, Pickup
+from agent_sim_sdk import Action, Observation, Pickup
+
+from agents.common.motor import Goal
 
 from ._common import (
     ArchetypeBot,
@@ -19,8 +21,6 @@ from ._common import (
     item_kind,
     nearest,
     random_walk,
-    step_away,
-    step_toward,
 )
 
 
@@ -60,7 +60,8 @@ class Scavenger(ArchetypeBot):
                 if d <= 2:
                     self.state = "LOOTING"
                 else:
-                    return Move(target=list(step_toward(here, self.target_pos)))
+                    self.goal = Goal.goto(*self.target_pos)  # race to the scream
+                    return None
 
         if self.state == "LOOTING":
             if threats:
@@ -77,15 +78,18 @@ class Scavenger(ArchetypeBot):
                         abs(target.pos[1] - here[1]),
                     ) <= 1:
                         return Pickup(target=target.entity_id)
-                    return Move(target=list(step_toward(here, tuple(target.pos))))
+                    self.goal = Goal.goto(*target.pos)  # walk to the loot
+                    return None
 
         if self.state == "RETREATING":
             if not threats:
                 self.state = "IDLE"
                 self.target_pos = None
+                self.goal = Goal.idle()
             else:
                 t = nearest(threats, here)
-                return Move(target=list(step_away(here, tuple(t.pos))))
+                self.goal = Goal.flee(t.entity_id)  # motor steps away
+                return None
 
         # IDLE: idle-fallback to grab visible coins/gems when nothing
         # else is going on. Money isn't the scavenger's primary goal
@@ -99,7 +103,8 @@ class Scavenger(ArchetypeBot):
             if max(abs(target.pos[0] - here[0]),
                    abs(target.pos[1] - here[1])) <= 1:
                 return Pickup(target=target.entity_id)
-            return Move(target=list(step_toward(here, tuple(target.pos))))
+            self.goal = Goal.goto(*target.pos)  # motor navigates to the coin
+            return None
         self._idle_tick = (self._idle_tick + 1) % 4
         if self._idle_tick == 0:
             return random_walk(self, here)

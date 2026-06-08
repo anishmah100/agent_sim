@@ -99,19 +99,10 @@ def nearest(items, anchor: Pos):
     return closest
 
 
-def step_toward(here: Pos, there: Pos) -> Pos:
-    """One-tile step from `here` toward `there` along the Chebyshev path.
-    Returns the same tile if already there."""
-    dx = (1 if there[0] > here[0] else -1 if there[0] < here[0] else 0)
-    dy = (1 if there[1] > here[1] else -1 if there[1] < here[1] else 0)
-    return (here[0] + dx, here[1] + dy)
-
-
-def step_away(here: Pos, threat: Pos) -> Pos:
-    """One-tile step from `here` away from `threat`."""
-    dx = (1 if here[0] >= threat[0] else -1)
-    dy = (1 if here[1] >= threat[1] else -1)
-    return (here[0] + dx, here[1] + dy)
+# NOTE: the old greedy `step_toward`/`step_away` helpers (single Chebyshev
+# tile toward/away, no obstacle awareness — the ones that froze bots at
+# walls) were removed in the movement redesign. All movement now goes
+# through the motor/Goal layer (pursue/flee/goto → nav A* → N/S/E/W step).
 
 
 # ---------------------------------------------------------------------------
@@ -162,42 +153,10 @@ class ArchetypeBot:
         transition. Default: returns plain "entered <state>"."""
         return None
 
-    # ----- navigation primitives (the harness owns motor; subclass owns
-    #       strategy — see docs/AGENT_MOVEMENT_REDESIGN.md) -----
-
-    def _blockers(self, obs: Observation) -> list[Pos]:
-        """Tiles occupied by other visible entities — avoided while pathing."""
-        me = obs.self.entity_id
-        return [tuple(e.pos) for e in (obs.visible_entities or [])
-                if e.entity_id != me]
-
-    def step_to(self, here: Pos, goal: Pos, obs: Observation,
-                stop_adjacent: bool = True) -> Optional[Action]:
-        """One A*-routed step toward `goal` (around terrain + other agents).
-        Falls back to a random step if there's no grid yet or no route."""
-        if self._nav is None:
-            return random_walk(self)
-        d = self._nav.next_dir(tuple(here), tuple(goal),
-                               dynamic_blocked=self._blockers(obs),
-                               stop_adjacent=stop_adjacent)
-        if d is None:
-            return random_walk(self)
-        return Step(dir=d)
-
-    def flee(self, here: Pos, threat: Pos, obs: Observation) -> Optional[Action]:
-        """Take the one walkable step that most increases distance from the
-        threat. Simple, deterministic, and good enough for prey — terrain
-        eventually corners a fleer, which is what lets a predator win."""
-        best_dir, best_dist = None, -1
-        for d, (dx, dy) in {"N": (0, -1), "S": (0, 1),
-                            "E": (1, 0), "W": (-1, 0)}.items():
-            nx, ny = here[0] + dx, here[1] + dy
-            if self._nav is not None and not self._nav.walkable(nx, ny):
-                continue
-            dist = max(abs(nx - threat[0]), abs(ny - threat[1]))
-            if dist > best_dist:
-                best_dist, best_dir = dist, d
-        return Step(dir=best_dir) if best_dir else None
+    # ----- navigation: the harness owns the MOTOR (reflex movement toward a
+    #       standing Goal); subclasses own STRATEGY — they set self.goal
+    #       (pursue/flee/goto) and the motor steps each tick. See
+    #       agents/common/motor.py + docs/AGENT_MOVEMENT_REDESIGN.md. -----
 
     # ----- runtime -----
 
