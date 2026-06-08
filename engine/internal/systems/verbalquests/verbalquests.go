@@ -16,7 +16,7 @@
 // State on every spawned agent-like entity:
 //   - contracts: []object — open contracts where this entity is the
 //     proposer OR the target. Each has:
-//       {id, proposer, target, terms, reward, status}
+//     {id, proposer, target, terms, reward, status}
 //     status in {"proposed","accepted","rejected","completed"}.
 //
 // The bookkeeping lives in extras.contracts on BOTH parties so both
@@ -26,6 +26,7 @@ package verbalquests
 import (
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
@@ -69,7 +70,9 @@ var (
 
 // === System ===
 
-type System struct{}
+type System struct {
+	idCounter uint64 // monotonic, for unique contract ids
+}
 
 func New() *System { return &System{} }
 
@@ -123,7 +126,9 @@ func (s *System) handlePropose(w syscore.World, e syscore.Entity, env *syscore.A
 		res.Reason = "empty_terms"
 		return res
 	}
-	id := fmt.Sprintf("ct_%s_%s_%d", e.ID(), p.Target, w.Tick())
+	// AUDIT FIX (medium/[15]): monotonic id, not proposer+target+tick — a
+	// double-propose to the same target in one tick produced colliding ids.
+	id := fmt.Sprintf("ct_%s_%d", e.ID(), atomic.AddUint64(&s.idCounter, 1))
 	contract := map[string]any{
 		"id":       id,
 		"proposer": e.ID(),

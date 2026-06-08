@@ -8,6 +8,7 @@ package inventory
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
@@ -218,7 +219,14 @@ func (s *System) handleCook(w syscore.World, e syscore.Entity, env *syscore.Acti
 		res.Reason = "not_cookable"
 		return res
 	}
-	cookedID := fmt.Sprintf("item:%s#%d", cooked, w.Tick())
+	// AUDIT FIX (low/[29]): derive the cooked id's unique suffix from the
+	// SOURCE item id (already unique per inventory slot), not w.Tick() — two
+	// cooks of the same kind on one tick previously minted identical ids.
+	suffix := p.Item
+	if h := strings.IndexByte(p.Item, '#'); h >= 0 {
+		suffix = p.Item[h+1:]
+	}
+	cookedID := fmt.Sprintf("item:%s#%s", cooked, suffix)
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
 		cur := extrasStrSlice(real, "inventory")
 		if i := indexOf(cur, p.Item); i >= 0 {

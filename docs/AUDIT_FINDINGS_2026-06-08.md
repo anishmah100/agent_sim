@@ -98,7 +98,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/verbalquests/verbalquests.go` :126
 - **why:** id = fmt.Sprintf("ct_%s_%s_%d", e.ID(), p.Target, w.Tick()). The only entropy beyond proposer+target is the tick. If the same proposer proposes two contracts to the same target on the same tick, both contracts are appended to both ledgers with an IDENTICAL id. indexContract (line 277-284) returns the FIRST match, so any subsequent accept_task/reject_task/complete_task on that id mutates the first contract and leaves the duplicate stuck — and the status check (line 173) plus authorization use the first contract's fields, so the agent can never act on the second contract independently. mutateContract on both parties also only ever flips the first match, so the two parties' second contracts silently diverge from intent. There is no per-proposal counter or uuid to disambiguate. This is a latent dup/desync bug that surfaces in any run where an agent batches/repeats proposals within one tick.
 - **repro:** In one tick, hero submits propose_task{target:merchant,terms:'A'} then propose_task{target:merchant,terms:'B'}. Both contracts get id ct_hero_merchant_<tick>. merchant accept_task{id:ct_hero_merchant_<tick>} flips only the first ('A'); the second ('B') is unreachable (every transition resolves to the first match).
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [16] MEDIUM · verbalquests — Contract ledger grows without bound — rejected/completed contracts are never pruned and ship in every observation snapshot
 - **file:** `engine/internal/systems/verbalquests/verbalquests.go` :286-306
@@ -182,7 +182,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :221
 - **why:** The cooked item id is built solely from the cooked kind + the current tick: fmt.Sprintf("item:%s#%d", cooked, w.Tick()). The '#<entityid>' suffix that pickup uses to keep carried items unique (see comment lines 287-296) is replaced by '#<tick>', which is not unique across entities. Two agents cooking the same raw food on the same tick produce identical inventory ids; if one later gives the cooked item to the other, the recipient now holds two identical ids, and indexOf/removeAt in eat/drop/give will always resolve to the first match, so the wrong item slot can be consumed/removed. This silently violates the documented per-item uniqueness the give/drop/eat targeting relies on.
 - **repro:** Two agents each cook fish_raw on the same tick -> both get 'item:fish_cooked#<sameTick>'; agent A gives its cooked fish to B; B now has two identical ids and a subsequent eat/give on that id targets the first occurrence regardless of which was intended.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [30] LOW · inventory — Items() and extrasStrSlice return the live backing inventory slice, enabling external aliasing/corruption
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :585-591 and 595-613
