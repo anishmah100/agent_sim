@@ -33,6 +33,9 @@ const testWorldJSON = `{
     {"entity_id":"hero","archetype":"trainer","pos":[2,2],"facing":"S","display_name":"Hero"},
     {"entity_id":"goblin","archetype":"goblin","pos":[3,2],"facing":"S","display_name":"Goblin"},
     {"entity_id":"merchant","archetype":"merchant","pos":[5,2],"facing":"S","display_name":"Merchant"}
+  ],
+  "decorations": [
+    {"x":1,"y":1,"sprite":"bld:granary","height_tiles":2,"footprint_w":2,"footprint_h":2,"walkable":false}
   ]
 }`
 

@@ -86,6 +86,7 @@ var publicExtraKeys = map[string]bool{
 	"max_hp":      true,
 	"gold":        true,
 	"locked":      true, // building lock state
+	"reputation":  true, // social standing — drives the inspector rep badge
 	// D8 — sprite + quantity exposed to the frontend renderer so item
 	// entities are drawn with their actual sprite (not a hardcoded
 	// wood_log fallback). Quantity is the stack size for coin piles

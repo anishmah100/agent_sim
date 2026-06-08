@@ -12,6 +12,7 @@ import (
 	"github.com/anishmah100/agent_sim/engine/internal/systems/loot"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/money"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/property"
+	"github.com/anishmah100/agent_sim/engine/internal/systems/reputation"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/resources"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/trade"
 	"github.com/anishmah100/agent_sim/engine/internal/systems/vitals"
@@ -56,6 +57,7 @@ func newVCTest(t *testing.T) *vcTest {
 	host.Install(loot.New())
 	host.Install(property.New())
 	host.Install(resources.New())
+	host.Install(reputation.New())
 	host.InstallInto()
 	// Subscribe AFTER InstallInto so we catch every Queue.
 	vc := &vcTest{t: t, world: w, host: host, bus: host.Bus}
@@ -559,6 +561,27 @@ func TestHasDecorationNear(t *testing.T) {
 	// (5,5)->(6,6) is Chebyshev distance 1, so radius 1 includes it.
 	if !w.HasDecorationNear([2]int{6, 6}, "bld:", 1) {
 		t.Error("stall at cheb-distance 1 should be found within radius 1")
+	}
+}
+
+// TestReputation_KillLowersKillerStanding — killing an agent drops the
+// killer's reputation below zero (the substrate for infamy-driven social
+// dynamics). Runs through the full Tick so the bus drains and the
+// reputation system's EntityDied handler fires.
+func TestReputation_KillLowersKillerStanding(t *testing.T) {
+	vc := newVCTest(t)
+	vc.world.entities["b"].LogicalTile = Tile{2, 1}
+	vc.world.entities["b"].Extras = map[string]interface{}{"hp": 5, "max_hp": 100}
+	vc.world.entities["a"].Extras = map[string]interface{}{
+		"equipped": map[string]any{"weapon": "item:axe#1"},
+	}
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("attack: %q", res.Reason)
+	}
+	rep, _ := vc.world.entities["a"].Extras["reputation"].(float64)
+	if rep >= 0 {
+		t.Errorf("killer A's reputation should be negative after a kill, got %v", rep)
 	}
 }
 

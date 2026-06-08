@@ -448,6 +448,21 @@ func buildExtrasSummary(e *Entity) map[string]interface{} {
 			break
 		}
 	}
+	// Reputation — social standing, so others can react to infamy/renown.
+	// Carries the raw value plus a coarse bucket for cheap rule-bot checks.
+	if rep, ok := numericExtra(e.Extras, "reputation"); ok && rep != 0 {
+		out["reputation"] = rep
+		switch {
+		case rep <= -8:
+			out["rep_bucket"] = "infamous"
+		case rep < 0:
+			out["rep_bucket"] = "shady"
+		case rep >= 8:
+			out["rep_bucket"] = "renowned"
+		default:
+			out["rep_bucket"] = "neutral"
+		}
+	}
 	if len(out) == 0 {
 		return nil
 	}
