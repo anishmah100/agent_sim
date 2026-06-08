@@ -128,6 +128,13 @@ class ArchetypeBot:
     # Agent-side navigation: the static walkability grid, fetched once.
     engine_url: str = "http://127.0.0.1:8080"
     _nav: Optional[NavGrid] = None
+    # Soft home leash: when a bot has nothing to do it drifts back toward
+    # `home` if it has strayed past `leash` tiles, instead of random-walking
+    # ever outward. Without this the population slowly diffuses off the
+    # resource hub and the world goes quiet (everyone milling alone in the
+    # wilderness). home defaults to the eldoria spawn/respawn hub.
+    home: Pos = (764, 864)
+    leash: int = 22
     # Two-rate motor layer (see docs/AGENT_MOVEMENT_REDESIGN.md): the FSM
     # (deliberation) sets `goal` + fires direct verbs; the motor (reflex)
     # turns the standing goal into one N/S/E/W step per observation, with
@@ -218,7 +225,17 @@ class ArchetypeBot:
 # ---------------------------------------------------------------------------
 
 def random_walk(bot: ArchetypeBot, here: Pos | None = None) -> Optional[Action]:
-    """Take a random one-tile step (N/S/E/W). The engine rejects a blocked
-    step harmlessly; the next tick tries again. Bot's RNG → deterministic
-    given the seed. (`here` kept for call-site compatibility, unused.)"""
+    """Idle step. Drifts back toward `bot.home` when the bot has strayed past
+    its leash (so the population stays on the resource hub instead of slowly
+    diffusing into the empty wilderness and the world going quiet); otherwise
+    a random one-tile step. The engine rejects a blocked step harmlessly; the
+    next tick tries again. Bot's RNG → deterministic given the seed."""
+    if here is not None and bot.home is not None:
+        dx = here[0] - bot.home[0]
+        dy = here[1] - bot.home[1]
+        if max(abs(dx), abs(dy)) > bot.leash:
+            # Step the dominant axis back toward home.
+            if abs(dx) >= abs(dy):
+                return Step(dir="W" if dx > 0 else "E")
+            return Step(dir="N" if dy > 0 else "S")
     return Step(dir=bot.rng.choice(["N", "S", "E", "W"]))
