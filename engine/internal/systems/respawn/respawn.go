@@ -110,44 +110,57 @@ func (s *System) tick(w syscore.World, tick uint64) {
 	if count >= cap {
 		return
 	}
-	// Pick a random walkable tile within the radius of the hub.
 	radius := w.TuningInt("respawn_radius", DefaultRespawnRadius)
 	hubX := w.TuningInt("respawn_hub_x", DefaultRespawnHubX)
 	hubY := w.TuningInt("respawn_hub_y", DefaultRespawnHubY)
-	var pos [2]int
-	found := false
-	for attempt := 0; attempt < 32; attempt++ {
-		dx := s.rng.IntN(2*radius+1) - radius
-		dy := s.rng.IntN(2*radius+1) - radius
-		t := [2]int{hubX + dx, hubY + dy}
-		if w.IsWalkable(t) {
-			pos = t
-			found = true
-			break
+	// Spawn a BATCH per interval, not a single item. One item per
+	// interval cannot keep a populated hub stocked: a crowd of foragers
+	// consumes the local supply far faster than it refills, the play
+	// area starves, and agents end up milling with nothing to do (the
+	// "everyone wanders aimlessly after 15s" failure). A batch keeps the
+	// town square continuously supplied so foraging / trading / and the
+	// resulting predation around the crowd actually sustain.
+	batch := w.TuningInt("respawn_batch", 1)
+	if batch < 1 {
+		batch = 1
+	}
+	for i := 0; i < batch && count < cap; i++ {
+		var pos [2]int
+		found := false
+		for attempt := 0; attempt < 32; attempt++ {
+			dx := s.rng.IntN(2*radius+1) - radius
+			dy := s.rng.IntN(2*radius+1) - radius
+			t := [2]int{hubX + dx, hubY + dy}
+			if w.IsWalkable(t) {
+				pos = t
+				found = true
+				break
+			}
 		}
+		if !found {
+			continue
+		}
+		pick := spawnable[s.rng.IntN(len(spawnable))]
+		sprite := "item:" + pick.kind
+		spawned, err := w.SpawnEntityFromSpec(syscore.EntitySpec{
+			Archetype:   "item",
+			Pos:         pos,
+			DisplayName: pick.kind,
+			Extras: map[string]any{
+				"sprite": sprite,
+				"source": "respawn",
+			},
+		})
+		if err != nil || spawned == nil {
+			continue
+		}
+		count++
+		w.QueueEvent(Spawned{
+			EntityID: spawned.ID(),
+			Sprite:   sprite,
+			At:       pos,
+		})
 	}
-	if !found {
-		return
-	}
-	pick := spawnable[s.rng.IntN(len(spawnable))]
-	sprite := "item:" + pick.kind
-	spawned, err := w.SpawnEntityFromSpec(syscore.EntitySpec{
-		Archetype:   "item",
-		Pos:         pos,
-		DisplayName: pick.kind,
-		Extras: map[string]any{
-			"sprite": sprite,
-			"source": "respawn",
-		},
-	})
-	if err != nil || spawned == nil {
-		return
-	}
-	w.QueueEvent(Spawned{
-		EntityID: spawned.ID(),
-		Sprite:   sprite,
-		At:       pos,
-	})
 }
 
 func (s *System) manifest() manifest.SystemDeclaration {

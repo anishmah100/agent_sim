@@ -59,8 +59,15 @@ register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
 # to do (no trades, no contracts). Aligning the respawn hub to the spawn
 # hub + a tight radius + a faster interval keeps a live economy under the
 # agents so scarcity drives interaction instead of just emptying out.
-register_tuning("respawn_interval_ticks", 600)    # 10 in-game sec @ 60Hz
-register_tuning("respawn_cap",            600)
+register_tuning("respawn_interval_ticks", 300)    # 5 in-game sec @ 60Hz
+register_tuning("respawn_cap",            900)
+# respawn_batch: items dropped PER interval. One-at-a-time can't keep a
+# populated hub stocked — a crowd of foragers drains the local supply far
+# faster than it refills and the play area starves, leaving agents milling
+# with nothing to do after the opening grab. A batch keeps the town square
+# continuously supplied so foraging / trading / and predation around the
+# crowd sustain instead of dying out. ~14/5s feeds ~20 agents.
+register_tuning("respawn_batch",          14)
 # radius 40 let items — and the agents chasing them — disperse past each
 # other's vision (radius 12), so runs were a coin-flip between a clustered
 # negotiating group and everyone hoarding solo in opposite corners (run13:
