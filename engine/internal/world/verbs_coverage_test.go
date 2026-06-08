@@ -502,7 +502,8 @@ func TestD10_DeathEmitsScreamAndWitnessAudibles(t *testing.T) {
 
 func TestD21_Attack_UnarmedDealsBaseDamage(t *testing.T) {
 	vc := newVCTest(t)
-	// Put B adjacent to A at full HP. A unarmed → 4 damage.
+	// Put B adjacent to A at full HP. A unarmed → 7 damage (unarmedDmg,
+	// raised from 4 so predation reads on screen without decimating the town).
 	vc.world.entities["b"].LogicalTile = Tile{2, 1}
 	vc.world.entities["b"].Extras = map[string]interface{}{"hp": 100, "max_hp": 100}
 	vc.world.entities["a"].Extras = map[string]interface{}{}
@@ -511,8 +512,8 @@ func TestD21_Attack_UnarmedDealsBaseDamage(t *testing.T) {
 		t.Fatalf("unarmed attack adjacent should accept; got %q", res.Reason)
 	}
 	hp := vc.world.entities["b"].Extras["hp"].(int)
-	if hp != 96 {
-		t.Errorf("unarmed attack: B's HP want 96 (100-4), got %d", hp)
+	if hp != 93 {
+		t.Errorf("unarmed attack: B's HP want 93 (100-7), got %d", hp)
 	}
 }
 

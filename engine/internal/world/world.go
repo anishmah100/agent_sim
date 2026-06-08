@@ -830,15 +830,44 @@ func (w *World) stepOneTile(e *Entity, next Tile) bool {
 	if e.CurrentAction == "move" && e.WalkProgress < 0.5 {
 		return false
 	}
-	if !w.CanEnter(e, next) {
+	if !w.IsWalkable(next) {
 		return false
 	}
+	cur := e.LogicalTile
+	occ, occupied := w.occupants[next]
+	if occupied && occ != e.EntityID {
+		// Tile is held by another entity. If it's an IDLE agent, SWAP places
+		// so a dense crowd can flow instead of gridlocking — 20+ agents
+		// converging on a hub otherwise jam solid (every neighbour occupied,
+		// every step rejected) and the town freezes while still attacking/
+		// foraging in place. Swapping lets agents slide past each other; it
+		// also keeps movement working at 100s–1000s of agents. We only swap
+		// with an idle (not mid-step), overworld, agent body.
+		other := w.entities[occ]
+		if other == nil || !isAgentArchetype(other.Archetype) ||
+			other.InsideBuilding != "" || other.WalkProgress < 1 {
+			return false
+		}
+		other.WalkFromTile = next
+		other.LogicalTile = cur
+		other.WalkProgress = 0
+		other.CurrentAction = "move"
+		other.Facing = stepFacing(next, cur)
+		w.occupants[cur] = other.EntityID
+		e.WalkFromTile = cur
+		e.LogicalTile = next
+		e.WalkProgress = 0
+		e.CurrentAction = "move"
+		e.Facing = stepFacing(cur, next)
+		w.occupants[next] = e.EntityID
+		return true
+	}
 	w.occupants[next] = e.EntityID
-	e.WalkFromTile = e.LogicalTile
+	e.WalkFromTile = cur
 	e.LogicalTile = next
 	e.WalkProgress = 0
 	e.CurrentAction = "move"
-	e.Facing = stepFacing(e.WalkFromTile, next)
+	e.Facing = stepFacing(cur, next)
 	return true
 }
 
