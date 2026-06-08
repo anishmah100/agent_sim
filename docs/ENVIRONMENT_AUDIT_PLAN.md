@@ -303,3 +303,10 @@ For EACH verb, a row in `tools/audit/verb_matrix.py` that:
   buy_food has NO spatial gate (food buyable anywhere with gold+hunger>0)
   despite bld:stall_* decorations existing. Consider market_radius>0 if the
   market should be a real place agents converge on.
+
+- 2026-06-08 · S2 (obs integrity) · tools/audit/obs_integrity.py, 2 live agents
+  · 0 findings: top-level keys EXACTLY the documented set; known_map_summary/
+  recent_self_results/weather absent; self.extras carries hp/gold/hunger/
+  inventory/reputation; **no private field (gold/inventory/hunger/contracts)
+  leaks into another agent's extras_summary** and no 'doing'; summary keys all
+  known-public. · PASS.
