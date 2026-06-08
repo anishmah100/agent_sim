@@ -695,7 +695,9 @@ export class EntityLayer {
     wrap.addChild(placeholder);
 
     const url = worldObjectSpriteUrl(e);
-    void Assets.load<Texture>(url).then((tex) => {
+    // Swap the dark placeholder rect for a real sprite once the texture
+    // loads. Factored so the error path can retry with a fallback.
+    const place = (tex: Texture) => {
       tex.source.scaleMode = "nearest";
       const sp = new Sprite(tex);
       // Match the decoration-tree visual scale (~3 tiles tall) so v2
@@ -713,13 +715,23 @@ export class EntityLayer {
       sp.height = targetH;
       sp.x = (FOOTPRINT_W - targetW) / 2;
       sp.y = FOOTPRINT_H - targetH;
-      if (placeholder.parent) {
-        wrap.removeChild(placeholder);
-      }
+      if (placeholder.parent) wrap.removeChild(placeholder);
       placeholder.destroy();
       wrap.addChild(sp);
-    }).catch((err) => {
-      console.warn(`world-object sprite failed for ${e.entity_id}:`, err);
+    };
+    void Assets.load<Texture>(url).then(place).catch(() => {
+      // The sprite 404'd (an item kind with no art file). Don't leave the
+      // dark-green placeholder rect forever (the "item renders as a dark
+      // square" bug) — fall back to a known-good generic item sprite, and
+      // if THAT fails too, recolor the placeholder to a small neutral
+      // item dot so it never reads as a broken black box.
+      const fallback = `${ENGINE_URL}/art/processed/v2_items_master_v2/wood_log.png`;
+      Assets.load<Texture>(fallback).then(place).catch((err) => {
+        console.warn(`world-object sprite + fallback failed for ${e.entity_id}:`, err);
+        placeholder.clear();
+        placeholder.circle(FOOTPRINT_W / 2, FOOTPRINT_H / 2, 3)
+          .fill({ color: 0xc9a227, alpha: 0.9 });  // small gold "item" dot
+      });
     });
 
     // Subtle drop-shadow ellipse at the base, like characters.
