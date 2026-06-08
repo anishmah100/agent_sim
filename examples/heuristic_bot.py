@@ -186,6 +186,7 @@ async def main() -> None:
     p.add_argument("--server", required=True, help="http://host:port")
     p.add_argument("--token", required=True)
     p.add_argument("--name", default="Wanderer")
+    p.add_argument("--npc", action="store_true", help="tag as a background NPC (hidden from the agent picker)")
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s: %(message)s")
@@ -193,7 +194,7 @@ async def main() -> None:
     agent = await register_and_connect(
         args.server,
         user_token=args.token,
-        persona={"name": args.name, "bio": "Goal-driven heuristic wanderer."},
+        persona={"name": args.name, "bio": "Goal-driven heuristic wanderer.", **({"archetype_tag": "npc"} if args.npc else {})},
         vision_mode=VisionMode.STRUCTURED,
         brain=my_brain,
     )

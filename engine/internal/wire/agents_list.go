@@ -65,6 +65,17 @@ func AgentsListHandler(hub *AgentHub, w *world.World) http.HandlerFunc {
 				// empty corner ("clicked an agent, nothing in sight").
 				continue
 			}
+			// Background NPCs (the heuristic_bot wanderers spawned by
+			// -npc-config) connect via the agent WS like anyone else, so
+			// they leaked into the picker as dummy "Wanderer" rows that
+			// jump the camera to a far wanderer with nothing recognizable
+			// there. They tag themselves persona.archetype_tag=="npc";
+			// keep them out of the experiment-agent picker.
+			if p := c.rec.Persona; p != nil {
+				if tag, _ := p["archetype_tag"].(string); tag == "npc" {
+					continue
+				}
+			}
 			info := agentInfo{
 				AgentID:      c.rec.AgentID,
 				EntityID:     c.rec.EntityID,

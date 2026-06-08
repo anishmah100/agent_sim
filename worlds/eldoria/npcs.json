@@ -7,7 +7,8 @@
         "examples/heuristic_bot.py",
         "--server", "http://${ENGINE_ADDR}",
         "--token", "dev",
-        "--name", "Wanderer"
+        "--name", "Wanderer",
+        "--npc"
       ],
       "count": 2,
       "auto_restart": true
