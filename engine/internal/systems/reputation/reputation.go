@@ -63,7 +63,11 @@ func (s *System) seed(w syscore.World, e syscore.Entity) {
 
 func (s *System) onDeath(ctx eventbus.WorldCtx, ev eventbus.Event) {
 	d, ok := ev.(combat.EntityDied)
-	if !ok || d.Killer == "" {
+	// AUDIT FIX (low/[41]): only a COMBAT kill brands the killer infamous.
+	// Non-combat deaths (starvation/trap/fire) carry a non-"attack" cause (and
+	// usually no killer); without this filter any attributed death would apply
+	// the kill penalty.
+	if !ok || d.Killer == "" || d.Cause != "attack" {
 		return
 	}
 	if w, ok := ctx.(syscore.World); ok {
@@ -74,6 +78,13 @@ func (s *System) onDeath(ctx eventbus.WorldCtx, ev eventbus.Event) {
 func (s *System) onDamage(ctx eventbus.WorldCtx, ev eventbus.Event) {
 	d, ok := ev.(combat.DamageDealt)
 	if !ok || d.Killer == "" || d.Cause != "attack" {
+		return
+	}
+	// AUDIT FIX (low/[39]): don't double-count the killing blow. A lethal hit
+	// also fires EntityDied (kill penalty); applying the attack penalty too
+	// would charge the killer twice. Skip the attack penalty when the hit was
+	// fatal (NewHP == 0) — onDeath's kill penalty covers it.
+	if d.NewHP == 0 {
 		return
 	}
 	if w, ok := ctx.(syscore.World); ok {
@@ -156,7 +167,10 @@ func (s *System) manifest() manifest.SystemDeclaration {
 		Name:        "reputation",
 		Description: "Per-agent standing scalar. Killing/attacking lowers it; it decays toward 0. Surfaced to others as reputation + rep_bucket so agents can react to infamy/renown.",
 		StateFields: []manifest.StateFieldDecl{
-			{Key: "reputation", Type: "float", Owner: "entity.extras", PublicAtAnyDistance: false, Meaning: "social standing; negative = infamous (killer/aggressor), positive = renowned"},
+			// AUDIT FIX (low/[40]): reputation IS public — buildExtrasSummary
+			// surfaces it (raw + rep_bucket) to every nearby agent, so the
+			// manifest must declare it public, not private.
+			{Key: "reputation", Type: "float", Owner: "entity.extras", PublicAtAnyDistance: true, Meaning: "social standing; negative = infamous (killer/aggressor), positive = renowned. Visible to others as reputation + rep_bucket."},
 		},
 	}
 }

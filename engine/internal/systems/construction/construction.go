@@ -12,9 +12,9 @@
 //   - advance_construction: spend the next batch of materials to push
 //     progress toward 100. Completes the blueprint
 //     into a building when it hits 100.
-//   - demolish:         remove an owned blueprint OR building. Refunds
-//     a fraction of materials when the structure was
-//     still under construction.
+//   - demolish:         remove an owned blueprint OR building. (No material
+//     refund in v1 — audit [34] corrected this doc; the
+//     handler removes the entity without refunding.)
 //
 // State on blueprint entities:
 //   - kind:        which blueprint shape ("cottage" / "shed" / ...).
@@ -151,6 +151,16 @@ func (s *System) handlePlace(w syscore.World, e syscore.Entity, env *syscore.Act
 		res.Reason = "unwalkable"
 		return res
 	}
+	// AUDIT FIX (medium/[10]): reject placing on a tile already held by a
+	// non-item entity (another blueprint/building/agent). IsWalkable doesn't
+	// catch blueprints (they don't mark the tile unwalkable), so blueprints
+	// could stack on each other / on agents.
+	for _, oid := range w.EntitiesInRadius(p.At, 0) {
+		if o := w.EntityByID(oid); o != nil && o.Archetype() != "item" {
+			res.Reason = "occupied"
+			return res
+		}
+	}
 
 	inv, ok := w.GetService("inventory").(inventory.InventoryService)
 	if !ok {
@@ -232,7 +242,13 @@ func (s *System) handleAdvance(w syscore.World, e syscore.Entity, env *syscore.A
 		return res
 	}
 
-	inv := w.GetService("inventory").(inventory.InventoryService)
+	// AUDIT FIX (medium/[11]): guard the service assertion (was an unchecked
+	// type assertion → nil-deref panic if inventory isn't registered).
+	inv, ok := w.GetService("inventory").(inventory.InventoryService)
+	if !ok {
+		res.Reason = "no_inventory_service"
+		return res
+	}
 	itemIDs, ok := resolveMaterials(inv, w, e.ID(), advanceKinds)
 	if !ok {
 		res.Reason = "missing_materials"
@@ -351,14 +367,14 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Description:      "Place a blueprint at an adjacent walkable tile. Pays the initial-materials cost up front.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"kind":{"type":"string"},"at":{"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2}},"required":["kind","at"]}`),
 				Preconditions:    []string{"`at` within 1 tile of self", "`at` is walkable", "self has the initial_materials for this kind"},
-				RejectionReasons: []string{"bad_params", "unknown_blueprint", "target_too_far", "unwalkable", "no_inventory_service", "missing_materials", "spawn_failed"},
+				RejectionReasons: []string{"bad_params", "unknown_blueprint", "target_too_far", "unwalkable", "occupied", "no_inventory_service", "missing_materials", "spawn_failed"},
 				EmitsEvents:      []string{"ConstructionStarted"},
 			},
 			{Verb: "advance_construction",
 				Description:      "Advance an owned adjacent blueprint by one step; consumes one advance_materials batch. Completes the blueprint when progress reaches 100.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target within 1 tile", "target is a blueprint owned by self", "self has the advance_materials"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_blueprint", "target_too_far", "not_owner", "broken_blueprint", "missing_materials"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_blueprint", "target_too_far", "not_owner", "broken_blueprint", "missing_materials", "no_inventory_service"},
 				EmitsEvents:      []string{"ConstructionAdvanced", "ConstructionCompleted"},
 			},
 			{Verb: "demolish",

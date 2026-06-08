@@ -131,6 +131,12 @@ func (s *System) handleAttack(w syscore.World, e syscore.Entity, env *syscore.Ac
 		res.Reason = "not_a_target"
 		return res
 	}
+	// AUDIT FIX (low/[23]): no self-attack — an agent could otherwise damage
+	// itself and even credit itself a kill.
+	if other.ID() == e.ID() {
+		res.Reason = "self_target"
+		return res
+	}
 	// D21 — weapon damage + reach. Read attacker's equipped weapon, look
 	// up its damage + reach. Unarmed = base damage 4, reach 1.
 	wepDmg, wepReach := weaponStats(e)
@@ -301,7 +307,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Description:      "Damage an adjacent target.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target must be within 1 tile (chebyshev)"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "target_too_far", "out_of_range"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "self_target", "target_too_far", "out_of_range"},
 				EmitsEvents:      []string{"DamageDealt", "EntityDied"},
 				Examples: []manifest.VerbExample{
 					{Params: json.RawMessage(`{"target":"goblin_3"}`), Result: "deals 12 dmg to goblin_3 (or 6 if defending)"},

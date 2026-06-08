@@ -68,13 +68,13 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/construction/construction.go` :149-152; IsWalkable at engine/internal/world/world.go:812-817
 - **why:** The only spatial gate is w.IsWalkable(p.At), which checks ONLY static terrain bounds + the precomputed walkable grid (world.go:812-817) — it does not consult w.occupants or any dynamic entity occupancy. So an agent can place a blueprint on a tile already occupied by another agent, on its own tile, on a tile holding another blueprint, or on top of an existing building, producing multiple overlapping structures on one tile. Combined with the id-collision bug above, two same-tick same-kind placements at the same tile both pass and stack. This breaks the 'place at an adjacent FREE tile' contract stated in the package header (line 11) and lets an adversarial agent spam blueprints into one cell.
 - **repro:** Stand a second agent on tile [3,3]; builder at [3,2] calls place_blueprint {kind:cottage, at:[3,3]}. IsWalkable([3,3]) is true (grass), so the blueprint spawns on top of the occupied tile. Repeat to stack many blueprints/buildings on one cell.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [11] MEDIUM · construction — advance_construction performs an unchecked inventory-service type assertion (nil-deref panic) — and the reason isn't in the manifest
 - **file:** `engine/internal/systems/construction/construction.go` :230
 - **why:** place_blueprint guards the service lookup: inv, ok := w.GetService("inventory").(inventory.InventoryService); if !ok { reason="no_inventory_service" } (lines 154-158). advance_construction instead does inv := w.GetService("inventory").(inventory.InventoryService) with NO ok form (line 230). If a world is configured without the inventory system (or GetService returns nil/another type), this is a panic on a type assertion failure — taking down the action-dispatch goroutine / world tick rather than returning a clean rejection. Additionally, advance's manifest RejectionReasons (line 356) does NOT include 'no_inventory_service', so even the graceful path the author intended isn't representable — an inconsistency between the two handlers' contracts.
 - **repro:** Run construction in a world bundle that registers construction but not inventory (or where the money/inventory service registration is skipped). First advance_construction call panics at line 230. place_blueprint in the same world returns reason='no_inventory_service' instead, exposing the asymmetry.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [12] MEDIUM · trade — trade appends an item to the target's inventory without enforcing the 10-slot cap (D20 bypass)
 - **file:** `engine/internal/systems/trade/trade.go` :93-97
@@ -146,7 +146,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/combat/combat.go:116-165,341-365`
 - **why:** handleAttack never checks p.Target != e.ID(). Self is an agent archetype and Chebyshev(self,self)=0 <= reach, so a self-attack passes all preconditions and calls DealDamage(self,...,killer=self). If it kills, the killer (self) is credited a kill via SetExtra("kills", +1) at line 363 before the entity is removed (harmless since it's removed, but it pollutes the leaderboard's kill attribution and lets an agent inflate its own kill count by self-damaging down to a kill on the final blow). It also lets an agent grief itself / drop its own loot deliberately. Low impact but it's an unguarded precondition an adversarial agent can exploit for the kill-count metric.
 - **repro:** Agent submits attack {target: <own id>} repeatedly. Each hit damages self; the lethal hit credits the agent's own "kills" counter and runs the full death-drop, with no rejection.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [24] LOW · money — pay returns rejection reasons (not_a_target, self_target) that are not declared in its manifest
 - **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :104-110 (returns), 225 (manifest declares only bad_params/unknown_target/target_too_far/not_enough_gold)
@@ -212,7 +212,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/construction/construction.go` :285-317 (handler), 16-17 + 359-365 (docs/manifest)
 - **why:** The package doc (lines 16-17: 'demolish ... Refunds a fraction of materials when the structure was still under construction') and the intent behind tracking steps_done/advance_materials promise a partial refund on demolishing an under-construction blueprint. handleDemolish does none of it: it only RemoveEntity + emits Demolished. Every material spent on place_blueprint and advance_construction is permanently destroyed on demolish. This is a value/material sink that contradicts documented behavior and removes any incentive structure around partial builds; in long runs it silently destroys all materials sunk into demolished blueprints (no conservation). The manifest verb description ('Remove an owned blueprint OR building.') also omits the refund, so the code and the top-of-file contract disagree.
 - **repro:** place_blueprint cottage (consumes 2 wood + 1 stone), advance_construction once (consumes 1 wood + 1 stone), then demolish the blueprint. Builder gets 0 materials back; inventory is permanently down 3 wood + 2 stone.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [35] LOW · trade — Rejection reasons returned by trade are not all declared in the manifest (not_a_target, self_target, not_enough_gold)
 - **file:** `engine/internal/systems/trade/trade.go` :49, 52, 73-76, 120
@@ -242,16 +242,16 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/reputation/reputation.go:64-82 (and combat.go:356,366)` :64-82
 - **why:** The documented model (reputation.go:11-15) says a kill drops reputation by rep_kill_penalty (default 5) and a landed attack drops it by rep_attack_penalty (default 0.5). But combat's DealDamage emits BOTH DamageDealt{Cause:"attack"} (combat.go:356) AND EntityDied{Cause:"attack"} (combat.go:366) for a single fatal blow. reputation.onDamage subscribes to DamageDealt with Cause=="attack" and applies -0.5; reputation.onDeath subscribes to EntityDied and applies -5 (it does NOT filter by Cause). So a kill-by-attack actually deducts -5.5, not the documented -5. The fatal hit is counted as both a hit and a kill. Magnitude is small but it makes the constant DefaultKillPenalty=5 a lie and skews any tuning/analysis that assumes kill==exactly kill_penalty.
 - **repro:** Agent A lands a killing attack on B (B at low HP). Bus drains: DamageDealt(attack) -> rep -=0.5, EntityDied(attack) -> rep -=5. Final delta -5.5 instead of -5. Confirmed by TestReputation_KillLowersKillerStanding path through full Tick.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [40] LOW · reputation — Manifest declares reputation private (PublicAtAnyDistance:false, no PublicWithinDistance) but it is broadcast to every in-view observer
 - **file:** `engine/internal/systems/reputation/reputation.go:158-160 (vs observation.go:438-449)` :158-160
 - **why:** The system manifest's only StateFieldDecl sets PublicAtAnyDistance:false and leaves PublicWithinDistance at its zero value (0), which advertises reputation as a hidden/private field. In reality buildExtrasSummary (observation.go:438-449) unconditionally includes the raw reputation value AND a rep_bucket in the ExtrasSummary of every VisibleEntityState (observation.go:107, snapshot.go:276) for any agent within observation radius/LOS. So the manifest contract that SDK/Rulebook/bot consumers read is wrong: agents reading the manifest would assume reputation cannot be perceived, while it is in fact perceivable at view distance (and additionally serialized to the frontend via the publicExtraKeys whitelist, world.go:103). The manifest should set PublicWithinDistance to the observation radius (matching how hp_bucket/equipped are exposed) to be truthful.
 - **repro:** Inspect generated manifest: reputation state_field shows public_at_any_distance=false, no public_within_distance. Then place agent B with non-zero reputation in A's view radius and read A's observation -> visible_entities[B].extras_summary contains reputation and rep_bucket.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [41] LOW · reputation — onDeath applies infamy for ANY attributed kill cause, not just combat (no Cause filter)
 - **file:** `engine/internal/systems/reputation/reputation.go:64-72` :64-72
 - **why:** onDeath penalizes whenever EntityDied has a non-empty Killer, ignoring Cause. The model frames the penalty as infamy for killing, but EntityDied.Cause can be "trap", "fire", etc. (combat.go:32 documents these). If a future hazard system credits a Killer for an indirect/environmental death (e.g. an agent lures another into a trap and the trap death is attributed), that agent eats the full kill_penalty even though no 'violent act' verb was issued. Today the only DealDamage caller in production code is the attack verb (all other matches are tests), so this is latent rather than live, but the asymmetry with onDamage (which DOES filter Cause=="attack") shows the cause filter was simply omitted here. Whether that is intended is ambiguous; flagging the inconsistency.
 - **repro:** Any system that calls combat.DealDamage(..., cause="trap"/"fire", killer=someAgent) and produces a death will trigger reputation.onDeath -> killer loses 5 rep with no combat verb performed.
-- **status:** [ ] open
+- **status:** [x] FIXED
