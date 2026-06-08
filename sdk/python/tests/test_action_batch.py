@@ -11,7 +11,7 @@ import pytest
 
 from agent_sim_sdk import (
     ActionBatch, ActionResult, ReasonCode,
-    Move, Speak, Pay,
+    Step, Speak, Pay,
     Agent, AgentCredentials,
 )
 
@@ -20,7 +20,7 @@ from agent_sim_sdk import (
 
 def test_action_batch_serializes_with_reasoning():
     b = ActionBatch(
-        actions=[Move(target=(24, 17)), Speak(text="hello")],
+        actions=[Step(dir="E"), Speak(text="hello")],
         reasoning="trying to reach the blacksmith and announce my arrival",
     )
     blob = json.loads(b.model_dump_json())
@@ -95,7 +95,7 @@ async def test_act_batch_round_trip_acks():
     agent._ws = fake  # type: ignore[assignment]
 
     batch = ActionBatch(
-        actions=[Move(target=(5, 5)), Speak(text="hi")],
+        actions=[Step(dir="E"), Speak(text="hi")],
         reasoning="walking and greeting",
     )
 
@@ -149,7 +149,7 @@ async def test_act_batch_times_out_cleanly():
     agent._ws = fake  # type: ignore[assignment]
     with pytest.raises(asyncio.TimeoutError):
         await agent.act_batch(
-            ActionBatch(actions=[Move(target=(5, 5))]),
+            ActionBatch(actions=[Step(dir="E")]),
             wait_for_acks=True,
             timeout=0.05,
         )
@@ -166,7 +166,7 @@ async def test_act_single_action_compat_shim():
     agent._ws = fake  # type: ignore[assignment]
 
     async def run():
-        return await agent.act_batch(ActionBatch(actions=[Move(target=(7, 7))]), wait_for_acks=True)
+        return await agent.act_batch(ActionBatch(actions=[Step(dir="E")]), wait_for_acks=True)
 
     task = asyncio.create_task(run())
     await asyncio.sleep(0)

@@ -10,17 +10,21 @@ Run: PYTHONPATH=sdk/python:. python3 tools/dev-scripts/building_probe.py
 from __future__ import annotations
 import asyncio
 
-from agent_sim_sdk import Agent, Enter, Exit, Move, VisionMode, register_agent
+from agent_sim_sdk import Agent, Enter, Exit, Step, VisionMode, register_agent
 
 
 def cheb(a, b):
     return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
 
 
-def step(here, there):
-    dx = (there[0] > here[0]) - (there[0] < here[0])
-    dy = (there[1] > here[1]) - (there[1] < here[1])
-    return [here[0] + dx, here[1] + dy]
+def compass(here, there):
+    """Single compass step (N/S/E/W) toward `there` — the engine no longer
+    pathfinds, so the agent owns one-tile movement."""
+    dx = there[0] - here[0]
+    dy = there[1] - here[1]
+    if abs(dx) >= abs(dy):
+        return "E" if dx > 0 else "W"
+    return "S" if dy > 0 else "N"
 
 
 async def main():
@@ -60,14 +64,14 @@ async def main():
                 if target is None:
                     # Head toward the village door cluster (south of spawn)
                     # until a door enters vision.
-                    await agent.act(Move(target=step(here, (764, 878))))
+                    await agent.act(Step(dir=compass(here, (764, 878))))
                     continue
                 if cheb(here, tpos) <= 1:
                     print(f"  adjacent to building {tid} at {tpos}; calling Enter")
                     await agent.act(Enter(target=tid))
                     phase = "VERIFY"
                 else:
-                    await agent.act(Move(target=step(here, tpos)))
+                    await agent.act(Step(dir=compass(here, tpos)))
                 continue
 
             if phase == "VERIFY":

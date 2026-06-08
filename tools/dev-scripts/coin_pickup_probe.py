@@ -52,7 +52,7 @@ def kind_of(sprite: str) -> str:
 
 async def main() -> int:
     from agent_sim_sdk import (
-        Agent, ActionBatch, Move, Pickup, VisionMode, register_agent,
+        Agent, ActionBatch, Step, Pickup, VisionMode, register_agent,
     )
 
     creds = await register_agent(
@@ -100,7 +100,7 @@ async def main() -> int:
         # Pathfinder: step toward the target one tile at a time so the
         # SDK keeps issuing Move requests even when the engine's
         # pathfinder thinks the destination is unreachable.
-        from agent_sim_sdk import Move, ActionBatch
+        from agent_sim_sdk import Step, ActionBatch
         adjacent = False
         for step in range(60):
             async for o in a.observations():
@@ -112,7 +112,7 @@ async def main() -> int:
                 break
             dx = 1 if cx < target_pos[0] else -1 if cx > target_pos[0] else 0
             dy = 1 if cy < target_pos[1] else -1 if cy > target_pos[1] else 0
-            await a.act_batch(ActionBatch(actions=[Move(target=[cx + dx, cy + dy])]))
+            await a.act_batch(ActionBatch(actions=[Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N"))]))
             await asyncio.sleep(0.5)
         if not adjacent:
             fail(f"failed to reach {target_pos}; final pos {obs.self.pos}")

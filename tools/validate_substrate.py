@@ -151,7 +151,7 @@ async def check_sdk_roundtrip() -> None:
 async def check_coin_pickup() -> None:
     section("Coin pickup auto-converts to gold")
     from agent_sim_sdk import (
-        register_agent, Agent, ActionBatch, Move, Pickup, VisionMode,
+        register_agent, Agent, ActionBatch, Step, Pickup, VisionMode,
     )
     creds = await register_agent(ENGINE, user_token="dev",
         persona={"name": "validator_coin", "bio": ""},
@@ -189,7 +189,7 @@ async def check_coin_pickup() -> None:
             hx, hy = 764, 864
             dx = 1 if ax < hx else -1 if ax > hx else 0
             dy = 1 if ay < hy else -1 if ay > hy else 0
-            await a.act_batch(ActionBatch(actions=[Move(target=[ax + dx, ay + dy])]))
+            await a.act_batch(ActionBatch(actions=[Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N"))]))
             await asyncio.sleep(0.4)
         if target is None:
             fail("no monetary item came into view within 40 steps")
@@ -207,7 +207,7 @@ async def check_coin_pickup() -> None:
                 break
             dx = 1 if cx < target_pos[0] else -1 if cx > target_pos[0] else 0
             dy = 1 if cy < target_pos[1] else -1 if cy > target_pos[1] else 0
-            await a.act_batch(ActionBatch(actions=[Move(target=[cx+dx, cy+dy])]))
+            await a.act_batch(ActionBatch(actions=[Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N"))]))
             await asyncio.sleep(0.5)
         if not adjacent:
             fail(f"could not walk to coin at {target_pos}")
@@ -235,7 +235,7 @@ async def check_coin_pickup() -> None:
 async def check_social_ledger() -> None:
     section("Social ledger bumps on Whisper")
     from agent_sim_sdk import (
-        register_agent, Agent, ActionBatch, Move, Whisper, VisionMode,
+        register_agent, Agent, ActionBatch, Step, Whisper, VisionMode,
     )
     creds_a = await register_agent(ENGINE, user_token="dev",
         persona={"name": "v_a", "bio": ""},
@@ -251,7 +251,7 @@ async def check_social_ledger() -> None:
             eid_b, pos_b = o.self.entity_id, o.self.pos
             break
         # Walk A toward B's CURRENT pos every tick (B may also drift).
-        # Use Move(target=B) so the engine's A* routes around building
+        # Single-tile Step toward B (the engine no longer pathfinds; the agent owns navigation).
         # walls — a naive per-tile greedy step wedges against corners and
         # never arrives (the old cause of this check's false failures).
         # If they spawned >64 tiles apart (beyond the pathfinder's cap),
@@ -273,9 +273,9 @@ async def check_social_ledger() -> None:
                 # Out of A* range — greedy-step to get within reach.
                 dx = 1 if ax < bx else -1 if ax > bx else 0
                 dy = 1 if ay < by else -1 if ay > by else 0
-                await a.act_batch(ActionBatch(actions=[Move(target=[ax + dx, ay + dy])]))
+                await a.act_batch(ActionBatch(actions=[Step(dir=("E" if dx > 0 else "W") if dx != 0 else ("S" if dy > 0 else "N"))]))
             else:
-                await a.act_batch(ActionBatch(actions=[Move(target=[bx, by])]))
+                await a.act_batch(ActionBatch(actions=[Step(dir=("E" if bx > ax else "W") if bx != ax else ("S" if by > ay else "N"))]))
             await asyncio.sleep(0.4)
         if not adjacent:
             fail(f"agent A could not reach B (a={ax,ay} b={bx,by}) after 90 steps")
