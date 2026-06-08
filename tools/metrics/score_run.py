@@ -218,6 +218,48 @@ def load_events(path: str) -> list[dict]:
     return out
 
 
+def digest_text(d: dict) -> str:
+    """Skimmable human-readable digest of a scored run (the researcher reads
+    this at a glance — see the 'design CLI views for skimming' preference)."""
+    L = []
+    L.append("=" * 56)
+    L.append("EMERGENCE DIGEST")
+    L.append("=" * 56)
+    L.append(f"events: {d['total_events']}   spawns: {d['per_kind'].get('Spawned', 0)}")
+    # Conflict
+    L.append("")
+    L.append("CONFLICT")
+    L.append(f"  kills: {d['kills']}   damage events: {d['damage_events']}")
+    if d.get("kill_pairs"):
+        pairs = ", ".join(f"{k}->{v}" for k, v in d["kill_pairs"][:5])
+        L.append(f"  kill pairs: {pairs}")
+    # Economy
+    L.append("")
+    L.append("ECONOMY")
+    L.append(f"  pay transfers: {d['pay_transfers']}   item transfers: {d['item_transfers']}")
+    if d.get("gold_total_end") is not None:
+        L.append(f"  gold total: {d['gold_total_end']}   wealth gini: {d['gold_gini_end']}")
+    # Contracts
+    L.append("")
+    L.append("CONTRACTS (verbal)")
+    L.append(f"  proposed:{d['contracts_proposed']} accepted:{d['contracts_accepted']} "
+             f"completed:{d['contracts_completed']} rejected:{d['contracts_rejected']} "
+             f"broken:{d['contracts_broken']}")
+    # Social
+    L.append("")
+    L.append("SOCIAL")
+    L.append(f"  speech:{d['speech_count']} shout:{d['shout_count']} whisper:{d['whisper_count']} "
+             f"mental_notes:{d['mental_notes']}")
+    if d.get("top_speakers"):
+        L.append("  top speakers: " + ", ".join(f"{s}({n})" for s, n in d["top_speakers"][:5]))
+    # Event spectrum
+    L.append("")
+    L.append("EVENT SPECTRUM")
+    for k, n in sorted(d["per_kind"].items(), key=lambda kv: -kv[1]):
+        L.append(f"  {n:7d}  {k}")
+    return "\n".join(L)
+
+
 def main(argv: list[str]) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="score_run")
@@ -225,6 +267,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--gold", help="JSON file: {entity_id: gold} at run end")
     ap.add_argument("--manipulators", help="comma-separated manipulator entity_ids")
     ap.add_argument("--out", help="write score JSON here (default stdout)")
+    ap.add_argument("--text", action="store_true",
+                    help="print a skimmable human-readable digest instead of JSON")
     a = ap.parse_args(argv)
 
     events = load_events(a.events)
@@ -234,7 +278,11 @@ def main(argv: list[str]) -> int:
             gold = json.load(f)
     manips = set((a.manipulators or "").split(",")) - {""}
     score = score_events(events, gold_by_agent=gold, manipulators=manips)
-    blob = json.dumps(score.to_dict(), indent=2)
+    d = score.to_dict()
+    if a.text:
+        print(digest_text(d))
+        return 0
+    blob = json.dumps(d, indent=2)
     if a.out:
         with open(a.out, "w") as f:
             f.write(blob)
