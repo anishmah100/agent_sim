@@ -8,13 +8,13 @@
 //
 // Verbs:
 //   - place_blueprint:  place a blueprint at an adjacent free tile,
-//                       pays the initial-materials cost up front.
+//     pays the initial-materials cost up front.
 //   - advance_construction: spend the next batch of materials to push
-//                       progress toward 100. Completes the blueprint
-//                       into a building when it hits 100.
+//     progress toward 100. Completes the blueprint
+//     into a building when it hits 100.
 //   - demolish:         remove an owned blueprint OR building. Refunds
-//                       a fraction of materials when the structure was
-//                       still under construction.
+//     a fraction of materials when the structure was
+//     still under construction.
 //
 // State on blueprint entities:
 //   - kind:        which blueprint shape ("cottage" / "shed" / ...).
@@ -30,6 +30,7 @@ package construction
 import (
 	"encoding/json"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
@@ -40,13 +41,13 @@ import (
 // Blueprint catalog — engine-level, hand-coded for v0. A scenario can
 // declare its own blueprints by registering more entries here.
 type BlueprintDef struct {
-	Kind                string   `json:"kind"`
-	Description         string   `json:"description"`
-	InitialMaterials    []string `json:"initial_materials"`
-	AdvanceMaterials    []string `json:"advance_materials"`
-	StepsToComplete     int      `json:"steps_to_complete"`
-	FootprintW int `json:"footprint_w,omitempty"`
-	FootprintH int `json:"footprint_h,omitempty"`
+	Kind             string   `json:"kind"`
+	Description      string   `json:"description"`
+	InitialMaterials []string `json:"initial_materials"`
+	AdvanceMaterials []string `json:"advance_materials"`
+	StepsToComplete  int      `json:"steps_to_complete"`
+	FootprintW       int      `json:"footprint_w,omitempty"`
+	FootprintH       int      `json:"footprint_h,omitempty"`
 }
 
 var defaultBlueprints = map[string]BlueprintDef{
@@ -169,7 +170,11 @@ func (s *System) handlePlace(w syscore.World, e syscore.Entity, env *syscore.Act
 		return res
 	}
 
-	id := fmt.Sprintf("bp_%s_%d_%s", p.Kind, w.Tick(), e.ID())
+	// AUDIT FIX (high/[2]): use a monotonic counter, not kind+tick+builder.
+	// Two place_blueprint actions of the same kind by the same agent in one
+	// tick produced identical ids; SpawnEntity has no collision guard, so the
+	// second silently clobbered the first (materials paid for both, one lost).
+	id := fmt.Sprintf("bp_%s_%d", p.Kind, atomic.AddUint64(&s.idCounter, 1))
 	_, err := w.SpawnEntityFromSpec(syscore.EntitySpec{
 		ID:        id,
 		Archetype: "blueprint",
@@ -327,10 +332,10 @@ func (s *System) manifest() manifest.SystemDeclaration {
 	})
 	for kind, def := range s.bp {
 		extras, _ := json.Marshal(map[string]any{
-			"steps_to_complete":  def.StepsToComplete,
-			"initial_materials":  def.InitialMaterials,
-			"advance_materials":  def.AdvanceMaterials,
-			"footprint":          [2]int{def.FootprintW, def.FootprintH},
+			"steps_to_complete": def.StepsToComplete,
+			"initial_materials": def.InitialMaterials,
+			"advance_materials": def.AdvanceMaterials,
+			"footprint":         [2]int{def.FootprintW, def.FootprintH},
 		})
 		bps = append(bps, manifest.ArchetypeDecl{
 			Archetype:     "blueprint:" + kind,
@@ -375,9 +380,13 @@ func (s *System) manifest() manifest.SystemDeclaration {
 
 // === helpers ===
 
-// resolveMaterials walks the actor's inventory matching item-IDs by
-// the prefix of the requested material kind. The Resources system
-// mints "wood_<tick>_<i>_<j>" so "wood" matches via prefix.
+// resolveMaterials walks the actor's inventory matching item-IDs by their
+// KIND against the requested material kinds. AUDIT FIX (high/[3]): the old
+// version matched by raw string prefix, which only worked for the (since-
+// removed) "wood_<tick>" resource ids — it could NOT match canonical
+// "item:wood#<id>" items (picked up, given, or — after fix [9] — harvested),
+// so construction silently ignored most wood/stone in inventory. Now both the
+// canonical and any legacy id resolve to their kind first.
 func resolveMaterials(inv inventory.InventoryService, w syscore.World, entityID string, want []string) ([]string, bool) {
 	have := inv.Items(w, entityID)
 	used := make(map[int]bool)
@@ -388,7 +397,7 @@ func resolveMaterials(inv inventory.InventoryService, w syscore.World, entityID 
 			if used[i] {
 				continue
 			}
-			if hasPrefix(id, kind) {
+			if kindOfItem(id) == kind {
 				found = i
 				break
 			}
@@ -402,11 +411,18 @@ func resolveMaterials(inv inventory.InventoryService, w syscore.World, entityID 
 	return out, true
 }
 
-func hasPrefix(s, prefix string) bool {
-	if len(prefix) > len(s) {
-		return false
+// kindOfItem extracts the canonical kind from an inventory id. Handles the
+// canonical "item:<kind>#<unique>" form and any legacy "<kind>_<...>" form.
+func kindOfItem(id string) string {
+	if len(id) > 5 && id[:5] == "item:" {
+		id = id[5:]
 	}
-	return s[:len(prefix)] == prefix
+	for i := 0; i < len(id); i++ {
+		if id[i] == '#' || id[i] == '_' {
+			return id[:i]
+		}
+	}
+	return id
 }
 
 func stringExtra(e syscore.Entity, k string) (string, bool) {
@@ -453,4 +469,3 @@ func stringSlice(e syscore.Entity, k string) []string {
 	}
 	return nil
 }
-

@@ -99,12 +99,21 @@ func (s *System) advance(w syscore.World, e syscore.Entity, q map[string]any) {
 			q["done"] = true
 		}
 	case "kill_target":
+		// AUDIT FIX (high/[4]): absence is ambiguous — a corpse is removed
+		// on death (legit kill) BUT a bogus/never-spawned target id is also
+		// absent. The old code completed on ANY absence, handing out a free
+		// reward for a nonexistent target. Only credit a kill once the target
+		// has been observed ALIVE at least once (target_seen): "gone after
+		// being seen" = killed, while "never existed" never completes.
 		tid, _ := q["target"].(string)
 		other := w.EntityByID(tid)
 		if other == nil {
-			q["done"] = true
+			if seen, _ := q["target_seen"].(bool); seen {
+				q["done"] = true
+			}
 			return
 		}
+		q["target_seen"] = true
 		hpV, _ := other.GetExtra("hp")
 		if asInt(hpV) <= 0 {
 			q["done"] = true
