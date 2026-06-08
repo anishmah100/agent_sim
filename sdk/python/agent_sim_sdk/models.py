@@ -166,16 +166,6 @@ class _Action(BaseModel):
     priority: int = 0
 
 
-class Move(_Action):
-    """DEPRECATED — the engine no longer pathfinds for agents and REJECTS the
-    `move` verb (unknown_verb). Movement is now single-tile `Step` (N/S/E/W),
-    with the agent owning navigation via agents.common.nav. Kept only so the
-    legacy examples/ still import; do not use in new agents."""
-    verb: Literal["move"] = "move"
-    target: Pos
-    jog: bool = False
-
-
 class Step(_Action):
     """Move exactly one tile in a compass direction (N/S/E/W). The AGENT
     owns navigation — compute your route (see agents.common.nav) and feed
@@ -418,7 +408,7 @@ class CompleteTask(_Action):
 Action = Annotated[
     Union[
         # Base verbs.
-        Move, Step, Speak, Whisper, Shout, LookAt, Interact,
+        Step, Speak, Whisper, Shout, LookAt, Interact,
         Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
         # Composable-system verbs (session 2).
         Pay, WorkForPay, BuyFood, Trade, Loot,

@@ -74,7 +74,7 @@ def test_does_not_greet_same_neighbor_twice():
     # Second turn — same Cara, no food, low hunger → should wander.
     batch, label = bot.pick_action(obs)
     assert label == "WANDER"
-    assert batch.actions[0].verb == "move"
+    assert batch.actions[0].verb == "step"
 
 
 def test_walks_toward_food_when_hungry():
@@ -88,9 +88,8 @@ def test_walks_toward_food_when_hungry():
     )
     batch, label = bot.pick_action(obs)
     assert label.startswith("WALK_TO_FOOD")
-    # Step should be toward the food (x ↑).
-    target = batch.actions[0].target
-    assert target[0] == 11
+    # Step should be toward the food (east).
+    assert batch.actions[0].dir == "E"
 
 
 def test_wanders_when_idle():
@@ -98,7 +97,7 @@ def test_wanders_when_idle():
     obs = _obs()  # no visible, no hunger, nothing to do
     batch, label = bot.pick_action(obs)
     assert label == "WANDER"
-    assert batch.actions[0].verb == "move"
+    assert batch.actions[0].verb == "step"
 
 
 def test_reasoning_trace_attached_to_every_batch():
