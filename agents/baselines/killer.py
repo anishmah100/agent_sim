@@ -29,7 +29,12 @@ from ._common import (
     is_money,
     item_kind,
     nearest,
+    random_walk,
 )
+
+# Archetypes the killer treats as prey. Registered agents are "wanderer";
+# the rest cover scenario-spawned actors. Items/objects are excluded.
+_AGENTS = ("trainer", "wanderer", "survivor", "killer", "manipulator", "scavenger")
 
 
 @dataclass
@@ -43,116 +48,63 @@ class Killer(ArchetypeBot):
         here = tuple(s.pos)
         hp = int((s.extras or {}).get("hp", 100) or 100)
 
-        # Low HP overrides everything except already-LOOTING. Retreat only
-        # when badly hurt and re-engage sooner, so the killer spends most of
-        # its time actually hunting (a high retreat threshold + slow regen
-        # left killers loitering out of the fight for long stretches, which
-        # is a big part of why combat went quiet mid-run).
-        if hp < 18 and self.state != "LOOTING":
+        # Badly hurt: flee the nearest agent until patched up. Never just
+        # stand — flee or roam.
+        if hp < 18:
             self.state = "RETREATING"
-
-        if self.state == "RETREATING":
             threats = [e for e in obs.visible_entities if e.entity_id != s.entity_id]
-            if not threats and hp > 45:
-                self.state = "HUNTING"
-                self.target_id = None
-                self.goal = Goal.idle()
-            elif threats:
-                t = nearest(threats, here)
-                self.goal = Goal.flee(t.entity_id)
-            return None  # motor flees / idles
-
-        if self.state == "LOOTING":
-            items = list(obs.visible_items)
-            if not items:
-                self.state = "HUNTING"
-                self.target_id = None
-                self.goal = Goal.idle()
-            else:
-                target = self._pick_loot_target(items)
-                if chebyshev(here, tuple(target.pos)) <= 1:
-                    return Pickup(target=target.entity_id)
-                self.goal = Goal.goto(*target.pos)
+            if threats:
+                self.goal = Goal.flee(nearest(threats, here).entity_id)
+                return None
+            self.goal = Goal.idle()
+            return random_walk(self, here)
+        if self.state == "RETREATING" and hp < 45:
+            # still recovering
+            threats = [e for e in obs.visible_entities if e.entity_id != s.entity_id]
+            if threats and hp < 30:
+                self.goal = Goal.flee(nearest(threats, here).entity_id)
                 return None
 
-        if self.state == "HUNTING":
-            # If unarmed and there's a visible weapon, grab it first —
-            # unarmed kills take 25+ uninterrupted hits, but a sword
-            # short halves that. Equip before pursuing prey.
-            inv = list((s.extras or {}).get("inventory") or [])
-            unarmed = not ((s.extras or {}).get("equipped", {}) or {}).get("weapon")
-            if unarmed:
-                weap_in_inv = next(
-                    (i for i in inv if isinstance(i, str)
-                     and any(k in i for k in WEAPON_KINDS)),
-                    None,
-                )
-                if weap_in_inv:
-                    return Equip(item=weap_in_inv, slot="weapon")
-                # Grab a weapon ONLY if it's right here — never detour across
-                # the map for one (that read as idle wandering). Unarmed
-                # hunting is fine; a found weapon is a bonus.
-                weap_items = [
-                    it for it in obs.visible_items
-                    if item_kind(it) in WEAPON_KINDS
-                    and chebyshev(here, tuple(it.pos)) <= 1
-                ]
-                if weap_items:
-                    return Pickup(target=weap_items[0].entity_id)
-            choice = self._pick_target(obs.visible_entities, here)
-            if choice is not None:
-                self.target_id = choice.entity_id
-                self.goal = Goal.pursue(choice.entity_id)
-                self.state = "PURSUING"
-            else:
-                # No prey: opportunistic gold grab so the killer doesn't
-                # visibly ignore loose coins. Lowest priority.
-                money_items = [it for it in obs.visible_items if is_money(it)]
-                if money_items:
-                    target = nearest(money_items, here)
-                    if chebyshev(here, tuple(target.pos)) <= 1:
-                        return Pickup(target=target.entity_id)
-                    self.goal = Goal.goto(*target.pos)
-                    return None
-                # Nothing to do — wander so we stumble onto prey. A fresh
-                # random goto each idle tick keeps us roaming, not frozen.
-                self.goal = Goal.idle()
-                from ._common import random_walk
-                return random_walk(self, here)
+        # Free lethality: equip a carried weapon, or grab one underfoot.
+        inv = list((s.extras or {}).get("inventory") or [])
+        if not ((s.extras or {}).get("equipped", {}) or {}).get("weapon"):
+            win = next((i for i in inv if isinstance(i, str)
+                        and any(k in i for k in WEAPON_KINDS)), None)
+            if win:
+                return Equip(item=win, slot="weapon")
+            whot = [it for it in obs.visible_items if item_kind(it) in WEAPON_KINDS
+                    and chebyshev(here, tuple(it.pos)) <= 1]
+            if whot:
+                return Pickup(target=whot[0].entity_id)
 
-        if self.state == "PURSUING":
-            # Keep the pursue goal current; the motor uses last-seen memory
-            # if the target slips out of view. If the motor reports the
-            # target is truly lost (memory expired), it returns no step and
-            # we fall back to re-hunting.
-            self.goal = Goal.pursue(self.target_id) if self.target_id else Goal.idle()
-            target = self._find_target(obs.visible_entities)
-            if target is not None and chebyshev(here, tuple(target.pos)) <= 1:
+        # RELENTLESS HUNT: re-pick the nearest visible agent EVERY tick and
+        # chase it. No stale target-lock — when a victim flees out of sight
+        # the killer immediately switches to the next-nearest agent instead
+        # of walking to an empty last-seen tile and sitting there (the "once
+        # the victim is far they just sit" bug). Attack the instant adjacent.
+        prey = [e for e in obs.visible_entities
+                if e.entity_id != s.entity_id and e.archetype in _AGENTS]
+        if prey:
+            t = nearest(prey, here)
+            self.target_id = t.entity_id
+            if chebyshev(here, tuple(t.pos)) <= 1:
                 self.state = "ATTACKING"
-                return Attack(target=target.entity_id)
-            # Target not visible AND no usable memory → give up, re-hunt.
-            if target is None and self._motor is not None \
-                    and self._motor.target_pos(self.target_id, obs) is None:
-                self.state = "HUNTING"
-                self.target_id = None
-                self.goal = Goal.idle()
-            return None  # motor pursues (live pos or last-seen)
+                return Attack(target=t.entity_id)
+            self.state = "PURSUING"
+            self.goal = Goal.pursue(t.entity_id)
+            return None  # motor closes on the nearest prey
 
-        if self.state == "ATTACKING":
-            target = self._find_target(obs.visible_entities)
-            if target is None:
-                # Target gone — presumed dead. Grab any loot it dropped.
-                self.target_id = None
-                self.state = "LOOTING" if obs.visible_items else "HUNTING"
-                self.goal = Goal.idle()
-                return None
-            if chebyshev(here, tuple(target.pos)) > 1:
-                self.state = "PURSUING"
-                self.goal = Goal.pursue(target.entity_id)
-                return None  # motor closes the gap
-            return Attack(target=target.entity_id)
-
-        return None
+        # No agent in sight: grab loose gold, else roam to find someone.
+        money_items = [it for it in obs.visible_items if is_money(it)]
+        if money_items:
+            t = nearest(money_items, here)
+            if chebyshev(here, tuple(t.pos)) <= 1:
+                return Pickup(target=t.entity_id)
+            self.goal = Goal.goto(*t.pos)
+            return None
+        self.state = "PROWL"
+        self.goal = Goal.idle()
+        return random_walk(self, here)
 
     # ----- target picking -----
 

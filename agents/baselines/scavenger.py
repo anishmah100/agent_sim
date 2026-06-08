@@ -16,6 +16,7 @@ from agents.common.motor import Goal
 
 from ._common import (
     ArchetypeBot,
+    forage_or_roam,
     has_weapon_equipped,
     is_money,
     item_kind,
@@ -105,10 +106,9 @@ class Scavenger(ArchetypeBot):
                 return Pickup(target=target.entity_id)
             self.goal = Goal.goto(*target.pos)  # motor navigates to the coin
             return None
-        self._idle_tick = (self._idle_tick + 1) % 4
-        if self._idle_tick == 0:
-            return random_walk(self, here)
-        return None
+        # Nothing to scavenge right now: forage any loot / roam rather than
+        # stand idle waiting for a death scream.
+        return forage_or_roam(self, obs, here)
 
     @staticmethod
     def _pick_loot_target(items):

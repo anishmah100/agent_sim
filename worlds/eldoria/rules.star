@@ -59,22 +59,22 @@ register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
 # to do (no trades, no contracts). Aligning the respawn hub to the spawn
 # hub + a tight radius + a faster interval keeps a live economy under the
 # agents so scarcity drives interaction instead of just emptying out.
-register_tuning("respawn_interval_ticks", 300)    # 5 in-game sec @ 60Hz
-register_tuning("respawn_cap",            900)
+register_tuning("respawn_interval_ticks", 180)    # 3 in-game sec @ 60Hz
+register_tuning("respawn_cap",            300)
 # respawn_batch: items dropped PER interval. One-at-a-time can't keep a
 # populated hub stocked — a crowd of foragers drains the local supply far
 # faster than it refills and the play area starves, leaving agents milling
 # with nothing to do after the opening grab. A batch keeps the town square
 # continuously supplied so foraging / trading / and predation around the
 # crowd sustain instead of dying out. ~14/5s feeds ~20 agents.
-register_tuning("respawn_batch",          14)
+register_tuning("respawn_batch",          12)
 # radius 40 let items — and the agents chasing them — disperse past each
 # other's vision (radius 12), so runs were a coin-flip between a clustered
 # negotiating group and everyone hoarding solo in opposite corners (run13:
 # 6 pays vs run14: 0 contracts, same config). Match the spawn radius (14)
 # so loot stays in the cluster and agents remain in mutual vision —
 # proximity is the precondition for the propose/trade/pay loop to fire.
-register_tuning("respawn_radius",         14)
+register_tuning("respawn_radius",         40)
 register_tuning("respawn_hub_x",          764)    # == spawn_hub_x
 register_tuning("respawn_hub_y",          864)    # == spawn_hub_y
 
@@ -98,7 +98,7 @@ register_tuning("respawn_hub_y",          864)    # == spawn_hub_y
 # pocket rather than spilling back into the market.
 register_tuning("spawn_hub_x",   764)
 register_tuning("spawn_hub_y",   864)
-register_tuning("spawn_radius",  14)
+register_tuning("spawn_radius",  40)
 
 # ---- Stats ----
 # Per-entity stats this world tracks. The engine creates the extras

@@ -24,6 +24,7 @@ from agent_sim_sdk import (
     Agent,
     AgentCredentials,
     Step,
+    Pickup,
     Observation,
     Pos,
     VisibleEntity,
@@ -227,3 +228,21 @@ def random_walk(bot: ArchetypeBot, here: Pos | None = None) -> Optional[Action]:
     already cluster naturally by chasing the respawning hub items (positive
     attraction), which keeps them lively WITHOUT a forced funnel + gridlock."""
     return Step(dir=bot.rng.choice(["N", "S", "E", "W"]))
+
+
+def forage_or_roam(bot: "ArchetypeBot", obs, here: Pos) -> Optional[Action]:
+    """Default 'something useful to do' for an idle agent so nobody just
+    stands around: go grab the nearest visible item (ANY kind — coins auto-
+    convert to gold, food/tools fill the pack), picking it up when adjacent;
+    if nothing is in view, take a roaming step toward fresh ground. Never
+    returns None, so an idle agent is always either gathering or exploring.
+    Sets bot.goal for the motor when it needs to walk to the item."""
+    from agents.common.motor import Goal
+    items = list(getattr(obs, "visible_items", []) or [])
+    if items:
+        t = nearest(items, here)
+        if chebyshev(here, tuple(t.pos)) <= 1:
+            return Pickup(target=t.entity_id)
+        bot.goal = Goal.goto(*t.pos)
+        return None  # motor walks to it
+    return random_walk(bot, here)

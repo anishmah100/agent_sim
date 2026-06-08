@@ -25,6 +25,7 @@ from agents.common.motor import Goal
 
 from ._common import (
     ArchetypeBot,
+    forage_or_roam,
     has_weapon_equipped,
     is_food,
     is_money,
@@ -103,11 +104,10 @@ class Survivor(ArchetypeBot):
             self.state = "IDLE"
             return None
 
-        # IDLE: money is the primary objective for the "normal
-        # character" (survivor). When not hungry / fleeing, head for
-        # the nearest visible coin or gem and pick it up. The engine
-        # auto-converts monetary items to gold on pickup, so this
-        # directly grows our wealth — no inventory bookkeeping.
+        # IDLE: keep busy. Prefer money (auto-converts to gold, no slot
+        # cost), but if there's no coin in view, grab ANY nearby item or
+        # roam toward fresh ground — an idle survivor should never just
+        # stand among loot. forage_or_roam never returns None.
         money_items = [it for it in obs.visible_items if is_money(it)]
         if money_items:
             target = nearest(money_items, here)
@@ -116,12 +116,7 @@ class Survivor(ArchetypeBot):
                 return Pickup(target=target.entity_id)
             self.goal = Goal.goto(*target.pos)  # motor navigates to the coin
             return None
-
-        # No money or food visible: wander occasionally so we
-        # explore + discover new spawns.
-        if self.rng.random() < 0.5:
-            return random_walk(self, here)
-        return None
+        return forage_or_roam(self, obs, here)
 
     def transition_note(self):
         # Default goal is gold accumulation; survival pressure
