@@ -20,7 +20,6 @@ from .models import (
     ProposeTask, AcceptTask, RejectTask, CompleteTask,
     VisionMode,
 )
-from .pathfind import Pathfinder, WALKABLE_TILES, BLOCKING_ARCHETYPES
 from .observation_render import (
     render_layered_observation, render_self, render_nearby,
     render_audible, render_minimap, rank_nearby, relative_compass,
@@ -43,7 +42,6 @@ __all__ = [
     "Enter", "Exit", "Lock", "Unlock", "ClaimOwnership", "TransferOwnership",
     "PlaceBlueprint", "AdvanceConstruction", "Demolish",
     "ProposeTask", "AcceptTask", "RejectTask", "CompleteTask",
-    "Pathfinder", "WALKABLE_TILES", "BLOCKING_ARCHETYPES",
     "render_layered_observation", "render_self", "render_nearby",
     "render_audible", "render_minimap", "rank_nearby", "relative_compass",
 ]
