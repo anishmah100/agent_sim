@@ -15,7 +15,6 @@ async def main():
             print("="*70)
             print(f"self.pos = {tuple(s.pos)}   facing={getattr(s,'facing','?')}")
             print(f"self.extras hp/hunger/gold = {(s.extras or {}).get('hp')}/{(s.extras or {}).get('hunger')}/{(s.extras or {}).get('gold')}")
-            print(f"map_dims = {getattr(obs,'map_dims',None)}")
             print(f"# visible_entities = {len(obs.visible_entities or [])}")
             for e in (obs.visible_entities or [])[:6]:
                 print(f"   entity {e.entity_id} archetype={e.archetype} pos={tuple(e.pos)} summary={e.extras_summary}")

@@ -217,10 +217,6 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 			DayPhase: dayPhaseFromTick(s.Tick),
 			Weather:  "clear",
 		},
-		KnownMap: &KnownMapSummary{
-			MapID:   s.MapID,
-			MapDims: [2]int{s.WidthTiles, s.HeightTiles},
-		},
 	}
 	if e.CurrentAction != "" {
 		obs.Self.CurrentAction = map[string]interface{}{

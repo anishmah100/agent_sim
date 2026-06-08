@@ -423,7 +423,6 @@ func (h *AgentHub) tickObservations() {
 			// BuildObservationFor directly) against the WS payload.
 			"visible_items":     obs.VisibleItems,
 			"audible":           obs.Audible,
-			"known_map_summary": obs.KnownMap,
 			// local_view — the egocentric ASCII terrain window. Like
 			// visible_items above, the hand-rolled map MUST list it or the
 			// WS payload silently drops it (the struct's json tag only

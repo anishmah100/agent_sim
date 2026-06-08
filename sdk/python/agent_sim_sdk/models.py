@@ -97,13 +97,6 @@ class WorldClock(BaseModel):
     weather: str = "clear"
 
 
-class KnownMap(BaseModel):
-    map_id: str
-    map_dims: tuple[int, int]
-    named_regions: list[dict[str, Any]] = Field(default_factory=list)
-    portals: list[dict[str, Any]] = Field(default_factory=list)
-
-
 class LocalView(BaseModel):
     """Egocentric ASCII tile-map — "what the screen shows around me" as text.
 
@@ -148,7 +141,6 @@ class Observation(BaseModel):
     visible_items: list[VisibleItem] = Field(default_factory=list)
     audible: list[AudibleEvent] = Field(default_factory=list)
     recent_self_results: list[dict[str, Any]] = Field(default_factory=list)
-    known_map_summary: Optional[KnownMap] = None
     # Egocentric ASCII terrain window (radius LocalViewRadius). Present on
     # every live observation; the agent reads it to plan routes the way a
     # human controlling the avatar would (see the lake, route around walls).

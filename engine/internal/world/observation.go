@@ -63,10 +63,6 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 			DayPhase:  dayPhaseFromTick(w.tick),
 			Weather:   "clear",
 		},
-		KnownMap: &KnownMapSummary{
-			MapID:    w.MapID,
-			MapDims:  [2]int{w.WidthTiles, w.HeightTiles},
-		},
 	}
 	if e.CurrentAction != "" {
 		obs.Self.CurrentAction = map[string]interface{}{
@@ -155,7 +151,6 @@ type Observation struct {
 	VisibleItems      []VisibleItemState    `json:"visible_items,omitempty"`
 	Audible           []AudibleEvent        `json:"audible"`
 	RecentSelfResults []ActionResult        `json:"recent_self_results,omitempty"`
-	KnownMap          *KnownMapSummary      `json:"known_map_summary,omitempty"`
 	// LocalView — the agent's egocentric ASCII tile-map: a Chebyshev
 	// radius-LocalViewRadius window of the static terrain centered on the
 	// agent, with visible entities/items/doors overlaid. This is "what the
@@ -369,11 +364,6 @@ type WorldClockState struct {
 	Tick     uint64 `json:"tick"`
 	DayPhase string `json:"day_phase"`
 	Weather  string `json:"weather"`
-}
-
-type KnownMapSummary struct {
-	MapID    string   `json:"map_id"`
-	MapDims  [2]int   `json:"map_dims"`
 }
 
 func dayPhaseFromTick(tick uint64) string {

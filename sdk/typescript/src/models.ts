@@ -59,13 +59,6 @@ export const WorldClock = z.object({
   weather: z.string().default("clear"),
 });
 
-export const KnownMap = z.object({
-  map_id: z.string(),
-  map_dims: z.tuple([z.number().int(), z.number().int()]),
-  named_regions: z.array(z.record(z.unknown())).default([]),
-  portals: z.array(z.record(z.unknown())).default([]),
-});
-
 // Egocentric ASCII tile-map. rows[0] is the northernmost row; origin is
 // the world (x,y) of rows[0][0]. Glyphs: @ you, . walkable, # blocked,
 // ~ water, (space) off-map, P person, $ item, + door. Terrain is known to
@@ -94,7 +87,6 @@ export const Observation = z.object({
   visible_objects: z.array(VisibleObject).default([]),
   audible: z.array(AudibleEvent).default([]),
   recent_self_results: z.array(z.record(z.unknown())).default([]),
-  known_map_summary: KnownMap.nullable().optional(),
   local_view: LocalView.nullable().optional(),
   world_clock: WorldClock,
   view_image: ViewImage.nullable().optional(),
