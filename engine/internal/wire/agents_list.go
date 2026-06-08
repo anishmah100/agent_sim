@@ -45,6 +45,18 @@ func AgentsListHandler(hub *AgentHub, w *world.World) http.HandlerFunc {
 		now := nowMs()
 		out := make([]agentInfo, 0, len(conns))
 		for _, c := range conns {
+			// Skip husks: a connection whose bound entity is no longer in
+			// the world snapshot is a dead/removed agent. Its entity was
+			// dropped on death, so it reports pos (0,0) — and the picker's
+			// jump-to-focus would fling the camera to the world's top-left
+			// corner ("Bram the cautious takes me to a weird spawn at 0,0").
+			// The supervisor respawns the persona as a fresh live entity,
+			// which DOES appear in the snapshot, so the live one still
+			// lists. Inside-building agents stay in the snapshot, so they
+			// are not affected.
+			if _, alive := entityPos[c.rec.EntityID]; !alive {
+				continue
+			}
 			info := agentInfo{
 				AgentID:      c.rec.AgentID,
 				EntityID:     c.rec.EntityID,
