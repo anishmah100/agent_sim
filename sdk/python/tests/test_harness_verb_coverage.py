@@ -21,7 +21,7 @@ import pytest
 from examples.claude_agent.harness import _action_from_dict
 from agent_sim_sdk import (
     Step, Speak, Whisper, Shout, LookAt, Interact, Pickup, Drop, Equip,
-    Give, Pay, WorkForPay, Trade, Loot, Chop, Mine,
+    Give, Pay, WorkForPay, BuyFood, Trade, Loot, Chop, Mine, Forage, Cook,
     Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
     Attack, Defend, Heal, Wait,
 )
@@ -45,11 +45,14 @@ ROUND_TRIP_CASES = [
     # Economy.
     ({"verb": "pay", "target": "b", "amount": 5}, Pay),
     ({"verb": "work_for_pay"}, WorkForPay),
+    ({"verb": "buy_food"}, BuyFood),
     ({"verb": "trade", "target": "b", "item": "apple", "price": 2}, Trade),
     ({"verb": "loot", "target": "corpse_1"}, Loot),
     # Resources.
     ({"verb": "chop", "target": "tree_3"}, Chop),
     ({"verb": "mine", "target": "rock_3"}, Mine),
+    ({"verb": "forage", "target": "tree_3"}, Forage),
+    ({"verb": "cook", "item": "item:fish_raw#1"}, Cook),
     # Property.
     ({"verb": "enter", "target": "bld:001"}, Enter),
     ({"verb": "exit"}, Exit),
@@ -130,8 +133,8 @@ def test_every_engine_verb_has_a_case():
     engine_verbs = {
         "step", "speak", "shout", "whisper", "look_at",
         "interact", "pickup", "drop", "equip", "give",
-        "pay", "work_for_pay", "trade", "loot",
-        "chop", "mine",
+        "pay", "work_for_pay", "buy_food", "trade", "loot",
+        "chop", "mine", "forage", "cook",
         "enter", "exit", "lock", "unlock",
         "claim_ownership", "transfer_ownership",
         "attack", "defend", "heal", "wait",

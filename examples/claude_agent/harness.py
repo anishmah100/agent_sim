@@ -19,7 +19,7 @@ from typing import Optional, Protocol
 
 from agent_sim_sdk import (
     ActionBatch, Step, Speak, Shout, Whisper, LookAt, Interact, Pickup,
-    Drop, Equip, Give, Pay, WorkForPay, Trade, Loot, Chop, Mine,
+    Drop, Equip, Give, Pay, WorkForPay, BuyFood, Trade, Loot, Chop, Mine, Forage, Cook,
     Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
     Attack, Defend, Heal, Wait,
     Observation, render_layered_observation,
@@ -205,6 +205,8 @@ def _action_from_dict(d: dict):
         return Pay(target=d.get("target", ""), amount=int(d.get("amount", 0)))
     if verb == "work_for_pay":
         return WorkForPay()
+    if verb == "buy_food":
+        return BuyFood()
     if verb == "trade":
         return Trade(target=d.get("target", ""),
                      item=d.get("item", ""),
@@ -217,6 +219,10 @@ def _action_from_dict(d: dict):
         return Chop(target=d.get("target", ""))
     if verb == "mine":
         return Mine(target=d.get("target", ""))
+    if verb == "forage":
+        return Forage(target=d.get("target", ""))
+    if verb == "cook":
+        return Cook(item=d.get("item", ""))
 
     # Property.
     if verb == "enter":
