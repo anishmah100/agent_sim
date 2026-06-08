@@ -159,6 +159,10 @@ interface RenderedEntity {
   prevPos: [number, number];
   movingSince: number;             // ms — for idle detection
   hitFlashUntil: number;           // BLK-1: ms timestamp; red tint while > now
+  flinchStart: number;             // ms timestamp of last hit, for flinch nudge
+  flinchDir: { x: number; y: number }; // unit kick-back direction
+  bodyHomeX: number;               // body sprite's resting x (flinch returns here)
+  bodyHomeY: number;               // body sprite's resting y
   prevHp: number | null;           // BLK-1: last seen hp, to detect damage
 }
 
@@ -168,9 +172,14 @@ interface RenderedEntity {
 interface DyingEntity {
   re: RenderedEntity;
   start: number;                   // performance.now() when death detected
+  baseY: number;                   // container.y at moment of death (slump anchor)
 }
 const DEATH_FADE_MS = 1400;
-const HIT_FLASH_MS = 160;
+const HIT_FLASH_MS = 180;
+// How long the flinch nudge lasts. The body kicks back a couple px on a
+// hit, then springs home — a small but legible "that hurt" read.
+const FLINCH_MS = 170;
+const FLINCH_PX = 2.2;
 
 // BLK-1: read an entity's hp from its public extras, or null if it has
 // none (world objects / items). Used to detect damage between snapshots.
@@ -186,19 +195,30 @@ function maxHpOf(e: EntityState): number | null {
 // Draw a compact RPG-style HP bar (dark frame + green→amber→red fill)
 // centered over the footprint. Width scales with the entity tile.
 const HP_BAR_W = 14;
-const HP_BAR_H = 2;
+const HP_BAR_H = 3;
 function drawHpBar(g: Graphics, hp: number, max: number): void {
   g.clear();
   const frac = Math.max(0, Math.min(1, hp / max));
   const x = (FOOTPRINT_W - HP_BAR_W) / 2;
-  // color ramps green → amber → red as HP falls.
-  const color = frac > 0.6 ? 0x5ee86a : frac > 0.3 ? 0xffc24a : 0xff4d4d;
-  // dark frame
-  g.rect(x - 1, -1, HP_BAR_W + 2, HP_BAR_H + 2).fill({ color: 0x181425, alpha: 0.85 });
-  // empty track
-  g.rect(x, 0, HP_BAR_W, HP_BAR_H).fill({ color: 0x3a2233, alpha: 0.9 });
-  // fill
-  if (frac > 0) g.rect(x, 0, HP_BAR_W * frac, HP_BAR_H).fill({ color, alpha: 1 });
+  // color ramps green → amber → red as HP falls (palette-aligned).
+  const color = frac > 0.6 ? 0x5ee89a : frac > 0.3 ? 0xfeae34 : 0xe43b44;
+  const r = HP_BAR_H / 2;                  // pill radius
+  // soft drop shadow under the whole pill for separation from the sprite.
+  g.roundRect(x - 1, 1, HP_BAR_W + 2, HP_BAR_H + 2, r + 1)
+    .fill({ color: 0x000000, alpha: 0.35 });
+  // dark rounded frame.
+  g.roundRect(x - 1, -1, HP_BAR_W + 2, HP_BAR_H + 2, r + 1)
+    .fill({ color: 0x181425, alpha: 0.92 });
+  // empty track.
+  g.roundRect(x, 0, HP_BAR_W, HP_BAR_H, r)
+    .fill({ color: 0x3a2233, alpha: 0.95 });
+  // fill (rounded; clamp width so a tiny sliver still shows as a pill).
+  if (frac > 0) {
+    const fw = Math.max(HP_BAR_H, HP_BAR_W * frac);
+    g.roundRect(x, 0, fw, HP_BAR_H, r).fill({ color, alpha: 1 });
+    // top highlight line — subtle glossy sheen.
+    g.rect(x + 0.5, 0.4, Math.max(0, fw - 1), 0.7).fill({ color: 0xffffff, alpha: 0.22 });
+  }
 }
 
 export interface ItemHoverEvent {
@@ -350,24 +370,54 @@ export class EntityLayer {
   tick(deltaMs: number): void {
     this.pulsePhase = (this.pulsePhase + deltaMs / 230) % (Math.PI * 2);
 
-    // BLK-1: damage flash — red-tint bodies whose hp just dropped.
+    // BLK-1: damage flash + flinch — bodies whose hp just dropped flash
+    // bright red, then quickly cool to white; simultaneously the body
+    // kicks back a couple px and springs home so the hit visibly reads.
     const now = performance.now();
     for (const re of this.items.values()) {
       const b = re.body as unknown as { tint?: number };
-      if (b.tint === undefined) continue;
-      b.tint = re.hitFlashUntil > now ? 0xff4d4d : 0xffffff;
+      // Flash: bright red at impact, easing back to white over the flash
+      // window — a single-frame full-red looked harsh / strobed.
+      if (b.tint !== undefined) {
+        if (re.hitFlashUntil > now) {
+          const f = (re.hitFlashUntil - now) / HIT_FLASH_MS; // 1 → 0
+          b.tint = lerpTint(0xffffff, 0xff3b3b, f);
+        } else {
+          b.tint = 0xffffff;
+        }
+      }
+      // Flinch nudge: a damped spring-out-and-back on the body sprite.
+      const ft = (now - re.flinchStart) / FLINCH_MS;
+      if (re.flinchStart > 0 && ft <= 1) {
+        // sin curve: 0 → peak at ft=0.5 → 0. Eases out + back.
+        const k = Math.sin(ft * Math.PI) * FLINCH_PX;
+        re.body.x = re.bodyHomeX + re.flinchDir.x * k;
+        re.body.y = re.bodyHomeY + re.flinchDir.y * k;
+      } else if (re.flinchStart > 0) {
+        re.body.x = re.bodyHomeX;
+        re.body.y = re.bodyHomeY;
+        re.flinchStart = 0;                  // settle; stop touching it
+      }
     }
-    // BLK-1: death fade — advance fading bodies and destroy when done.
+    // BLK-1: death dissolve — a readable kill beat: brief white flash →
+    // grayscale → slump downward + fade out. The body doesn't just pop.
     if (this.dying.length > 0) {
-      const startY = (d: DyingEntity) => d.re.container.y;
       for (let i = this.dying.length - 1; i >= 0; i--) {
         const d = this.dying[i];
         const t01 = Math.min(1, (now - d.start) / DEATH_FADE_MS);
-        d.re.container.alpha = 1 - t01;
-        // slight slump downward as it falls.
-        d.re.container.y = startY(d); // (no cumulative drift; alpha is the tell)
         const b = d.re.body as unknown as { tint?: number };
-        if (b.tint !== undefined) b.tint = 0x000000; // fade to dark
+        if (t01 < 0.12) {
+          // opening white flash — "the killing blow lands".
+          d.re.container.alpha = 1;
+          if (b.tint !== undefined) b.tint = 0xffffff;
+        } else {
+          const dt = (t01 - 0.12) / 0.88;     // 0 → 1 over the dissolve
+          // grayscale-ish fade by tinting toward a cold gray, then fading.
+          if (b.tint !== undefined) b.tint = lerpTint(0xffffff, 0x5a5a6e, Math.min(1, dt * 1.5));
+          d.re.container.alpha = 1 - dt;
+          // slump: ease the body downward a few px as it falls.
+          d.re.container.y = d.baseY + easeOutCubic(dt) * 3;
+        }
         if (t01 >= 1) {
           d.re.container.destroy({ children: true });
           this.dying.splice(i, 1);
@@ -418,7 +468,7 @@ export class EntityLayer {
           !re.state.inside_building;
         if (wasChar) {
           re.container.visible = true;
-          this.dying.push({ re, start: performance.now() });
+          this.dying.push({ re, start: performance.now(), baseY: re.container.y });
         } else {
           re.container.destroy({ children: true });
         }
@@ -588,6 +638,10 @@ export class EntityLayer {
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
       hitFlashUntil: 0,
+      flinchStart: 0,
+      flinchDir: { x: 0, y: 1 },
+      bodyHomeX: body.x,
+      bodyHomeY: body.y,
       prevHp: hpOf(e),
     };
   }
@@ -679,6 +733,10 @@ export class EntityLayer {
       prevPos: [e.pos[0], e.pos[1]],
       movingSince: performance.now(),
       hitFlashUntil: 0,
+      flinchStart: 0,
+      flinchDir: { x: 0, y: 1 },
+      bodyHomeX: placeholder.x,
+      bodyHomeY: placeholder.y,
       prevHp: hpOf(e),
     };
   }
@@ -758,6 +816,10 @@ export class EntityLayer {
     const nh = hpOf(next);
     if (nh !== null && re.prevHp !== null && nh < re.prevHp) {
       re.hitFlashUntil = performance.now() + HIT_FLASH_MS;
+      re.flinchStart = performance.now();
+      // Recoil AWAY from where the victim is facing (i.e. away from the
+      // attacker in front of them) so the hit reads as a knockback.
+      re.flinchDir = flinchVector(next.facing);
       // BLK-1/FX: emit a floating damage number at the victim.
       this.onDamage?.(next.pos, re.prevHp - nh);
     }
@@ -798,6 +860,32 @@ export class EntityLayer {
     this.container.destroy({ children: true });
   }
 }
+
+// Knockback direction for a flinch: the victim recoils AWAY from the
+// direction it's facing (the attacker is in front of it). Y grows
+// downward in screen space.
+function flinchVector(f: "N" | "S" | "E" | "W"): { x: number; y: number } {
+  switch (f) {
+    case "N": return { x: 0, y: 1 };   // facing up → kicked down
+    case "S": return { x: 0, y: -1 };  // facing down → kicked up
+    case "E": return { x: -1, y: 0 };  // facing right → kicked left
+    case "W": return { x: 1, y: 0 };   // facing left → kicked right
+  }
+}
+
+// Lerp between two 0xRRGGBB colors. f=0 → a, f=1 → b. Used for the smooth
+// hit-flash decay and the death grayscale fade.
+function lerpTint(a: number, b: number, f: number): number {
+  f = Math.max(0, Math.min(1, f));
+  const ar = (a >> 16) & 0xff, ag = (a >> 8) & 0xff, ab = a & 0xff;
+  const br = (b >> 16) & 0xff, bg = (b >> 8) & 0xff, bb = b & 0xff;
+  const r = Math.round(ar + (br - ar) * f);
+  const g = Math.round(ag + (bg - ag) * f);
+  const bl = Math.round(ab + (bb - ab) * f);
+  return (r << 16) | (g << 8) | bl;
+}
+
+function easeOutCubic(t: number): number { return 1 - Math.pow(1 - t, 3); }
 
 function facingToAnim(f: "N"|"S"|"E"|"W"): CharacterAnim {
   switch (f) {
