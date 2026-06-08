@@ -215,6 +215,13 @@ Full state every push (Q53). Cadence = whatever the bot configured (default 1000
     "named_regions": [ {"name": "plaza", "center": [30, 10], "kind": "town"} ],
     "portals": [ {"at": [30, 16], "to_map": "interior:tavern_v1"} ]
   },
+  "local_view": {
+    "radius": 20,
+    "origin": [-10, -15],          // world (x,y) of rows[0][0]; rows[0] is NORTHMOST
+    "rows": [ "....#####....", "....#.....~~.", "......@...$..", ... ],
+    "legend": { "@":"you", ".":"walkable", "#":"blocked", "~":"water",
+                " ":"off-map", "P":"person", "$":"item", "+":"door" }
+  },
   "world_clock": {
     "tick": 12345,
     "day_phase": "afternoon",

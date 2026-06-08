@@ -128,6 +128,17 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 		})
 	}
 	obs.Audible = w.VisibleAudible(e, o.LastSinceTick)
+
+	// Egocentric ASCII terrain window — see buildObservationSnap for the
+	// rationale. Mirrors the snapshot path so both code paths agree.
+	obs.LocalView = buildLocalView(e.LogicalTile, LocalViewRadius,
+		func(x, y int) byte {
+			if x < 0 || x >= w.WidthTiles || y < 0 || y >= w.HeightTiles {
+				return ' '
+			}
+			return terrainGlyph(w.walkable[y][x], w.tileKindGrid[y][x])
+		},
+		obs.VisibleEntities, obs.VisibleItems, obs.VisibleObjects)
 	return obs
 }
 
@@ -145,8 +156,117 @@ type Observation struct {
 	Audible           []AudibleEvent        `json:"audible"`
 	RecentSelfResults []ActionResult        `json:"recent_self_results,omitempty"`
 	KnownMap          *KnownMapSummary      `json:"known_map_summary,omitempty"`
+	// LocalView — the agent's egocentric ASCII tile-map: a Chebyshev
+	// radius-LocalViewRadius window of the static terrain centered on the
+	// agent, with visible entities/items/doors overlaid. This is "what the
+	// screen shows around me" in text form: it lets the agent (or a viewer)
+	// reason about routes, walls and water the same way a human controlling
+	// the avatar would. Identity/exact metadata still come from the
+	// structured VisibleEntities/VisibleItems/VisibleObjects lists.
+	LocalView         *LocalView            `json:"local_view,omitempty"`
 	WorldClock        WorldClockState       `json:"world_clock"`
 	ViewImage         *ViewImage            `json:"view_image,omitempty"`
+}
+
+// LocalView is the egocentric ASCII tile-map embedded in an observation.
+//
+// Rows is a square block of glyphs, Rows[0] is the NORTHERNMOST row (the
+// row with the smallest world-Y) so the text reads top=north like a map.
+// Origin is the world tile of the top-left glyph (Rows[0][0]) — add a
+// glyph's (col,row) to Origin to recover its world (x,y). Self is always
+// '@' at the center. Terrain is fully known out to Radius; dynamic
+// entities/items only appear where vision+LOS reached them, so an empty
+// patch means "no terrain obstacle AND nothing seen there", not
+// "definitely empty".
+//
+// Glyphs (see Legend):
+//
+//	@ you   . walkable   # blocked (wall/building/tree)   ~ water
+//	(space) off-map/unknown   P person/agent   $ item on ground   + door
+type LocalView struct {
+	Radius int               `json:"radius"`
+	Origin Tile              `json:"origin"`
+	Rows   []string          `json:"rows"`
+	Legend map[string]string `json:"legend"`
+}
+
+// localViewLegend — static glyph → meaning map shipped with every LocalView
+// so a fresh reader (or LLM) needs no external key.
+func localViewLegend() map[string]string {
+	return map[string]string{
+		"@": "you",
+		".": "walkable ground",
+		"#": "blocked (wall/building/tree)",
+		"~": "water (impassable)",
+		" ": "off-map or unknown",
+		"P": "person/agent",
+		"$": "item on the ground",
+		"+": "door (enter)",
+	}
+}
+
+// terrainGlyph maps a (walkable, kind) pair to the base terrain glyph.
+// Off-map cells are the caller's responsibility (rendered as ' ').
+func terrainGlyph(walkable bool, kind string) byte {
+	if walkable {
+		return '.'
+	}
+	if kind == "water" {
+		return '~'
+	}
+	return '#'
+}
+
+// buildLocalView renders the egocentric ASCII window. `terrainAt(x,y)`
+// returns the base glyph for a world tile (' ' if off-map). The visible
+// entity/item/door lists (already vision+LOS filtered by the caller) are
+// overlaid on top of the terrain. self is the agent's world tile.
+func buildLocalView(self Tile, radius int, terrainAt func(x, y int) byte,
+	ents []VisibleEntityState, items []VisibleItemState, objs []VisibleObjectState) *LocalView {
+	cx, cy := self[0], self[1]
+	x0, y0 := cx-radius, cy-radius
+	side := 2*radius + 1
+	// Build a mutable grid of bytes, terrain first.
+	grid := make([][]byte, side)
+	for ry := 0; ry < side; ry++ {
+		row := make([]byte, side)
+		for rx := 0; rx < side; rx++ {
+			row[rx] = terrainAt(x0+rx, y0+ry)
+		}
+		grid[ry] = row
+	}
+	// Overlay helper: place glyph at a world tile if it falls in-window.
+	put := func(t Tile, g byte) {
+		rx, ry := t[0]-x0, t[1]-y0
+		if rx < 0 || rx >= side || ry < 0 || ry >= side {
+			return
+		}
+		grid[ry][rx] = g
+	}
+	// Order matters (later wins). Doors < items < entities < self, so a
+	// person standing on an item reads as a person, and self always wins.
+	for _, o := range objs {
+		if o.Kind == "door" {
+			put(o.Pos, '+')
+		}
+	}
+	for _, it := range items {
+		put(it.Pos, '$')
+	}
+	for _, e := range ents {
+		put(e.Pos, 'P')
+	}
+	put(self, '@')
+	rows := make([]string, side)
+	for ry := 0; ry < side; ry++ {
+		rows[ry] = string(grid[ry])
+	}
+	return &LocalView{
+		Radius: radius,
+		Origin: Tile{x0, y0},
+		Rows:   rows,
+		Legend: localViewLegend(),
+	}
 }
 
 type SelfState struct {

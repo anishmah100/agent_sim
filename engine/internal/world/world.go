@@ -389,6 +389,15 @@ func (w *World) scenarioHandler(verb string) func(*World, *Entity, *ActionEnvelo
 const (
 	VisionRadius = 12
 	NightRadius  = 6
+	// LocalViewRadius — Chebyshev radius of the ASCII local terrain window
+	// embedded in every observation (the agent's egocentric tile-map, the
+	// equivalent of "what the screen shows around me"). Terrain is fully
+	// known to agents, so this window can be WIDER than VisionRadius: it
+	// renders the static map (walls/water/ground) out to 20 tiles, while
+	// dynamic entities/items are still only overlaid where vision+LOS reach
+	// (radius VisionRadius). That asymmetry is intentional — a player knows
+	// their town's layout but only sees creatures nearby.
+	LocalViewRadius = 20
 )
 
 type buildingRef struct {

@@ -411,6 +411,12 @@ func (h *AgentHub) tickObservations() {
 			"visible_items":     obs.VisibleItems,
 			"audible":           obs.Audible,
 			"known_map_summary": obs.KnownMap,
+			// local_view — the egocentric ASCII terrain window. Like
+			// visible_items above, the hand-rolled map MUST list it or the
+			// WS payload silently drops it (the struct's json tag only
+			// matters for json.Marshal of the whole Observation, which this
+			// path does NOT do). Without this agents are terrain-blind.
+			"local_view":        obs.LocalView,
 			"world_clock":       obs.WorldClock,
 			// recent_self_results was also being dropped — surfaces
 			// the engine's verb ack history so brains can recognise

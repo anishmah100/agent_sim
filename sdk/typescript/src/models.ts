@@ -66,6 +66,17 @@ export const KnownMap = z.object({
   portals: z.array(z.record(z.unknown())).default([]),
 });
 
+// Egocentric ASCII tile-map. rows[0] is the northernmost row; origin is
+// the world (x,y) of rows[0][0]. Glyphs: @ you, . walkable, # blocked,
+// ~ water, (space) off-map, P person, $ item, + door. Terrain is known to
+// `radius`; entities/items only appear where vision reached.
+export const LocalView = z.object({
+  radius: z.number().int(),
+  origin: Pos,
+  rows: z.array(z.string()).default([]),
+  legend: z.record(z.string()).default({}),
+});
+
 export const ViewImage = z.object({
   format: z.enum(["png", "webp"]),
   width: z.number().int(),
@@ -84,6 +95,7 @@ export const Observation = z.object({
   audible: z.array(AudibleEvent).default([]),
   recent_self_results: z.array(z.record(z.unknown())).default([]),
   known_map_summary: KnownMap.nullable().optional(),
+  local_view: LocalView.nullable().optional(),
   world_clock: WorldClock,
   view_image: ViewImage.nullable().optional(),
 });

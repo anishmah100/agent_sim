@@ -30,6 +30,13 @@ type LiveSnapshot struct {
 
 	VisionBlocks [][]bool   // shared by reference; static
 	TileKindGrid [][]string // shared by reference; static
+	// Walkable is the static collision grid (terrain AND placed
+	// buildings/decorations baked in — decorations set walkable=false
+	// without touching TileKindGrid, so this is the authoritative "can a
+	// foot go here" grid that agent A* routes on). Shared by reference;
+	// static after load. Used to render the local ASCII view's '#' cells so
+	// the map the agent reads matches exactly what nav can path through.
+	Walkable [][]bool
 }
 
 // publishSnapshot copies tick-end state into an immutable snapshot and
@@ -72,6 +79,7 @@ func (w *World) publishSnapshot() {
 		Audible:       aud,
 		VisionBlocks:  w.visionBlocks,
 		TileKindGrid:  w.tileKindGrid,
+		Walkable:      w.walkable,
 	}
 	w.snapshot.Store(snap)
 }
@@ -294,5 +302,18 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 	}
 
 	obs.Audible = s.visibleAudible(e.EntityID, e.LogicalTile, o.LastSinceTick)
+
+	// Egocentric ASCII terrain window. Terrain is fully known, so the
+	// window is rendered out to LocalViewRadius regardless of vision; the
+	// entity/item/door overlays above are already vision+LOS filtered, so
+	// they only appear where the agent can actually see.
+	obs.LocalView = buildLocalView(e.LogicalTile, LocalViewRadius,
+		func(x, y int) byte {
+			if x < 0 || x >= s.WidthTiles || y < 0 || y >= s.HeightTiles {
+				return ' '
+			}
+			return terrainGlyph(s.Walkable[y][x], s.TileKindGrid[y][x])
+		},
+		obs.VisibleEntities, obs.VisibleItems, obs.VisibleObjects)
 	return obs
 }

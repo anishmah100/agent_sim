@@ -104,6 +104,28 @@ class KnownMap(BaseModel):
     portals: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class LocalView(BaseModel):
+    """Egocentric ASCII tile-map — "what the screen shows around me" as text.
+
+    ``rows`` is a square block of glyphs; ``rows[0]`` is the northernmost row.
+    ``origin`` is the world (x, y) of ``rows[0][0]``; add a glyph's
+    (col, row) to ``origin`` to recover its world coordinate. Terrain is
+    fully known out to ``radius``; dynamic entities/items only appear where
+    vision+LOS reached, so a blank cell means "no terrain obstacle AND
+    nothing seen", not "definitely empty". Use the structured
+    ``visible_entities`` / ``visible_items`` lists for exact ids + metadata;
+    this view is for spatial reasoning (routes, walls, water).
+
+    Glyphs (also in ``legend``): ``@`` you · ``.`` walkable · ``#`` blocked ·
+    ``~`` water · ``(space)`` off-map/unknown · ``P`` person · ``$`` item ·
+    ``+`` door.
+    """
+    radius: int
+    origin: Pos
+    rows: list[str] = Field(default_factory=list)
+    legend: dict[str, str] = Field(default_factory=dict)
+
+
 class ViewImage(BaseModel):
     """Multimodal observation payload. `data` is raw bytes — base64
     decoded by the WS layer before this model is constructed."""
@@ -127,6 +149,10 @@ class Observation(BaseModel):
     audible: list[AudibleEvent] = Field(default_factory=list)
     recent_self_results: list[dict[str, Any]] = Field(default_factory=list)
     known_map_summary: Optional[KnownMap] = None
+    # Egocentric ASCII terrain window (radius LocalViewRadius). Present on
+    # every live observation; the agent reads it to plan routes the way a
+    # human controlling the avatar would (see the lake, route around walls).
+    local_view: Optional[LocalView] = None
     world_clock: WorldClock
     view_image: Optional[ViewImage] = None
 

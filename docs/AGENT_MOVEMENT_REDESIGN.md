@@ -83,7 +83,7 @@ dynamic world** — measured live, not asserted:
 
 ## Outstanding threads — DO NOT DROP (master checklist)
 Movement redesign slices: 1 step verb ✓ · 2a walkability endpoint ✓ ·
-3 nav A* lib ✓ · 2b local ASCII view in observation (radius 20) · 4 reflex
+3 nav A* lib ✓ · 2b local ASCII view in observation (radius 20) ✓ · 4 reflex
 loop + pursue/flee standing goals · 5 last-seen tracker · 6 LLM harness on
 new view+nav (try map-to-LLM vs harness-A*; Claude vs Qwen) · 7 scripted
 Hunter + LLM prey scenario · 8 remove old move/engine-pathfinding + update
