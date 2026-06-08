@@ -681,6 +681,27 @@ func Load(path string) (*World, error) {
 	return w, nil
 }
 
+// HasDecorationNear reports whether any decoration whose sprite id starts
+// with `prefix` sits within `radius` (Chebyshev) tiles of `pos`. Verb
+// handlers use it to spatially ground actions — e.g. buy_food only at a
+// market stall ("bld:stall"), work_for_pay only at a worksite. Prefix
+// matching keeps it flexible: "bld:" matches any building, "bld:stall"
+// any stall. Read-only over the static decoration list; no lock needed
+// (decorations are immutable after load aside from the editor overlay,
+// which is single-writer).
+func (w *World) HasDecorationNear(pos [2]int, prefix string, radius int) bool {
+	for i := range w.decorations {
+		d := &w.decorations[i]
+		if prefix != "" && !strings.HasPrefix(d.Sprite, prefix) {
+			continue
+		}
+		if absInt(d.X-pos[0]) <= radius && absInt(d.Y-pos[1]) <= radius {
+			return true
+		}
+	}
+	return false
+}
+
 // relocateStuckEntities scans every loaded entity, finds those on
 // non-walkable tiles (because a decoration footprint stomped their
 // spawn after the entity was placed), and moves them to the closest

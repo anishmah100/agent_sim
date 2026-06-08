@@ -248,6 +248,10 @@ func (a *WorldAdapter) EntitiesInRadius(center [2]int, r int) []string {
 
 func (a *WorldAdapter) IsWalkable(t [2]int) bool { return a.W.IsWalkable(Tile(t)) }
 
+func (a *WorldAdapter) HasDecorationNear(pos [2]int, prefix string, radius int) bool {
+	return a.W.HasDecorationNear(pos, prefix, radius)
+}
+
 func (a *WorldAdapter) Chebyshev(a1, b [2]int) int {
 	return chebyshev(Tile(a1), Tile(b))
 }

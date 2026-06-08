@@ -69,6 +69,12 @@ type World interface {
 	// clears it automatically. Drives the frontend swing/flinch/use anims.
 	SetEntityAction(id, verb string, holdTicks int)
 
+	// HasDecorationNear reports whether a decoration whose sprite id
+	// starts with `prefix` is within `radius` Chebyshev tiles of `pos`.
+	// Lets verbs require spatial grounding against static map features
+	// (market stalls, worksites) that aren't entities.
+	HasDecorationNear(pos [2]int, prefix string, radius int) bool
+
 	// Declarative-ruleset access. Tunings live in worlds/<name>/rules.star
 	// and are loaded into World.Rules at bundle load. The methods are
 	// nil-safe — a world without a ruleset returns the supplied default,

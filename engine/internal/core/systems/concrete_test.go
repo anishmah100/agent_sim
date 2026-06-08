@@ -39,6 +39,7 @@ func (s *stubWorld) GetService(string) any             { return nil }
 func (s *stubWorld) RegisterService(string, any)       {}
 func (s *stubWorld) EntitiesInRadius([2]int, int) []string { return nil }
 func (s *stubWorld) IsWalkable([2]int) bool            { return true }
+func (s *stubWorld) HasDecorationNear([2]int, string, int) bool { return true }
 func (s *stubWorld) EnterBuilding(string, string, int) bool { return false }
 func (s *stubWorld) SetEntityAction(string, string, int)   {}
 func (s *stubWorld) ExitBuilding(string) bool          { return false }

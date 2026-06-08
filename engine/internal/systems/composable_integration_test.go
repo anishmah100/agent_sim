@@ -144,6 +144,18 @@ func TestComposable_BuyFoodSpendsGoldAndCutsHunger(t *testing.T) {
 	}
 }
 
+func TestComposable_WorkForPayRequiresWorksite(t *testing.T) {
+	wa, reg := boot(t)
+	// The 10x6 test world has no buildings, so work_for_pay must reject
+	// rather than mint free gold — the exploit fix.
+	res := reg.Handle(wa, wa.EntityByID("hero"), &syscore.ActionEnvelope{
+		ActionID: "1", Verb: "work_for_pay", Raw: []byte(`{}`),
+	})
+	if res.Accepted || res.Reason != "no_worksite_nearby" {
+		t.Fatalf("work_for_pay with no worksite should reject no_worksite_nearby, got accepted=%v reason=%s", res.Accepted, res.Reason)
+	}
+}
+
 func TestComposable_BuyFoodRejectsWhenSated(t *testing.T) {
 	wa, reg := boot(t)
 	// hero default hunger is 0 → nothing to buy.

@@ -22,6 +22,11 @@ const (
 	// longer. Tunable per world (food_price / food_relief).
 	DefaultFoodPrice  = 6
 	DefaultFoodRelief = 0.5
+	// work_for_pay must happen at a worksite (any building) within this
+	// Chebyshev radius — otherwise it's free gold minted from nowhere,
+	// which wrecks the wealth distribution. Tunable via worksite_radius;
+	// set to 0 to disable the gate.
+	DefaultWorksiteRadius = 6
 )
 
 // GoldSpent — emitted when gold leaves the economy (a sink), e.g. buying
@@ -155,6 +160,15 @@ func (s *System) handleBuyFood(w syscore.World, e syscore.Entity, env *syscore.A
 		res.Reason = "not_enough_gold"
 		return res
 	}
+	// Optional spatial gate: when market_radius > 0, food can only be
+	// bought standing near a market stall, which makes the market a real
+	// place agents converge on. Default 0 keeps the gold-only "rations"
+	// model so a world without stalls still works.
+	if mr := w.TuningInt("market_radius", 0); mr > 0 &&
+		!w.HasDecorationNear(e.Pos(), "bld:stall", mr) {
+		res.Reason = "no_market_nearby"
+		return res
+	}
 	next := hunger - relief
 	if next < 0 {
 		next = 0
@@ -184,9 +198,18 @@ func toInt(v any) int {
 }
 
 func (s *System) handleWork(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
+	res := syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	// Must be at a worksite (any building) — no minting gold from thin
+	// air in an empty field. worksite_radius=0 disables the gate.
+	if radius := w.TuningInt("worksite_radius", DefaultWorksiteRadius); radius > 0 &&
+		!w.HasDecorationNear(e.Pos(), "bld:", radius) {
+		res.Reason = "no_worksite_nearby"
+		return res
+	}
 	svc := w.GetService("money").(MoneyService)
 	svc.Grant(w, e.ID(), w.TuningInt("work_payment", WorkPayment), "work_for_pay")
-	return syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb, Accepted: true}
+	res.Accepted = true
+	return res
 }
 
 func (s *System) manifest() manifest.SystemDeclaration {
@@ -203,16 +226,19 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				EmitsEvents:      []string{"GoldTransferred"},
 			},
 			{
-				Verb:         "work_for_pay",
-				Description:  "Perform labor (stub: just credits gold). Real version will validate a work-site.",
-				ParamsSchema: json.RawMessage(`{"type":"object","properties":{}}`),
+				Verb:             "work_for_pay",
+				Description:      "Perform labor at a worksite (any building within worksite_radius) for a wage.",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{}}`),
+				Preconditions:    []string{"a building within worksite_radius tiles"},
+				RejectionReasons: []string{"no_worksite_nearby"},
+				EmitsEvents:      []string{"GoldTransferred"},
 			},
 			{
 				Verb:             "buy_food",
-				Description:      "Buy a meal: spend food_price gold to reduce hunger by food_relief. The economy's gold sink + survival loop.",
+				Description:      "Buy a meal: spend food_price gold to reduce hunger by food_relief. The economy's gold sink + survival loop. With market_radius>0, must be at a market stall.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{}}`),
-				Preconditions:    []string{"hunger > 0", "self has at least food_price gold"},
-				RejectionReasons: []string{"not_hungry", "not_enough_gold"},
+				Preconditions:    []string{"hunger > 0", "self has at least food_price gold", "(if market_radius>0) a market stall within range"},
+				RejectionReasons: []string{"not_hungry", "not_enough_gold", "no_market_nearby"},
 				EmitsEvents:      []string{"GoldSpent"},
 			},
 		},

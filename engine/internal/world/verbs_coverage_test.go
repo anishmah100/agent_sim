@@ -541,6 +541,27 @@ func TestWitnessLog_RecordsKillForBystander(t *testing.T) {
 	}
 }
 
+func TestHasDecorationNear(t *testing.T) {
+	w := loadTestWorld(t)
+	w.decorations = append(w.decorations,
+		DecorationRef{X: 5, Y: 5, Sprite: "bld:stall_red_bread_open"},
+		DecorationRef{X: 20, Y: 20, Sprite: "veg:tree_oak"},
+	)
+	if !w.HasDecorationNear([2]int{6, 6}, "bld:stall", 2) {
+		t.Error("stall at (5,5) should be found within radius 2 of (6,6)")
+	}
+	if w.HasDecorationNear([2]int{6, 6}, "bld:stall", 0) {
+		t.Error("radius 0 from (6,6) should not reach the stall at (5,5)")
+	}
+	if !w.HasDecorationNear([2]int{6, 6}, "bld:", 2) {
+		t.Error("prefix bld: should match the stall")
+	}
+	// (5,5)->(6,6) is Chebyshev distance 1, so radius 1 includes it.
+	if !w.HasDecorationNear([2]int{6, 6}, "bld:", 1) {
+		t.Error("stall at cheb-distance 1 should be found within radius 1")
+	}
+}
+
 // === D21 — weapons damage + reach ===
 
 func TestD21_Attack_UnarmedDealsBaseDamage(t *testing.T) {
