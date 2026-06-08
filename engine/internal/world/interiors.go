@@ -1,6 +1,10 @@
 package world
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // Building interiors (HeartGold multi-map model).
 //
@@ -18,6 +22,28 @@ import "fmt"
 // own room.
 func InteriorMapID(sprite string, door Tile) string {
 	return fmt.Sprintf("interior:%s@%d,%d", sprite, door[0], door[1])
+}
+
+// ParseInteriorMapID is the inverse of InteriorMapID: it extracts the building
+// sprite and overworld door tile from an "interior:<sprite>@x,y" map id.
+// Returns ("", {0,0}) if the id isn't an interior id.
+func ParseInteriorMapID(id string) (sprite string, door [2]int) {
+	rest, ok := strings.CutPrefix(id, "interior:")
+	if !ok {
+		return "", [2]int{}
+	}
+	at := strings.LastIndexByte(rest, '@')
+	if at < 0 {
+		return rest, [2]int{}
+	}
+	sprite = rest[:at]
+	coords := strings.Split(rest[at+1:], ",")
+	if len(coords) == 2 {
+		x, _ := strconv.Atoi(coords[0])
+		y, _ := strconv.Atoi(coords[1])
+		door = [2]int{x, y}
+	}
+	return sprite, door
 }
 
 // interiorDims picks a room size from the building footprint, clamped to a

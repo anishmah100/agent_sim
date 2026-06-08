@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,16 +37,19 @@ var upgrader = websocket.Upgrader{
 // broadcast goroutine that pushes snapshots to all of them.
 type ViewerHub struct {
 	w *world.World
+	// hub — multi-map hub; lets the viewer broadcast building-interior
+	// occupants so the frontend can render agents inside (HeartGold).
+	hub *world.MultiMapHub
 
 	mu      sync.Mutex
 	clients map[*viewerConn]struct{}
 }
 
 type viewerConn struct {
-	conn  *websocket.Conn
-	send  chan []byte
-	hub   *ViewerHub
-	addr  string
+	conn *websocket.Conn
+	send chan []byte
+	hub  *ViewerHub
+	addr string
 	// done is closed by the read pump's defer once teardown begins, so
 	// the broadcast loop's non-blocking sends can bail instead of racing
 	// against an in-progress channel close.
@@ -71,9 +75,10 @@ func (c *viewerConn) trySend(data []byte) bool {
 
 // NewViewerHub starts the broadcast goroutine and returns a hub ready
 // to accept HTTP handlers for new connections.
-func NewViewerHub(ctx context.Context, w *world.World) *ViewerHub {
+func NewViewerHub(ctx context.Context, w *world.World, hub *world.MultiMapHub) *ViewerHub {
 	h := &ViewerHub{
 		w:       w,
+		hub:     hub,
 		clients: make(map[*viewerConn]struct{}),
 	}
 	go h.broadcastLoop(ctx)
@@ -184,9 +189,26 @@ func (h *ViewerHub) broadcastLoop(ctx context.Context) {
 }
 
 type viewerMessage struct {
-	Type     string                `json:"type"`
-	Snapshot *world.WorldSnapshot  `json:"snapshot,omitempty"`
-	Audible  []world.AudibleEvent  `json:"audible,omitempty"`
+	Type     string               `json:"type"`
+	Snapshot *world.WorldSnapshot `json:"snapshot,omitempty"`
+	Audible  []world.AudibleEvent `json:"audible,omitempty"`
+	// Interiors — one entry per currently-occupied building interior
+	// (HeartGold model). Lets the frontend render the live agents inside a
+	// building when the viewer follows/opens it. Empty/absent when nobody
+	// is inside anything.
+	Interiors []interiorView `json:"interiors,omitempty"`
+}
+
+// interiorView — a building interior's live occupants for the viewer. Keyed by
+// the building instance (sprite + overworld door tile) so the frontend can
+// match it to the building the user clicked/followed.
+type interiorView struct {
+	MapID    string          `json:"map_id"`
+	Sprite   string          `json:"sprite"`
+	Door     [2]int          `json:"door"`
+	Width    int             `json:"width_tiles"`
+	Height   int             `json:"height_tiles"`
+	Entities []*world.Entity `json:"entities"`
 }
 
 func (h *ViewerHub) encodeSnapshot() ([]byte, error) {
@@ -200,10 +222,42 @@ func (h *ViewerHub) encodeSnapshot() ([]byte, error) {
 	}
 	audible := h.w.RecentAudibleAll(since)
 	return json.Marshal(viewerMessage{
-		Type:     "world_snapshot",
-		Snapshot: &snap,
-		Audible:  audible,
+		Type:      "world_snapshot",
+		Snapshot:  &snap,
+		Audible:   audible,
+		Interiors: h.interiorViews(),
 	})
+}
+
+// interiorViews collects the live occupants of every loaded building interior.
+func (h *ViewerHub) interiorViews() []interiorView {
+	if h.hub == nil {
+		return nil
+	}
+	var out []interiorView
+	for _, id := range h.hub.Maps() {
+		if !strings.HasPrefix(id, "interior:") {
+			continue
+		}
+		iw := h.hub.Get(id)
+		if iw == nil {
+			continue
+		}
+		isnap := iw.Snapshot()
+		if len(isnap.Entities) == 0 {
+			continue // empty room — nothing to render
+		}
+		sprite, door := world.ParseInteriorMapID(id)
+		out = append(out, interiorView{
+			MapID:    id,
+			Sprite:   sprite,
+			Door:     door,
+			Width:    isnap.WidthTiles,
+			Height:   isnap.HeightTiles,
+			Entities: isnap.Entities,
+		})
+	}
+	return out
 }
 
 func (c *viewerConn) writePump() {

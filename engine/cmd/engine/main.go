@@ -194,7 +194,7 @@ func main() {
 	// observations/actions to whichever map it's standing on. With only the
 	// overworld loaded, behavior is identical to the single-world engine.
 	mmhub := world.NewMultiMapHub(w)
-	hub := wire.NewViewerHub(ctx, w)
+	hub := wire.NewViewerHub(ctx, w, mmhub)
 	agents := wire.NewAgentHub(ctx, w, mmhub)
 
 	// Layered reasoning capture. -capture-reasoning AND the per-agent
