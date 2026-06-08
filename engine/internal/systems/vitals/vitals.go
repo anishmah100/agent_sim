@@ -96,8 +96,24 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 			hpRaw, _ := e.GetExtra("hp")
 			hp, _ := hpRaw.(int)
 			if hp > 0 {
+				newHP := hp - rate
+				if newHP <= 0 {
+					// Starved to death. Remove the body — before this,
+					// starvation only set hp and left a 0-HP entity lingering
+					// on screen, and those husks accumulated and gridlocked
+					// the hub, turning a long-running world inert. Anonymous
+					// death scream (no killer), then remove. The agent's WS
+					// then closes (BuildObservationFor->nil) so the supervisor
+					// respawns it, keeping the population stable.
+					w.MutateEntity(id, func(real syscore.Entity) {
+						real.SetExtra("hp", 0)
+					})
+					w.EmitDeathScream(e.Pos(), id, "", false)
+					w.RemoveEntity(id)
+					continue
+				}
 				w.MutateEntity(id, func(real syscore.Entity) {
-					real.SetExtra("hp", hp-rate)
+					real.SetExtra("hp", newHP)
 				})
 				// Distinct visual beat for starvation damage so the UI can
 				// show a hunger pang (amber) rather than a red combat hit.
