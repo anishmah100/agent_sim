@@ -46,6 +46,47 @@ func (w *World) emitWhisper(speaker, target *Entity, text string) {
 	})
 }
 
+// WitnessRecord — one notable thing an agent perceived: a kill it saw
+// (kind="kill_witnessed", with killer/victim identity) or a death scream
+// it heard from somewhere (kind="scream_heard", anonymous). Surfaced by
+// the inspector's Witnesses tab so a spectator can read an agent's recent
+// first-hand experience of violence in the world.
+type WitnessRecord struct {
+	Tick   uint64 `json:"tick"`
+	Kind   string `json:"kind"`   // kill_witnessed | scream_heard
+	Killer string `json:"killer,omitempty"`
+	Victim string `json:"victim,omitempty"`
+	Pos    [2]int `json:"pos"`
+}
+
+// witnessAppend records a perceived event for one witness. Called from
+// EmitDeathScream under the world write lock. Keeps the most recent 32
+// per entity — enough for the inspector, bounded so a long run can't
+// leak memory through a popular witness.
+func (w *World) witnessAppend(witnessID string, rec WitnessRecord) {
+	if w.witnessLog == nil {
+		w.witnessLog = make(map[string][]WitnessRecord)
+	}
+	list := append(w.witnessLog[witnessID], rec)
+	if len(list) > 32 {
+		list = list[len(list)-32:]
+	}
+	w.witnessLog[witnessID] = list
+}
+
+// WitnessedBy returns the most recent `limit` things the entity has
+// witnessed, newest first. Safe for concurrent HTTP callers.
+func (w *World) WitnessedBy(entityID string, limit int) []WitnessRecord {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	src := w.witnessLog[entityID]
+	out := make([]WitnessRecord, 0, limit)
+	for i := len(src) - 1; i >= 0 && len(out) < limit; i-- {
+		out = append(out, src[i])
+	}
+	return out
+}
+
 func (w *World) audibleAppend(ev AudibleEvent) {
 	w.audible = append(w.audible, ev)
 	// Trim: keep only last 256 events. They're cheap and expire by

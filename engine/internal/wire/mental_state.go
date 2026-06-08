@@ -18,6 +18,9 @@ type SocialPeersReader interface {
 	// VitalsOf returns hp/hunger/gold/inventory/equipped for the inspector.
 	// Returns zero VitalsSnapshot when the entity is unknown.
 	VitalsOf(entityID string) world.VitalsSnapshot
+	// WitnessedBy returns the most recent things the entity perceived
+	// (kills it saw, death screams it heard) for the Witnesses tab.
+	WitnessedBy(entityID string, limit int) []world.WitnessRecord
 }
 
 // MentalStateHandler serves /api/v1/agent/<id>/mental_state — the
@@ -71,12 +74,16 @@ func MentalStateHandler(hist *historian.Historian, captureReasoning bool, social
 			Mind:                    mindSnapshot{ShareReasoning: false},
 			Traces:                  []traceLine{},
 			Peers:                   map[string]world.SocialCounts{},
+			Witnesses:               []world.WitnessRecord{},
 		}
 		if social != nil {
 			if peers := social.SocialPeersOf(entityID); len(peers) > 0 {
 				body.Peers = peers
 			}
 			body.Vitals = social.VitalsOf(entityID)
+			if ws := social.WitnessedBy(entityID, 20); len(ws) > 0 {
+				body.Witnesses = ws
+			}
 		}
 		if hist != nil {
 			body.Traces = collectTraces(hist, entityID, 20)
@@ -117,6 +124,9 @@ type mentalStateResponse struct {
 	// Live vitals snapshot: hp, hunger, gold, inventory, equipped.
 	// Surfaced to the inspector's identity block + inventory display.
 	Vitals world.VitalsSnapshot `json:"vitals"`
+	// Witnesses — recent kills this agent saw + screams it heard,
+	// newest first. Surfaced to the inspector's Witnesses tab.
+	Witnesses []world.WitnessRecord `json:"witnesses"`
 }
 
 type dialogueLine struct {

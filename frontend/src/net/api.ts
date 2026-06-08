@@ -59,6 +59,15 @@ export interface MentalStateResponse {
     equipped: Record<string, string>;
     inside_building?: string;
   };
+  // Recent things this agent perceived first-hand: kills it saw +
+  // death screams it heard. Newest first. Drives the Witnesses tab.
+  witnesses?: Array<{
+    tick: number;
+    kind: "kill_witnessed" | "scream_heard";
+    killer?: string;
+    victim?: string;
+    pos: [number, number];
+  }>;
 }
 
 export async function fetchMentalState(entityID: string): Promise<MentalStateResponse> {

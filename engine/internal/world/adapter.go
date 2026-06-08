@@ -146,9 +146,6 @@ func (a *WorldAdapter) EmitDeathScream(at [2]int, victimID, killerID string, muf
 		radius:    radius,
 		// FromEntity intentionally empty — anonymous.
 	})
-	if killerID == "" {
-		return // starvation etc: no witness event
-	}
 	// Witness events: deliver a targeted "kill_witnessed" audible to
 	// every entity with line-of-sight to the killing tile.
 	// LOS check uses the existing lineOfSight helper. Witnesses must
@@ -156,40 +153,55 @@ func (a *WorldAdapter) EmitDeathScream(at [2]int, victimID, killerID string, muf
 	// day, 6 night — for simplicity here use 12; observation builder
 	// filters by per-agent day_phase if needed).
 	const witnessRadius = 12
-	// Build the witness event payload once.
-	witnessText := `{"killer":"` + killerID + `","victim":"` + victimID + `"}`
+	scrTick := a.W.tick
+	// Track who got the richer "kill_witnessed" record so the anonymous
+	// scream pass below doesn't also tag them with a duplicate row.
+	witnessed := map[string]bool{}
+	if killerID != "" {
+		witnessText := `{"killer":"` + killerID + `","victim":"` + victimID + `"}`
+		for id, ent := range a.W.entities {
+			if ent.InsideBuilding != "" && muffled {
+				// Inside-building observers can't witness an outdoor kill.
+				continue
+			}
+			if id == victimID || id == killerID {
+				continue
+			}
+			if chebyshev(ent.LogicalTile, Tile{at[0], at[1]}) > witnessRadius {
+				continue
+			}
+			if !a.W.lineOfSight(ent.LogicalTile, Tile{at[0], at[1]}) {
+				continue
+			}
+			a.W.audibleAppend(AudibleEvent{
+				EventID:   nextEventID(&a.W.eventSeq),
+				Kind:      "sound",
+				SoundKind: "kill_witnessed",
+				FromPos:   at, // witnesses see the true position
+				Text:      witnessText,
+				Tick:      a.W.tick,
+				radius:    1,
+				whisperTo: id, // only this witness receives it
+			})
+			a.W.witnessAppend(id, WitnessRecord{
+				Tick: scrTick, Kind: "kill_witnessed",
+				Killer: killerID, Victim: victimID, Pos: at,
+			})
+			witnessed[id] = true
+		}
+	}
+	// Anonymous scream: log a "scream_heard" for every (non-victim)
+	// entity in earshot that didn't directly witness the kill, so the
+	// inspector can show "heard a scream nearby" even without LOS.
 	for id, ent := range a.W.entities {
-		if ent.InsideBuilding != "" && muffled {
-			// Inside-building observers can't witness an outdoor kill.
+		if id == victimID || id == killerID || witnessed[id] {
 			continue
 		}
-		if id == victimID || id == killerID {
+		if chebyshev(ent.LogicalTile, Tile{approxX, approxY}) > radius {
 			continue
 		}
-		// Chebyshev + LOS.
-		dx := at[0] - ent.LogicalTile[0]
-		if dx < 0 {
-			dx = -dx
-		}
-		dy := at[1] - ent.LogicalTile[1]
-		if dy < 0 {
-			dy = -dy
-		}
-		if dx > witnessRadius || dy > witnessRadius {
-			continue
-		}
-		if !a.W.lineOfSight(ent.LogicalTile, Tile{at[0], at[1]}) {
-			continue
-		}
-		a.W.audibleAppend(AudibleEvent{
-			EventID:   nextEventID(&a.W.eventSeq),
-			Kind:      "sound",
-			SoundKind: "kill_witnessed",
-			FromPos:   at, // witnesses see the true position
-			Text:      witnessText,
-			Tick:      a.W.tick,
-			radius:    1,
-			whisperTo: id, // only this witness receives it
+		a.W.witnessAppend(id, WitnessRecord{
+			Tick: scrTick, Kind: "scream_heard", Pos: [2]int{approxX, approxY},
 		})
 	}
 }

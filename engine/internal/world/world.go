@@ -236,6 +236,13 @@ type World struct {
 	audible  []AudibleEvent
 	eventSeq uint64
 
+	// witnessLog — per-entity ring of notable things an agent perceived
+	// (kills it saw, death screams it heard). Drives the inspector's
+	// Witnesses tab. Distinct from `audible` (which expires in seconds);
+	// these persist so the UI can show "what has this agent witnessed
+	// recently" long after the sound faded. Keyed by witness entity id.
+	witnessLog map[string][]WitnessRecord
+
 	// Scenario hooks — installed via InstallScenario. Both are nil for
 	// a bare engine; when a scenario is installed, the dispatcher
 	// consults verbHandlers and Tick() calls onTick.

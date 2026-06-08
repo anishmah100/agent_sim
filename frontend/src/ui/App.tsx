@@ -141,6 +141,7 @@ export function App() {
         })),
         mind: m.mind,
         traces: m.traces,
+        witnesses: m.witnesses,
         capture_reasoning_enabled: m.capture_reasoning_enabled,
         peers: m.peers ?? {},
         vitals: m.vitals,

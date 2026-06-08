@@ -64,10 +64,21 @@ export interface TraceLine {
   reasoning: string;
 }
 
+// One thing an agent perceived first-hand: a kill it saw (with killer +
+// victim identity) or a death scream it heard from somewhere (anonymous).
+export interface WitnessRecord {
+  tick: number;
+  kind: "kill_witnessed" | "scream_heard";
+  killer?: string;
+  victim?: string;
+  pos: [number, number];
+}
+
 export interface MentalState {
   dialogue: DialogueLine[];
   mind: MindSnapshot;
   traces: TraceLine[];
+  witnesses?: WitnessRecord[];
   capture_reasoning_enabled: boolean;
   // D19 — per-pair counters keyed by the *other* agent's entity_id.
   peers?: Record<string, SocialCounts>;
@@ -83,7 +94,7 @@ export interface MentalState {
   brain?: BadgeKind;
 }
 
-type Tab = "speech" | "mind" | "trace" | "relationships" | "inventory";
+type Tab = "speech" | "mind" | "witnesses" | "relationships" | "inventory";
 
 export function Inspector(props: {
   entity: EntityState | null;
@@ -102,10 +113,6 @@ export function Inspector(props: {
     !!props.mentalState?.capture_reasoning_enabled ||
     !!props.mentalState?.mind?.last_reflection,
   );
-  const traceVisible = createMemo(() =>
-    !!props.mentalState?.capture_reasoning_enabled,
-  );
-
   return (
     <Show when={isOpen()}>
       <div
@@ -202,13 +209,9 @@ export function Inspector(props: {
           <TabBtn current={tab()} value="relationships"
                   onClick={() => setTab("relationships")}
                   label="Relationships" enabled />
-          <TabBtn current={tab()} value="trace" onClick={() => setTab("trace")}
-                  label="Trace" enabled={traceVisible()}
-                  disabledHint={
-                    props.mentalState?.capture_reasoning_enabled
-                      ? "share_reasoning=false"
-                      : "capture_reasoning=off"
-                  } />
+          <TabBtn current={tab()} value="witnesses"
+                  onClick={() => setTab("witnesses")}
+                  label="Witnesses" enabled />
         </div>
 
         {/* Tab body */}
@@ -218,8 +221,9 @@ export function Inspector(props: {
         <Show when={tab() === "mind" && mindVisible()}>
           <MindTab mind={props.mentalState!.mind} />
         </Show>
-        <Show when={tab() === "trace" && traceVisible()}>
-          <TraceTab traces={props.mentalState!.traces} />
+        <Show when={tab() === "witnesses"}>
+          <WitnessesTab witnesses={props.mentalState?.witnesses ?? []}
+                        selfId={props.entity?.entity_id ?? ""} />
         </Show>
         <Show when={tab() === "relationships"}>
           <RelationshipsTab
@@ -587,27 +591,53 @@ function relColor(kind: keyof SocialCounts): string {
   }
 }
 
-function TraceTab(props: { traces: TraceLine[] }) {
+// WitnessesTab — what this agent has perceived first-hand: kills it saw
+// (with killer/victim) and death screams it heard from somewhere. The
+// engine computes line-of-sight at the moment of death, so this is the
+// agent's *true* knowledge — the basis for gossip, revenge, and fear.
+function WitnessesTab(props: { witnesses: WitnessRecord[]; selfId: string }) {
+  // Shorten long entity ids ("spawn_42" stays, but uuid-ish ids clip).
+  const short = (id?: string) =>
+    !id ? "?" : id.length > 16 ? id.slice(0, 14) + "…" : id;
   return (
     <Show
-      when={props.traces.length > 0}
+      when={props.witnesses.length > 0}
       fallback={
         <div style={emptyStyle()}>
-          No reasoning traces. Either this agent is heuristic (no LLM
-          to reason) or the agent connected with share_reasoning=false.
+          Nothing witnessed yet. This agent hasn't seen a kill or heard a
+          death scream in range. Violence nearby will show up here.
         </div>
       }
     >
-      <div data-testid="trace-tab" style={{ display: "grid", "row-gap": "8px" }}>
-        <For each={props.traces.slice(-10)}>
-          {(t) => (
-            <div>
+      <div data-testid="witnesses-tab" style={{ display: "grid", "row-gap": "8px" }}>
+        <For each={props.witnesses}>
+          {(wn) => (
+            <div style={{
+              "border-left": `3px solid ${wn.kind === "kill_witnessed" ? "#f87171" : "#fbbf24"}`,
+              "padding-left": "8px",
+            }}>
               <div style={{ "font-size": "11px", color: "#8b9bb4" }}>
-                t={t.tick} · verb=<code>{t.verb}</code>
+                t={wn.tick} · ({wn.pos[0]}, {wn.pos[1]})
               </div>
-              <div style={{ "font-family": "ui-monospace, monospace", "font-size": "12px" }}>
-                {t.reasoning}
-              </div>
+              <Show
+                when={wn.kind === "kill_witnessed"}
+                fallback={
+                  <div style={{ "font-size": "12px", color: "#fbbf24" }}>
+                    🔊 heard a death scream nearby
+                  </div>
+                }
+              >
+                <div style={{ "font-size": "12px", color: "#f87171" }}>
+                  ⚔ saw{" "}
+                  <code style={{ color: wn.killer === props.selfId ? "#fee761" : "#f87171" }}>
+                    {short(wn.killer)}
+                  </code>{" "}
+                  kill{" "}
+                  <code style={{ color: wn.victim === props.selfId ? "#fee761" : "#ead4aa" }}>
+                    {short(wn.victim)}
+                  </code>
+                </div>
+              </Show>
             </div>
           )}
         </For>

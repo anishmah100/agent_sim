@@ -498,6 +498,49 @@ func TestD10_DeathEmitsScreamAndWitnessAudibles(t *testing.T) {
 	}
 }
 
+// TestWitnessLog_RecordsKillForBystander — a third party with LOS to a
+// kill gets a persistent kill_witnessed WitnessRecord (drives the
+// inspector's Witnesses tab); the killer does not (they already know),
+// but does get a scream_heard.
+func TestWitnessLog_RecordsKillForBystander(t *testing.T) {
+	vc := newVCTest(t)
+	w := vc.world
+	w.entities["b"].LogicalTile = Tile{2, 1}
+	w.entities["b"].Extras = map[string]interface{}{"hp": 5, "max_hp": 100}
+	w.entities["a"].Extras = map[string]interface{}{
+		"equipped": map[string]any{"weapon": "item:axe#1"},
+	}
+	// Bystander C: adjacent, clear LOS, within witnessRadius.
+	w.entities["c"] = &Entity{EntityID: "c", Archetype: "agent", LogicalTile: Tile{3, 1}}
+
+	res := vc.submit("a", "attack", `{"target":"b"}`)
+	if !res.Accepted {
+		t.Fatalf("attack: %q", res.Reason)
+	}
+
+	cRecs := w.WitnessedBy("c", 10)
+	sawKill := false
+	for _, r := range cRecs {
+		if r.Kind == "kill_witnessed" {
+			sawKill = true
+			if r.Killer != "a" || r.Victim != "b" {
+				t.Errorf("witness record killer/victim: got %q/%q want a/b", r.Killer, r.Victim)
+			}
+		}
+	}
+	if !sawKill {
+		t.Errorf("bystander C should have a kill_witnessed record, got %+v", cRecs)
+	}
+
+	// Killer A: no kill_witnessed (already knows), but heard the scream.
+	aRecs := w.WitnessedBy("a", 10)
+	for _, r := range aRecs {
+		if r.Kind == "kill_witnessed" {
+			t.Errorf("killer A should NOT get a kill_witnessed record; got %+v", r)
+		}
+	}
+}
+
 // === D21 — weapons damage + reach ===
 
 func TestD21_Attack_UnarmedDealsBaseDamage(t *testing.T) {
