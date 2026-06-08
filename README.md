@@ -107,7 +107,7 @@ A world is a self-contained bundle: `world.json` + `bundle.toml` + `npcs.json` +
 
 ## Emergent behaviors the substrate supports
 
-The verb set is the surface area for emergence. Base verbs (every world): `step` (one cardinal tile — the agent owns navigation; see `agents/common/nav.py`), `speak`, `whisper` (private, adjacent), `shout` (long-range), `look_at`, `interact` (polymorphic — sit/enter/read per the object's affordances), `pickup`, `drop`, `equip`, `give`, `attack`, `defend`, `heal`, `wait`, `noop`. Scenario verbs (fantasy_town): `trade` (offer/accept/reject), `pay`, `work`, `loot`, `build`. Full per-verb accept/reject semantics and emitted events are in `docs/VERB_REFERENCE.md` and `docs/AFFORDANCE_MANIFEST.md`.
+The verb set is the surface area for emergence (30 system verbs + base verbs; the live authority is `GET /api/v1/world/affordances`). Base verbs (every world): `step` (one cardinal tile — the agent owns navigation; see `agents/common/nav.py`), `speak`, `whisper` (private, adjacent), `shout` (long-range), `look_at`, `interact` (polymorphic — `enter` on door objects), `wait`. Composable-system verbs: combat (`attack`/`defend`/`heal`), economy (`pay`/`work_for_pay` at a worksite/`buy_food`), survival+inventory (`pickup`/`drop`/`equip`/`give`/`eat`/`cook`), resources (`chop`/`mine`/`forage` — renewable, regenerating), `trade` (atomic item↔gold), `loot`, property+interiors (`enter`/`exit` — **warps into a real walkable interior sub-map, HeartGold model**/`lock`/`unlock`/`claim_ownership`/`transfer_ownership`), construction (`place_blueprint`/`advance_construction`/`demolish`), and verbal contracts (`propose_task`/`accept_task`/`reject_task`/`complete_task`). Full per-verb accept/reject semantics and emitted events are in `docs/VERB_REFERENCE.md` and `docs/AFFORDANCE_MANIFEST.md`.
 
 Out of that surface, the substrate is designed to let the following **emerge** rather than be scripted:
 
@@ -227,12 +227,21 @@ python3 tools/validate_substrate.py
 ( cd engine && go test ./... )
 python -m pytest sdk/python/tests/
 
+# Live-engine audit harness — exercises every verb (accept + every rejection),
+# observation integrity (no private-data leaks), building enter/walk/exit, and
+# the event census against a fresh engine. The permanent "does it ACTUALLY
+# work end-to-end" gate (see docs/ENVIRONMENT_AUDIT_PLAN.md).
+bash tools/audit/restart_sidecar.sh        # fresh engine on :8090 (kill-all + verify)
+python3 tools/audit/run_all.py             # S1 verbs / S2 obs / S5 interiors / S6 events
+
 # UI — requires the stack to be up via `./agent_sim start`
 node tools/dev-scripts/ui_smoke.mjs         # engine + WS + world rendering
 node tools/dev-scripts/ui_editor_e2e.mjs    # click-to-paint round-trips to disk
 ```
 
-The UI smokes are the gate that catches "scaffolded but not wired" bugs — earlier work shipped UI panels that fetched hardcoded empty data; the smokes stop that.
+The UI smokes catch "scaffolded but not wired" bugs; the **audit harness**
+catches "looks right in code but broken end-to-end" bugs — the exact class that
+let the building-interior gap survive until a live test (`docs/ENVIRONMENT_AUDIT_PLAN.md`).
 
 ## Repo layout
 

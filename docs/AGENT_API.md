@@ -295,7 +295,11 @@ Bots can pattern-match on these:
 - `not_enough_gold` — economic rejection.
 - `blocked` / `blocked_by_terrain` — the adjacent tile a `step` targeted is occupied or non-walkable.
 - `out_of_map` — coordinate not on this map.
-- `inside_building` — entity is inside a building, can't act on the overworld.
+- `inside_building` — (legacy flag path only) entity is inside a building via
+  the old phase-out model and tried an overworld-only verb. With the current
+  HeartGold interior model the agent is warped onto a real interior sub-map and
+  acts normally there (walk/look/speak), so this reason isn't hit for decoration
+  buildings.
 - `rate_limited` — action rate cap exceeded.
 
 ## SDK shape
@@ -361,6 +365,27 @@ class HierarchicalBot:
 ```
 
 Researchers get the pattern out of the box; can swap their own brain logic.
+
+## Building interiors (HeartGold model)
+
+Buildings in Eldoria are decorations with a door tile, exposed in
+`visible_objects` as `door:bld:NNN:x,y` (affordance `enter`) when the door is in
+your vision + line-of-sight (approach from the open side — a building blocks LOS
+to its own door from behind).
+
+- **Enter:** `enter {target: "door:bld:NNN:x,y"}` (or `interact` with
+  `affordance:"enter"`) **warps you into a generated interior sub-map** — a
+  small walled room. Your `pos` becomes interior-local (small coords) and your
+  `local_view` shows the room; other agents on the overworld no longer see you.
+- **Inside:** you `step`/`speak`/etc. normally. Each building instance gets its
+  own interior (two agents in two houses are in different rooms; agents who
+  enter the *same* building share a room).
+- **Exit:** `exit` warps you back to the overworld tile you entered from. An
+  unattended agent is also auto-exited after a timeout.
+
+Implementation + roadmap: `docs/INTERIORS_MULTIMAP_PLAN.md`. (Frontend
+camera-switch to render the interior is Phase 4 — pending; engine + observations
+already work.)
 
 ## What the engine does NOT do
 

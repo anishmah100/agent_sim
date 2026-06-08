@@ -1,6 +1,12 @@
 # Building Interiors — HeartGold multi-map model (implementation plan)
 
 **Status:** ACTIVE (started 2026-06-08)
+**Progress:** Phases 1–3 DONE + live-verified (Entity.CurrentMap @f057501;
+multi-map hub + per-map routing @6523cf0; warp interiors @38a0c63 — enter→
+interior sub-map→walk→exit proven by tools/audit/building_e2e.py). Phase 4
+(frontend camera/map-switching so a viewer SEES the agent inside) and Phase 5
+(locks/multi-agent-inside/interior items/emit EnteredBuilding-ExitedBuilding
+from the warp path) remain.
 **Decision:** Pokémon HeartGold model — doors are portals to *separate* interior
 sub-maps. Enter warps the agent into the interior map; the camera shows only
 the current map; the agent walks around inside; an exit tile warps it back to
