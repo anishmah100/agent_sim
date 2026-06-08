@@ -327,7 +327,7 @@ class Agent:
             # validation. Engine v0.0.3+ initializes empty slices but we
             # keep the coercion for forward + backward compat.
             for key in ("visible_entities", "visible_objects", "visible_items",
-                        "audible", "recent_self_results"):
+                        "audible"):
                 if payload.get(key) is None:
                     payload[key] = []
             # Defensive: non-agent entities (items, decorations) may

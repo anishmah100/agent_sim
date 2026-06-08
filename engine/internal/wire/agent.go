@@ -430,10 +430,6 @@ func (h *AgentHub) tickObservations() {
 			// path does NOT do). Without this agents are terrain-blind.
 			"local_view":        obs.LocalView,
 			"world_clock":       obs.WorldClock,
-			// recent_self_results was also being dropped — surfaces
-			// the engine's verb ack history so brains can recognise
-			// "my last pickup was rejected" without parsing acks.
-			"recent_self_results": obs.RecentSelfResults,
 		}
 		data, err := json.Marshal(msg)
 		if err != nil {

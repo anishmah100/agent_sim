@@ -32,7 +32,6 @@ export const VisibleEntity = z.object({
   facing: Facing,
   archetype: z.string(),
   extras_summary: z.record(z.unknown()).default({}),
-  doing: z.string().nullable().optional(),
 });
 
 export const VisibleObject = z.object({
@@ -56,7 +55,6 @@ export const AudibleEvent = z.object({
 export const WorldClock = z.object({
   tick: z.number().int(),
   day_phase: DayPhase,
-  weather: z.string().default("clear"),
 });
 
 // Egocentric ASCII tile-map. rows[0] is the northernmost row; origin is
@@ -86,7 +84,6 @@ export const Observation = z.object({
   visible_entities: z.array(VisibleEntity).default([]),
   visible_objects: z.array(VisibleObject).default([]),
   audible: z.array(AudibleEvent).default([]),
-  recent_self_results: z.array(z.record(z.unknown())).default([]),
   local_view: LocalView.nullable().optional(),
   world_clock: WorldClock,
   view_image: ViewImage.nullable().optional(),

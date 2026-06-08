@@ -211,11 +211,9 @@ func (s *LiveSnapshot) buildObservationSnap(e *Entity, obsID uint64, opts *Agent
 		VisibleObjects:    []VisibleObjectState{},
 		VisibleItems:      []VisibleItemState{},
 		Audible:           []AudibleEvent{},
-		RecentSelfResults: []ActionResult{},
 		WorldClock: WorldClockState{
 			Tick:     s.Tick,
 			DayPhase: dayPhaseFromTick(s.Tick),
-			Weather:  "clear",
 		},
 	}
 	if e.CurrentAction != "" {

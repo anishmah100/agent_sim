@@ -57,11 +57,9 @@ func (w *World) BuildObservation(e *Entity, obsID uint64, opts *AgentObservation
 		VisibleObjects:    []VisibleObjectState{},
 		VisibleItems:      []VisibleItemState{},
 		Audible:           []AudibleEvent{},
-		RecentSelfResults: []ActionResult{},
 		WorldClock: WorldClockState{
-			Tick:      w.tick,
-			DayPhase:  dayPhaseFromTick(w.tick),
-			Weather:   "clear",
+			Tick:     w.tick,
+			DayPhase: dayPhaseFromTick(w.tick),
 		},
 	}
 	if e.CurrentAction != "" {
@@ -150,7 +148,6 @@ type Observation struct {
 	// VisibleObjects (doors/decorations) only support interact afford.
 	VisibleItems      []VisibleItemState    `json:"visible_items,omitempty"`
 	Audible           []AudibleEvent        `json:"audible"`
-	RecentSelfResults []ActionResult        `json:"recent_self_results,omitempty"`
 	// LocalView — the agent's egocentric ASCII tile-map: a Chebyshev
 	// radius-LocalViewRadius window of the static terrain centered on the
 	// agent, with visible entities/items/doors overlaid. This is "what the
@@ -336,7 +333,6 @@ type VisibleEntityState struct {
 	Facing        string                 `json:"facing"`
 	Archetype     string                 `json:"archetype"`
 	ExtrasSummary map[string]interface{} `json:"extras_summary,omitempty"`
-	Doing         string                 `json:"doing,omitempty"`
 }
 
 type VisibleObjectState struct {
@@ -363,7 +359,6 @@ type VisibleItemState struct {
 type WorldClockState struct {
 	Tick     uint64 `json:"tick"`
 	DayPhase string `json:"day_phase"`
-	Weather  string `json:"weather"`
 }
 
 func dayPhaseFromTick(tick uint64) string {

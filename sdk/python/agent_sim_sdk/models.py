@@ -56,7 +56,6 @@ class VisibleEntity(BaseModel):
     facing: Facing
     archetype: str
     extras_summary: dict[str, Any] = Field(default_factory=dict)
-    doing: Optional[str] = None
 
 
 class VisibleObject(BaseModel):
@@ -94,7 +93,6 @@ class AudibleEvent(BaseModel):
 class WorldClock(BaseModel):
     tick: int
     day_phase: Literal["dawn", "morning", "midday", "afternoon", "dusk", "night"]
-    weather: str = "clear"
 
 
 class LocalView(BaseModel):
@@ -140,7 +138,6 @@ class Observation(BaseModel):
     # range; engine returns items as entities of archetype="item".
     visible_items: list[VisibleItem] = Field(default_factory=list)
     audible: list[AudibleEvent] = Field(default_factory=list)
-    recent_self_results: list[dict[str, Any]] = Field(default_factory=list)
     # Egocentric ASCII terrain window (radius LocalViewRadius). Present on
     # every live observation; the agent reads it to plan routes the way a
     # human controlling the avatar would (see the lake, route around walls).
