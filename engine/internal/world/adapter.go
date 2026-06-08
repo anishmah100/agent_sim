@@ -180,7 +180,12 @@ func (a *WorldAdapter) EmitDeathScream(at [2]int, victimID, killerID string, muf
 				FromPos:   at, // witnesses see the true position
 				Text:      witnessText,
 				Tick:      a.W.tick,
-				radius:    1,
+				// Radius must cover the witness: they were selected by
+				// LOS within witnessRadius, but VisibleAudible still gates
+				// on chebyshev(pos, FromPos) <= radius. With the old
+				// radius=1 any non-adjacent witness silently dropped the
+				// event and never learned the killer's identity.
+				radius:    witnessRadius,
 				whisperTo: id, // only this witness receives it
 			})
 			a.W.witnessAppend(id, WitnessRecord{
