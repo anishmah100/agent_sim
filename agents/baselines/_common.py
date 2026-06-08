@@ -23,12 +23,13 @@ from agent_sim_sdk import (
     ActionBatch,
     Agent,
     AgentCredentials,
-    Move,
+    Step,
     Observation,
     Pos,
     VisibleEntity,
     VisibleItem,
 )
+from agents.common.nav import NavGrid
 
 
 log = logging.getLogger("agents.baselines")
@@ -132,6 +133,9 @@ class ArchetypeBot:
     # Set from the first observation; lets an experiment runner map this
     # bot to its world entity without racing the /agents endpoint.
     entity_id: Optional[str] = None
+    # Agent-side navigation: the static walkability grid, fetched once.
+    engine_url: str = "http://127.0.0.1:8080"
+    _nav: Optional[NavGrid] = None
 
     def __post_init__(self) -> None:
         # Per-bot RNG seeded by entity id so different bots make
@@ -149,6 +153,43 @@ class ArchetypeBot:
         transition. Default: returns plain "entered <state>"."""
         return None
 
+    # ----- navigation primitives (the harness owns motor; subclass owns
+    #       strategy — see docs/AGENT_MOVEMENT_REDESIGN.md) -----
+
+    def _blockers(self, obs: Observation) -> list[Pos]:
+        """Tiles occupied by other visible entities — avoided while pathing."""
+        me = obs.self.entity_id
+        return [tuple(e.pos) for e in (obs.visible_entities or [])
+                if e.entity_id != me]
+
+    def step_to(self, here: Pos, goal: Pos, obs: Observation,
+                stop_adjacent: bool = True) -> Optional[Action]:
+        """One A*-routed step toward `goal` (around terrain + other agents).
+        Falls back to a random step if there's no grid yet or no route."""
+        if self._nav is None:
+            return random_walk(self)
+        d = self._nav.next_dir(tuple(here), tuple(goal),
+                               dynamic_blocked=self._blockers(obs),
+                               stop_adjacent=stop_adjacent)
+        if d is None:
+            return random_walk(self)
+        return Step(dir=d)
+
+    def flee(self, here: Pos, threat: Pos, obs: Observation) -> Optional[Action]:
+        """Take the one walkable step that most increases distance from the
+        threat. Simple, deterministic, and good enough for prey — terrain
+        eventually corners a fleer, which is what lets a predator win."""
+        best_dir, best_dist = None, -1
+        for d, (dx, dy) in {"N": (0, -1), "S": (0, 1),
+                            "E": (1, 0), "W": (-1, 0)}.items():
+            nx, ny = here[0] + dx, here[1] + dy
+            if self._nav is not None and not self._nav.walkable(nx, ny):
+                continue
+            dist = max(abs(nx - threat[0]), abs(ny - threat[1]))
+            if dist > best_dist:
+                best_dist, best_dir = dist, d
+        return Step(dir=best_dir) if best_dir else None
+
     # ----- runtime -----
 
     async def run(self) -> None:
@@ -160,6 +201,11 @@ class ArchetypeBot:
                     return
                 if self.entity_id is None:
                     self.entity_id = obs.self.entity_id
+                if self._nav is None:
+                    try:
+                        self._nav = NavGrid.fetch(self.engine_url)
+                    except Exception:
+                        log.exception("nav grid fetch failed; will retry next tick")
                 try:
                     act = self.decide(obs)
                 except Exception:
@@ -195,8 +241,8 @@ class ArchetypeBot:
 # Default move helper for IDLE-style states.
 # ---------------------------------------------------------------------------
 
-def random_walk(bot: ArchetypeBot, here: Pos) -> Optional[Action]:
-    """Pick a random 8-direction neighbor and move there. Bot's RNG
-    so trajectory is deterministic given the seed."""
-    dx, dy = bot.rng.choice([(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)])
-    return Move(target=[here[0] + dx, here[1] + dy])
+def random_walk(bot: ArchetypeBot, here: Pos | None = None) -> Optional[Action]:
+    """Take a random one-tile step (N/S/E/W). The engine rejects a blocked
+    step harmlessly; the next tick tries again. Bot's RNG → deterministic
+    given the seed. (`here` kept for call-site compatibility, unused.)"""
+    return Step(dir=bot.rng.choice(["N", "S", "E", "W"]))

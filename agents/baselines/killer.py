@@ -72,7 +72,7 @@ class Killer(ArchetypeBot):
                     abs(target.pos[1] - here[1]),
                 ) <= 1:
                     return Pickup(target=target.entity_id)
-                return Move(target=list(step_toward(here, tuple(target.pos))))
+                return Move(target=list(target.pos))
 
         if self.state == "HUNTING":
             # If unarmed and there's a visible weapon, grab it first —
@@ -119,7 +119,7 @@ class Killer(ArchetypeBot):
                     target = nearest(money_items, here)
                     if chebyshev(here, tuple(target.pos)) <= 1:
                         return Pickup(target=target.entity_id)
-                    return Move(target=list(step_toward(here, tuple(target.pos))))
+                    return Move(target=list(target.pos))
                 return random_walk(self, here)
 
         if self.state == "PURSUING":
@@ -133,14 +133,14 @@ class Killer(ArchetypeBot):
                     return random_walk(self, here)
                 # Walk toward the last known position.
                 if self.target_last_pos is not None:
-                    return Move(target=list(step_toward(here, self.target_last_pos)))
+                    return Move(target=list(self.target_last_pos))
                 return random_walk(self, here)
             self.target_last_pos = tuple(target.pos)
             self.lost_ticks = 0
             if chebyshev(here, tuple(target.pos)) <= 1:
                 self.state = "ATTACKING"
             else:
-                return Move(target=list(step_toward(here, tuple(target.pos))))
+                return Move(target=list(target.pos))
 
         if self.state == "ATTACKING":
             target = self._find_target(obs.visible_entities)
@@ -159,7 +159,7 @@ class Killer(ArchetypeBot):
             # extras_summary's hp_bucket=="dying" then absence.
             if chebyshev(here, tuple(target.pos)) > 1:
                 self.state = "PURSUING"
-                return Move(target=list(step_toward(here, tuple(target.pos))))
+                return Move(target=list(target.pos))
             return Attack(target=target.entity_id)
 
         return None
