@@ -87,6 +87,11 @@ export class DecorationLayer {
   private vx0 = 0; private vy0 = 0; private vx1 = 0; private vy1 = 0;
   private hasVis = false;
   private lastRefreshMs = 0;
+  // Diagnostic: sprite ids skipped at materialize time because their
+  // texture never made it into the cache (404 / load failure). Warned
+  // once each so a future "decorations missing" incident is visible in
+  // the console instead of failing silently. See refreshVisible.
+  private warnedMissing = new Set<string>();
 
   constructor() {
     this.container = new Container();
@@ -294,7 +299,19 @@ export class DecorationLayer {
       if (this.liveSprites.has(i)) continue;
       const spec = this.specs[i];
       const tex = this.cache.get(spec.sprite);
-      if (!tex) continue;
+      if (!tex) {
+        // Texture absent from cache — load() either failed/404'd it or it
+        // is an unknown sprite id. It will never materialize on its own;
+        // surface it once so missing buildings/decorations are diagnosable.
+        if (!this.warnedMissing.has(spec.sprite)) {
+          this.warnedMissing.add(spec.sprite);
+          console.warn(
+            `decoration not rendered — texture missing for "${spec.sprite}" ` +
+            `at (${spec.x},${spec.y}); check spriteUrl()/art assets.`,
+          );
+        }
+        continue;
+      }
       const wrap = this.addSprite(spec, tex);
       if (wrap) this.liveSprites.set(i, wrap);
       if (--budget <= 0) {

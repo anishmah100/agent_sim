@@ -181,6 +181,18 @@ export function App() {
       .then(setWorldInfo)
       .catch((e) => setConnError((e as Error).message));
 
+    // Idempotency guard: if a stale Pixi app is still mounted (e.g. a
+    // dev HMR re-ran onMount before the prior onCleanup destroyed it, or
+    // the container already holds a canvas), tear it down first so we
+    // never stack two Pixi Applications on one container — the failure
+    // mode that left the decoration layer orphaned/empty after live edits.
+    const g = globalThis as unknown as { __pixiHandle?: PixiHandle | null };
+    if (g.__pixiHandle) {
+      try { g.__pixiHandle.destroy(); } catch { /* already gone */ }
+      g.__pixiHandle = null;
+    }
+    if (canvasContainer) canvasContainer.replaceChildren();
+
     pixiHandle = await mountPixiApp(canvasContainer);
 
     // Dev escape hatch: expose the pixi handle on globalThis so tests
@@ -828,4 +840,18 @@ export function App() {
       <Onboarding />
     </div>
   );
+}
+
+// Opt App out of Solid HMR — full page reload on change instead.
+//
+// App owns the PixiJS lifecycle (mountPixiApp in onMount). PixiApp.tsx
+// already opts itself out for the same reason, but a hot-swap of App OR
+// of any render-layer module (Decoration/Tilemap/Entity propagate their
+// HMR boundary up to here, App being the nearest Solid component that
+// accepts) would replace App's closures while the live Pixi scene kept
+// running — orphaning layers so e.g. buildings stop rendering until a
+// manual refresh. A full reload guarantees one clean Pixi scene per
+// source change. Same established "don't mix HMR with PixiJS" rule.
+if (import.meta.hot) {
+  import.meta.hot.invalidate();
 }
