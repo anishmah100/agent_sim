@@ -150,15 +150,19 @@ class Agent:
                     return
             yield obs
 
-    async def act(self, action: Action) -> Optional[ActionResult]:
-        """Send ONE action. Returns engine's ack if it arrives within
-        the timeout, None otherwise — the brain stays unblocked.
+    async def act(self, action: Action, *, timeout: float = 5.0) -> Optional[ActionResult]:
+        """Send ONE action and return the engine's ack (or None on timeout).
 
-        Preserved for backward compatibility. New brain code should
-        use `act_batch` so the engine's per-tick ordering applies
-        across the whole receding-horizon plan.
+        Convenience wrapper around `act_batch` with `wait_for_acks=True` — so
+        callers that inspect the result (`res.accepted`) actually get one. The
+        previous implementation passed fire-and-forget, so it ALWAYS returned
+        None regardless of whether the action landed, which made single-action
+        probes look like the agent never moved. New brain code should still
+        prefer `act_batch` so the engine's per-tick ordering applies across a
+        whole receding-horizon plan.
         """
-        results = await self.act_batch(ActionBatch(actions=[action]))
+        results = await self.act_batch(
+            ActionBatch(actions=[action]), wait_for_acks=True, timeout=timeout)
         return results[0] if results and results[0] is not None else None
 
     async def act_batch(
