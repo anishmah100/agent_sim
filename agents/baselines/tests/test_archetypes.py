@@ -269,7 +269,7 @@ def test_killer_retreats_low_hp():
     bot.target_id = "victim-3"
     obs = make_obs(
         pos=(10, 10),
-        extras={"hp": 20, "hunger": 0.0, "inventory": []},
+        extras={"hp": 12, "hunger": 0.0, "inventory": []},  # below retreat threshold (18)
         entities=[vent("victim-3", "survivor", (11, 10))],
     )
     act = bot.decide(obs)

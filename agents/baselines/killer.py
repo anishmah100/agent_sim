@@ -43,13 +43,17 @@ class Killer(ArchetypeBot):
         here = tuple(s.pos)
         hp = int((s.extras or {}).get("hp", 100) or 100)
 
-        # Low HP overrides everything except already-LOOTING.
-        if hp < 30 and self.state != "LOOTING":
+        # Low HP overrides everything except already-LOOTING. Retreat only
+        # when badly hurt and re-engage sooner, so the killer spends most of
+        # its time actually hunting (a high retreat threshold + slow regen
+        # left killers loitering out of the fight for long stretches, which
+        # is a big part of why combat went quiet mid-run).
+        if hp < 18 and self.state != "LOOTING":
             self.state = "RETREATING"
 
         if self.state == "RETREATING":
             threats = [e for e in obs.visible_entities if e.entity_id != s.entity_id]
-            if not threats and hp > 70:
+            if not threats and hp > 45:
                 self.state = "HUNTING"
                 self.target_id = None
                 self.goal = Goal.idle()

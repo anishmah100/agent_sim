@@ -155,12 +155,14 @@ ARCHETYPES = {
 
 
 class Handle:
-    def __init__(self, name, kind, creds, bot):
+    def __init__(self, name, kind, creds, bot, idx=0):
         self.name = name
         self.kind = kind          # "llm" or archetype name
         self.creds = creds
         self.bot = bot
+        self.idx = idx            # cast index, for respawning a replacement
         self.task: Optional[asyncio.Task] = None
+        self.deaths = 0           # times this slot's body died + respawned
 
 
 async def register_llm(engine: str, idx: int, brain: str = "qwen") -> Handle:
@@ -181,7 +183,7 @@ async def register_llm(engine: str, idx: int, brain: str = "qwen") -> Handle:
     else:
         bot = QwenFocalAgent(creds=creds, persona=persona, goal=goal,
                              cfg=FocalConfig(timeout_s=90), engine_url=engine)
-    return Handle(name, "llm", creds, bot)
+    return Handle(name, "llm", creds, bot, idx=idx)
 
 
 # Movement speed = step cadence (the motor emits one tile per observation, so
@@ -208,7 +210,7 @@ async def register_archetype(engine: str, arch: str, idx: int) -> Handle:
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
         cadence_ms=_cadence_for(arch))
     bot = cls(creds=creds, archetype_name=arch, engine_url=engine)
-    return Handle(name, arch, creds, bot)
+    return Handle(name, arch, creds, bot, idx=idx)
 
 
 # ---- narrator subprocess ----
@@ -228,6 +230,34 @@ def start_narrator(events: Path, out: Path, max_claude: int) -> subprocess.Popen
 
 
 # ---- driver ----
+
+async def supervise(h: "Handle", engine: str, brain: str, deadline: float):
+    """Run a bot; when its body dies (run() returns) BEFORE the wall window
+    ends, register a fresh replacement of the same kind and keep going. This
+    keeps the population — and the killers' supply of prey — from bleeding
+    out over a long run, which is what made activity plateau as the cast
+    thinned. The replacement reuses the slot's persona/index so the cast
+    composition stays constant."""
+    import time as _t
+    while _t.monotonic() < deadline and not getattr(h.bot, "_stopped", False):
+        try:
+            await h.bot.run()
+        except Exception:
+            log.exception("[%s] bot.run crashed; respawning", h.name)
+        if _t.monotonic() >= deadline or getattr(h.bot, "_stopped", False):
+            break
+        # Body died — respawn a replacement after a short beat.
+        await asyncio.sleep(1.0)
+        try:
+            nh = (await register_llm(engine, h.idx, brain) if h.kind == "llm"
+                  else await register_archetype(engine, h.kind, h.idx))
+            h.creds, h.bot = nh.creds, nh.bot
+            h.deaths += 1
+            log.info("[%s] respawned (death #%d) as %s", h.name, h.deaths, h.bot.creds.agent_id)
+        except Exception:
+            log.exception("[%s] respawn failed; slot stays dead", h.name)
+            break
+
 
 async def main_run(args) -> int:
     logging.basicConfig(level=logging.INFO,
@@ -259,9 +289,13 @@ async def main_run(args) -> int:
         narrator_proc = start_narrator(
             events_path, out_dir / "narrator.jsonl", args.max_claude)
 
-    # Launch all bots.
+    # Launch all bots under a supervisor that respawns a dead body so the
+    # population (and prey for the killers) stays stable across the window.
+    _deadline = time.monotonic() + args.wall_seconds
     for h in handles:
-        h.task = asyncio.create_task(h.bot.run(), name=h.name)
+        h.task = asyncio.create_task(
+            supervise(h, engine, getattr(args, "brain", "qwen"), _deadline),
+            name=h.name)
 
     # Run window with periodic progress. We ALSO poll each agent's
     # gold every tick of the loop and keep the last NON-ZERO reading

@@ -134,7 +134,10 @@ class ArchetypeBot:
     # resource hub and the world goes quiet (everyone milling alone in the
     # wilderness). home defaults to the eldoria spawn/respawn hub.
     home: Pos = (764, 864)
-    leash: int = 22
+    # Leash ≈ vision radius (12) + a little, and ≈ respawn_radius (14), so a
+    # leashed forager keeps the item-rich hub IN VIEW and stays actively
+    # gathering instead of oscillating just outside sight of it and idling.
+    leash: int = 14
     # Two-rate motor layer (see docs/AGENT_MOVEMENT_REDESIGN.md): the FSM
     # (deliberation) sets `goal` + fires direct verbs; the motor (reflex)
     # turns the standing goal into one N/S/E/W step per observation, with
