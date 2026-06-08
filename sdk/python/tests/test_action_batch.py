@@ -26,7 +26,7 @@ def test_action_batch_serializes_with_reasoning():
     blob = json.loads(b.model_dump_json())
     assert blob["reasoning"].startswith("trying to reach")
     assert len(blob["actions"]) == 2
-    assert blob["actions"][0]["verb"] == "move"
+    assert blob["actions"][0]["verb"] == "step"
     assert blob["actions"][1]["verb"] == "speak"
 
 
