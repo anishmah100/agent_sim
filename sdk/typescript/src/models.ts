@@ -42,6 +42,17 @@ export const VisibleObject = z.object({
   state_summary: z.record(z.unknown()).default({}),
 });
 
+// A pickup-able item entity within vision + line-of-sight. Mirrors the
+// Python SDK VisibleItem. `sprite` carries the kind (e.g. "item:apple");
+// `quantity` is 1 for non-stackables, higher for stacks like coin piles.
+export const VisibleItem = z.object({
+  entity_id: z.string(),
+  sprite: z.string(),
+  pos: Pos,
+  quantity: z.number().int().default(1),
+  label: z.string().nullable().optional(),
+});
+
 export const AudibleEvent = z.object({
   event_id: z.string(),
   kind: z.enum(["speech", "shout", "whisper", "sound"]),
@@ -83,6 +94,7 @@ export const Observation = z.object({
   self: SelfState,
   visible_entities: z.array(VisibleEntity).default([]),
   visible_objects: z.array(VisibleObject).default([]),
+  visible_items: z.array(VisibleItem).default([]),
   audible: z.array(AudibleEvent).default([]),
   local_view: LocalView.nullable().optional(),
   world_clock: WorldClock,
