@@ -17,6 +17,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SUITES = [
     ("S1 verb matrix", "verb_matrix.py", [ENGINE]),
     ("S2 obs integrity", "obs_integrity.py", [ENGINE]),
+    ("S3 movement", "movement_check.py", [ENGINE]),
     ("S5 building e2e", "building_e2e.py", [ENGINE]),
     ("S4 combat→econ e2e", "combat_economy_e2e.py", [ENGINE]),
     ("S6 events census", "events_check.py", ["/tmp/doccap_events.jsonl", ENGINE]),
