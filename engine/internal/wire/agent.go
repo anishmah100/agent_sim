@@ -392,6 +392,19 @@ func (h *AgentHub) tickObservations() {
 		}
 		obs := h.w.BuildObservationFor(c.rec.EntityID, c.lastObs.Load()+1, nil)
 		if obs == nil {
+			// No observation: either the entity was removed (death/loot
+			// cleanup) or the published snapshot is briefly behind a fresh
+			// spawn. Distinguish via the live entity map — only a TRULY
+			// gone entity gets its socket closed. Without this, a dead
+			// agent's WS stayed open forever; the bot's observation loop
+			// blocked on messages that never came, so supervise()'s
+			// `await bot.run()` never returned and the agent was never
+			// respawned — the population bled out over a long run
+			// (sustain bug). Closing the conn ends observations() → run()
+			// returns → the supervisor registers a replacement.
+			if h.w.EntityByID(c.rec.EntityID) == nil && !c.closedAt.Load() {
+				c.conn.Close()
+			}
 			continue
 		}
 		msg := map[string]any{
