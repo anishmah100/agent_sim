@@ -229,7 +229,13 @@ func (s *System) manifest() manifest.SystemDeclaration {
 			{Verb: "propose_task",
 				Description:      "Propose a verbal contract to a known entity. Records the contract on both parties' extras.contracts.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"terms":{"type":"string"},"reward":{"type":"string"}},"required":["target","terms"]}`),
-				RejectionReasons: []string{"bad_params", "unknown_target", "self_target", "empty_terms"},
+				// AUDIT NOTE (medium/[14]): INTENTIONALLY has no range limit —
+				// contracts may be proposed at any distance (they model
+				// pre-arranged/remote coordination, unlike whisper which needs
+				// adjacency). Documented here so it reads as a design choice,
+				// not a missing check.
+				Preconditions:    []string{"target is a known agent (any distance)", "non-empty terms"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "self_target", "empty_terms"},
 				EmitsEvents:      []string{"TaskProposed"},
 			},
 			{Verb: "accept_task",
@@ -300,15 +306,36 @@ func appendContract(w syscore.World, entityID string, contract map[string]any) {
 	}
 	w.MutateEntity(entityID, func(real syscore.Entity) {
 		cur := readContracts(real)
-		// Materialize as []any so JSON round-trips match the seeded shape.
-		out := make([]any, 0, len(cur)+1)
+		cur = append(cur, clone)
+		// AUDIT FIX (medium/[16]): bound the ledger. Rejected/completed
+		// contracts are terminal — keep recent history but drop the oldest
+		// terminal ones once the ledger exceeds maxContracts so a long-lived
+		// agent's contracts extra (and every observation carrying it) can't
+		// grow without bound. Open (proposed/accepted) contracts are never
+		// pruned.
+		if len(cur) > maxContracts {
+			kept := make([]map[string]any, 0, len(cur))
+			drop := len(cur) - maxContracts
+			for _, c := range cur {
+				st, _ := c["status"].(string)
+				if drop > 0 && (st == "rejected" || st == "completed") {
+					drop--
+					continue
+				}
+				kept = append(kept, c)
+			}
+			cur = kept
+		}
+		out := make([]any, 0, len(cur))
 		for _, c := range cur {
 			out = append(out, c)
 		}
-		out = append(out, clone)
 		real.SetExtra("contracts", out)
 	})
 }
+
+// maxContracts bounds a single agent's contract ledger (audit [16]).
+const maxContracts = 50
 
 func mutateContract(w syscore.World, entityID, id string, mutate func(map[string]any)) {
 	w.MutateEntity(entityID, func(real syscore.Entity) {

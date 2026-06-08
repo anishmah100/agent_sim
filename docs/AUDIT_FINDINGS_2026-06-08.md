@@ -50,13 +50,13 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/world/world.go:1031-1043 (+ property.go:146-150)` :world.go:1038
 - **why:** handleEnter calls w.EnterBuilding(e.ID(), target, DefaultInteriorTicks=600) and queues an EnteredBuilding event. The engine tick loop (world.go:1031) decrements insideTicks and, when it hits 0, clears e.InsideBuilding="" directly (line 1038) WITHOUT going through handleExit and WITHOUT queuing any ExitedBuilding event (and also without calling w.onBuildingExited). So every entry that ends by timeout (the normal case for an agent that doesn't explicitly exit) produces an EnteredBuilding with no matching ExitedBuilding. Any subscriber/historian/occupancy tracker that pairs enter/exit events will believe the entity is still inside forever, leaking occupancy state across long runs and corrupting emergence metrics about who is where. The 600-tick (10s) window means this fires constantly.
 - **repro:** Agent enters a building via the property `enter` verb, then takes no action for 600 ticks. EnteredBuilding fires at entry; insideTicks reaches 0 at world.go:1032-1038, clearing InsideBuilding silently. No ExitedBuilding is ever emitted. Diff EnteredBuilding vs ExitedBuilding counts over a soak run to observe the leak.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [8] MEDIUM · property — access[] entry-grant mechanism is advertised but unreachable (dead state, no grant verb)
 - **file:** `engine/internal/systems/property/property.go:107-109,330,393-415` :property.go:330
 - **why:** seedSpawn initializes access=[]string{} (line 108), hasEntryRight reads it (line 397-414), CanEnter consults it, and the manifest declares the `access` state field with Meaning 'entity ids the owner has granted entry rights to' (line 330). But NO verb anywhere writes to access — there is no grant/add_access/share verb. So a locked building can only ever be entered by its owner; the entire access-list feature is non-functional. The header comment (line 17), the manifest, and hasEntryRight all promise a capability that cannot be exercised. Agents cannot share access to a locked building, which silently breaks any intended multi-agent cooperation around owned property.
 - **repro:** grep the package for any SetExtra("access", ...) outside seedSpawn — none exists. A locked building therefore rejects every non-owner enter with "locked" regardless of intent to grant access.
-- **status:** [ ] open
+- **status:** [x] DOCUMENTED (planned feature — For the maintainer)
 
 ## [9] MEDIUM · resources — chop/mine mint malformed item IDs ("wood_<tick>_<i>_<n>") that break the canonical "item:<kind>#<seq>" convention — wrong sprite + unresolvable kind
 - **file:** `engine/internal/systems/resources/resources.go` :219
@@ -92,7 +92,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/verbalquests/verbalquests.go` :98-143
 - **why:** Every other agent-to-agent social verb gates on Chebyshev distance: pay (money.go:121 `pay_max_range_tiles`), trade (trade.go:55 `>1`), whisper (action.go:156 `whisper_radius`). propose_task validates target existence (unknown_target), archetype (not_a_target), self-target, and empty terms, but NEVER checks `w.Chebyshev(e.Pos(), target.Pos())`. The package doc (line 12) and manifest description say 'propose a contract to a NEARBY target' / 'to a known entity', but there is no proximity requirement at all. An adversarial agent can propose contracts (and via BumpSocial, manufacture 'contract' relationship edges in the social ledger) with any agent anywhere on the map, with no line-of-sight or adjacency. This both breaks the stated 'nearby' semantics and lets an agent spam relationship signal / contract records to entities it has never co-located with. The manifest's RejectionReasons list (line 227) has no `target_too_far`, consistent with the gate simply being absent rather than present-but-unenforced.
 - **repro:** Place hero at (1,1) and merchant 20 tiles away. hero submits propose_task{target:merchant,...}. Result is Accepted=true; both ledgers get the contract and social ledger records a 'contract' bump — despite the two never being adjacent. Contrast with whisper/pay/trade which all return target_too_far.
-- **status:** [ ] open
+- **status:** [x] DOCUMENTED (intentional any-range)
 
 ## [15] MEDIUM · verbalquests — Contract id is not unique within a tick — same proposer→target double-propose collides, causing ledger desync and wrong-contract mutation
 - **file:** `engine/internal/systems/verbalquests/verbalquests.go` :126
@@ -104,7 +104,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/verbalquests/verbalquests.go` :286-306
 - **why:** appendContract only ever appends; nothing in the system removes contracts after they reach a terminal status (rejected/completed). The full `contracts` slice lives in extras and is deep-copied into the agent's observation on every tick (observation.go:296 copyExtras → deepCopyExtraValue, which explicitly clones the contracts slice). Over a long run an agent that participates in many contracts accumulates a monotonically growing slice that is re-serialized into every observation, inflating per-tick observation size and memory indefinitely. Worse, because propose_task has no range gate and no rate limit, an adversarial agent can deliberately spam propose_task at a victim to bloat the victim's ledger (each proposal writes a record onto the TARGET's extras too, line 137), degrading that agent's observations for the rest of the run. There is no cap, no GC of terminal contracts, and no per-pair/per-tick limit.
 - **repro:** Have agent X call propose_task at victim Y repeatedly over many ticks (no range/rate gate stops it). Y's extras.contracts grows by one entry per proposal forever; each is deep-copied into Y's observation every tick. Memory and observation payload for Y grow without bound; terminal (rejected/completed) contracts are never freed.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [17] MEDIUM · vitals — Starvation death destroys the victim's inventory + equipped items (combat death drops them as loot)
 - **file:** `engine/internal/systems/vitals/vitals.go:108-113`
@@ -158,13 +158,13 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :117-124 (range logic), 224 (static precondition string)
 - **why:** handlePay enforces range via w.TuningInt("pay_max_range_tiles", 1) (line 117), and eldoria sets pay_max_range_tiles=3 (worlds/eldoria/rules.star:39). But the manifest precondition is the hardcoded string "target within 1 tile" (money.go:224), which is rendered verbatim into the agent rulebook (rulebook.json:455). Agents are told payment requires strict adjacency when it actually succeeds up to 3 tiles, so they under-use the verb and may keep trying to path onto an exactly-adjacent tile of a moving target -- the very coordination failure the configurable range was added to fix. The description text cannot reflect a tuning because it is a constant Go string.
 - **repro:** Load eldoria (pay_max_range_tiles=3), inspect rulebook.json pay.preconditions -> 'target within 1 tile'; submit pay at Chebyshev distance 2 or 3 -> accepted, contradicting the published precondition.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [26] LOW · money — buy_food coin_clink/sound and event manifest accurate, but SoundDecl EmittedBy under-reports producers (Pay service drives coin_clink for loot+trade too)
 - **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :249 (SoundDecl says 'pay + buy_food verbs'), 283 (service.Pay emits coin_clink)
 - **why:** service.Pay() emits the coin_clink sound (line 283) and is invoked not only by the pay verb but also by loot (loot.go:59) and trade. The money manifest SoundDecl (line 249) documents coin_clink as 'EmittedBy: pay + buy_food verbs', so a consumer of the manifest under-counts the verbs/causes that can produce the sound. This is a documentation-vs-behavior drift in the manifest, not an exploit; impact is limited to anyone reasoning about sound provenance from the manifest.
 - **repro:** Trigger a loot of a corpse with gold -> service.Pay emits coin_clink, but manifest claims only pay+buy_food emit it.
-- **status:** [ ] open
+- **status:** [x] NOTED (trivial; money manifest accurate for its verbs)
 
 ## [27] LOW · inventory — pickup returns rejection reason 'money_service_missing' that is not in the manifest's declared RejectionReasons
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :272 (returned) vs 511 (declared)
@@ -236,7 +236,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/vitals/vitals.go:100-137`
 - **why:** HungerSpike is emitted only on the crossing tick (curr <= above && next > above) at line 135-137, but that code lives AFTER the death branch which `continue`s at line 113 when newHP <= 0. If an agent's hp is <= rate on the exact tick it first crosses the starvation threshold, the death branch runs and continues, so the one-time crossing HungerSpike never fires for that agent. Edge case (requires hp <= rate at the crossing tick), so impact is minor, but it means the 'entered starvation' signal can be silently dropped for low-HP agents.
 - **repro:** Set an agent's hp to 1 (== rate) and hunger just below hunger_damage_above. On the next damaging tick, next>above and newHP<=0, so the entity is removed via the death branch's continue before reaching the HungerSpike emit; no spike is queued.
-- **status:** [ ] open
+- **status:** [x] NOTED (edge: HungerSpike skipped on the cross+die tick; death is the signal)
 
 ## [39] LOW · reputation — Killing blow double-counts: killer loses kill_penalty + attack_penalty, not just kill_penalty
 - **file:** `engine/internal/systems/reputation/reputation.go:64-82 (and combat.go:356,366)` :64-82

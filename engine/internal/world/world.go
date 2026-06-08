@@ -1035,10 +1035,18 @@ func (w *World) Tick() {
 			}
 			// Time to exit. Re-emerge at the door tile (the entity's
 			// LogicalTile was stored at entry).
+			exited := e.InsideBuilding
 			e.InsideBuilding = ""
 			e.Facing = FacingS
 			if w.occupants[e.LogicalTile] == "" {
 				w.occupants[e.LogicalTile] = e.EntityID
+			}
+			// AUDIT FIX (medium/[7]): notify on auto-exit so the building
+			// system emits ExitedBuilding — previously the timed auto-exit
+			// silently cleared the flag, so an EnteredBuilding was never paired
+			// with an ExitedBuilding in the event log.
+			if w.onBuildingExited != nil {
+				w.onBuildingExited(e.EntityID, exited, w.tick)
 			}
 			continue
 		}

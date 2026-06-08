@@ -331,7 +331,11 @@ func (s *System) manifest() manifest.SystemDeclaration {
 		StateFields: []manifest.StateFieldDecl{
 			{Key: "owner", Type: "string", Owner: "entity.extras", PublicAtAnyDistance: true, Meaning: "entity id of the owner of this building, or empty if unowned"},
 			{Key: "locked", Type: "bool", Owner: "entity.extras", PublicAtAnyDistance: true, Meaning: "if true, only owner or entities in access[] can enter"},
-			{Key: "access", Type: "list", Owner: "entity.extras", PublicAtAnyDistance: false, Meaning: "entity ids the owner has granted entry rights to (private)"},
+			// AUDIT NOTE (medium/[8]): access[] is read by enter (hasEntryRight)
+			// but there is NO verb to populate it yet — a locked building is
+			// currently enterable ONLY by its owner. A grant_access verb is a
+			// planned feature (flagged For the maintainer in SESSION_HANDOFF).
+			{Key: "access", Type: "list", Owner: "entity.extras", PublicAtAnyDistance: false, Meaning: "entity ids the owner has granted entry rights to (private; no grant verb yet — owner-only for now)"},
 		},
 		Archetypes: []manifest.ArchetypeDecl{
 			{Archetype: "building", Description: "A first-class structure entity. Owned via claim_ownership; constructed via the construction system; enterable as an interior tile space.",

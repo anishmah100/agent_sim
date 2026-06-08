@@ -221,7 +221,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Verb:             "pay",
 				Description:      "Transfer gold to an adjacent entity.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"amount":{"type":"integer","minimum":1}},"required":["target","amount"]}`),
-				Preconditions:    []string{"target within 1 tile", "self has at least `amount` gold"},
+				Preconditions:    []string{"target within pay_max_range_tiles (default 1) chebyshev", "self has at least `amount` gold"},
 				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "self_target", "target_too_far", "not_enough_gold"},
 				EmitsEvents:      []string{"GoldTransferred"},
 			},
