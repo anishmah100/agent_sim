@@ -22,7 +22,7 @@ import type { TileMapData } from "../render/Tilemap";
 import type { EntityState } from "../render/Entity";
 import { Inspector } from "./Inspector";
 import { InfoPanel } from "./InfoPanel";
-import { AgentHoverCard, type AgentHoverInfo } from "./AgentHoverCard";
+import { AgentHoverCard, type AgentHoverInfo, type BadgeKind } from "./AgentHoverCard";
 import { describeSprite, type SpriteInfo } from "./SpriteInfo";
 import { WorldRulebook } from "./WorldRulebook";
 import { Leaderboards } from "./Leaderboards";
@@ -43,6 +43,7 @@ import { Onboarding } from "./Onboarding";
 interface AgentsRow {
   entity_id: string;
   is_llm?: boolean;
+  brain?: string;
   archetype?: string;
   display_name?: string;
   persona_name?: string;
@@ -144,6 +145,12 @@ export function App() {
         peers: m.peers ?? {},
         vitals: m.vitals,
         is_llm: row?.is_llm,
+        // Brain badge kind: a known agent reports its model (qwen/claude),
+        // or rule for heuristic bots; an entity absent from /agents is a
+        // background NPC.
+        brain: row
+          ? ((row.brain as BadgeKind | undefined) ?? (row.is_llm ? "llm" : "rule"))
+          : "npc",
       });
     }).catch(() => setMentalState(null));
   }
@@ -422,6 +429,9 @@ export function App() {
           // only), so it would otherwise show a misleading "rule" badge +
           // 0/0 HP. Flag it so the card renders "NPC" and hides vitals.
           is_npc: row === undefined,
+          brain: row
+            ? ((row.brain as BadgeKind | undefined) ?? (row.is_llm ? "llm" : "rule"))
+            : "npc",
           hp: vit.hp,
           max_hp: vit.max_hp,
           gold: vit.gold,

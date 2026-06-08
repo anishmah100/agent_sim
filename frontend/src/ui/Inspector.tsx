@@ -14,7 +14,7 @@
 
 import { For, Show, createMemo, createSignal } from "solid-js";
 import type { EntityState } from "../render/Entity";
-import { Badge } from "./AgentHoverCard";
+import { Badge, type BadgeKind } from "./AgentHoverCard";
 
 export interface DialogueLine {
   tick: number;
@@ -77,6 +77,10 @@ export interface MentalState {
   // badge in the inspector header. Undefined when the entity is
   // not a registered agent (e.g. background NPCs).
   is_llm?: boolean;
+  // brain — which model/driver runs the agent: "qwen" | "claude" |
+  // "llm" | "rule" | "npc". Drives the header badge; supersedes the
+  // coarse is_llm boolean (kept for back-compat).
+  brain?: BadgeKind;
 }
 
 type Tab = "speech" | "mind" | "trace" | "relationships" | "inventory";
@@ -143,8 +147,8 @@ export function Inspector(props: {
             }}>
               {props.entity?.display_name ?? props.entity?.entity_id ?? "(unknown)"}
             </strong>
-            <Show when={props.mentalState?.is_llm !== undefined}>
-              <Badge kind={props.mentalState!.is_llm ? "llm" : "rule"} />
+            <Show when={props.mentalState?.brain ?? (props.mentalState?.is_llm !== undefined)}>
+              <Badge kind={props.mentalState!.brain ?? (props.mentalState!.is_llm ? "llm" : "rule")} />
             </Show>
           </div>
           <button

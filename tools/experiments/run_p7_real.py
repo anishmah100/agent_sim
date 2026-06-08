@@ -169,7 +169,8 @@ async def register_llm(engine: str, idx: int, brain: str = "qwen") -> Handle:
     name, persona, goal = FOCAL_PERSONAS[idx % len(FOCAL_PERSONAS)]
     creds = await register_agent(
         engine, user_token="dev",
-        persona={"name": name, "bio": persona, "archetype_tag": "llm"},
+        persona={"name": name, "bio": persona, "archetype_tag": "llm",
+                 "brain": brain},
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
         # Fast obs cadence drives the reflex MOTOR loop (one step/tick toward
         # the standing goal); the LLM deliberation rate is gated separately
@@ -206,7 +207,7 @@ async def register_archetype(engine: str, arch: str, idx: int) -> Handle:
     creds = await register_agent(
         engine, user_token="dev",
         persona={"name": name, "bio": f"rule-based {arch}",
-                 "archetype_tag": arch},
+                 "archetype_tag": arch, "brain": "rule"},
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
         cadence_ms=_cadence_for(arch))
     bot = cls(creds=creds, archetype_name=arch, engine_url=engine)

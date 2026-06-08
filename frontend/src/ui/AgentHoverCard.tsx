@@ -17,6 +17,9 @@ export interface AgentHoverInfo {
   archetype: string;
   is_llm: boolean;
   is_npc?: boolean;
+  // brain — specific model/driver (qwen/claude/rule); when present the
+  // hover badge shows it. Falls back to the is_llm/is_npc booleans.
+  brain?: BadgeKind;
   hp: number;
   max_hp: number;
   gold: number;
@@ -83,13 +86,8 @@ export function AgentHoverCard(props: {
               >
                 {info().display_name ?? info().entity_id}
               </strong>
-              {info().is_npc
-                ? <span style={{ "font-size": "9px", color: "#8b9bb4",
-                    border: "1px solid #3a4466", "border-radius": "3px",
-                    padding: "0 4px" }}>NPC</span>
-                : info().is_llm
-                  ? <Badge kind="llm" />
-                  : <Badge kind="rule" />}
+              <Badge kind={info().brain
+                ?? (info().is_npc ? "npc" : info().is_llm ? "llm" : "rule")} />
             </div>
             <div
               style={{
@@ -158,13 +156,27 @@ export function AgentHoverCard(props: {
   );
 }
 
-/** Small pill — "LLM" cyan or "rule" gray. Exported because the
- *  Inspector header uses the same visual treatment (task 6.5). */
-export function Badge(props: { kind: "llm" | "rule" }) {
-  const isLlm = props.kind === "llm";
+/** Small pill identifying what drives an agent. Exported because the
+ *  Inspector header uses the same visual treatment (task 6.5).
+ *  Kinds: qwen / claude (specific LLM models), llm (unspecified model),
+ *  rule (heuristic bot), npc (background population). */
+export type BadgeKind = "qwen" | "claude" | "llm" | "rule" | "npc";
+
+const BADGE_STYLES: Record<BadgeKind, { label: string; color: string; bg: string }> = {
+  // Claude = Anthropic's signature warm orange; Qwen = cyan; generic LLM
+  // = a lighter cyan; rule/npc = muted grays so AI agents pop.
+  claude: { label: "Claude", color: "#ff9d5c", bg: "rgba(255, 157, 92, 0.18)" },
+  qwen:   { label: "Qwen",   color: "#22d3ee", bg: "rgba(34, 211, 238, 0.18)" },
+  llm:    { label: "LLM",    color: "#7dd3fc", bg: "rgba(125, 211, 252, 0.16)" },
+  rule:   { label: "rule",   color: "#8b9bb4", bg: "rgba(139, 155, 180, 0.18)" },
+  npc:    { label: "NPC",    color: "#9ca3af", bg: "rgba(156, 163, 175, 0.16)" },
+};
+
+export function Badge(props: { kind: BadgeKind }) {
+  const s = () => BADGE_STYLES[props.kind] ?? BADGE_STYLES.rule;
   return (
     <span
-      data-testid={isLlm ? "llm-badge" : "rule-badge"}
+      data-testid={`${props.kind}-badge`}
       style={{
         display: "inline-block",
         padding: "1px 6px",
@@ -172,14 +184,14 @@ export function Badge(props: { kind: "llm" | "rule" }) {
         "font-size": "10px",
         "font-weight": "600",
         "font-family": "ui-monospace, monospace",
-        background: isLlm ? "rgba(34, 211, 238, 0.18)" : "rgba(139, 155, 180, 0.18)",
-        color: isLlm ? "#22d3ee" : "#8b9bb4",
-        border: `1px solid ${isLlm ? "#22d3ee" : "#5a6988"}`,
+        background: s().bg,
+        color: s().color,
+        border: `1px solid ${s().color}`,
         "line-height": "1.2",
         "letter-spacing": "0.5px",
       }}
     >
-      {isLlm ? "LLM" : "rule"}
+      {s().label}
     </span>
   );
 }

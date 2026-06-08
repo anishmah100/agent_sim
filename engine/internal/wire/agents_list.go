@@ -71,6 +71,17 @@ func AgentsListHandler(hub *AgentHub, w *world.World) http.HandlerFunc {
 				} else {
 					info.IsLLM = true
 				}
+				// Brain — which model drives an LLM agent (qwen / claude),
+				// or "rule" for heuristic bots. The runner stamps
+				// persona["brain"] on register; fall back sensibly when
+				// it's absent so older runs still render a badge.
+				if brain, ok := p["brain"].(string); ok && brain != "" {
+					info.Brain = brain
+				} else if info.IsLLM {
+					info.Brain = "llm"
+				} else {
+					info.Brain = "rule"
+				}
 			}
 			if pos, ok := entityPos[c.rec.EntityID]; ok {
 				info.Pos = pos
@@ -110,6 +121,10 @@ type agentInfo struct {
 	// IsLLM — heuristic-bot agents register with a known bio.
 	// Anything else is assumed LLM-driven.
 	IsLLM       bool   `json:"is_llm"`
+	// Brain — model driving the agent: "qwen" / "claude" for LLM
+	// agents, "rule" for heuristic bots, "llm" when an LLM agent
+	// didn't stamp a specific model. The UI badge reads this.
+	Brain       string `json:"brain,omitempty"`
 	// LastVerb — last action verb the agent submitted (any verb,
 	// accepted or not). Surfaces what the agent is currently
 	// trying to do; helps the user see at-a-glance that an agent
