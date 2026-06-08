@@ -139,6 +139,18 @@ def test_survivor_flees_armed_entity():
     assert bot.goal.kind == "flee" and bot.goal.entity_id == "killer-1"
 
 
+def test_survivor_forages_tree_when_hungry():
+    from agent_sim_sdk import Forage
+    bot = Survivor(creds=make_creds())
+    obs = make_obs(
+        pos=(10, 10),
+        extras={"hp": 100, "hunger": 0.7, "inventory": [], "gold": 0},
+        entities=[vent("oak-1", "tree", (11, 10))],
+    )
+    act = bot.decide(obs)
+    assert isinstance(act, Forage) and act.target == "oak-1", (act, bot.state)
+
+
 def test_survivor_buys_food_when_hungry_with_gold_no_food():
     from agent_sim_sdk import BuyFood
     bot = Survivor(creds=make_creds())

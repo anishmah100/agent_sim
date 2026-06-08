@@ -16,6 +16,7 @@ from typing import Optional
 from agent_sim_sdk import (
     Action,
     BuyFood,
+    Forage,
     Eat,
     Observation,
     Pay,
@@ -105,6 +106,17 @@ class Survivor(ArchetypeBot):
                     return Pickup(target=f.entity_id)
                 # (c) walk toward closest food (motor navigates).
                 self.goal = Goal.goto(*f.pos)
+                return None
+            # (c2) a tree/bush in reach → forage fruit. Free renewable food,
+            # preferred over spending gold; walk to it if not adjacent.
+            trees = [e for e in obs.visible_entities
+                     if e.archetype in ("tree", "bush")]
+            if trees:
+                t = nearest(trees, here)
+                if max(abs(t.pos[0] - here[0]), abs(t.pos[1] - here[1])) <= 1:
+                    self.state = "EATING"
+                    return Forage(target=t.entity_id)
+                self.goal = Goal.goto(*t.pos)
                 return None
             # (d) no food in sight but gold in pocket → buy a meal at the
             # market. This is the gold sink that makes accumulated wealth
