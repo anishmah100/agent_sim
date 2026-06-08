@@ -289,4 +289,17 @@ For EACH verb, a row in `tools/audit/verb_matrix.py` that:
 - 2026-06-08 · S5 (pre-build) · enter `door:bld:000:767,867`→accepted,
   inside_building set; exit→cleared; **step inside = no-op, no interior** ·
   FAIL → interiors to be built (decision).
-- 2026-06-08 · S7.b · TS Observation missing `visible_items` · FAIL → to fix.
+- 2026-06-08 · S7.b · TS Observation missing `visible_items` · FIXED@ce0f558 (added VisibleItem + vitest parity test).
+- 2026-06-08 · S2.g · dead fields doing/weather/recent_self_results removed from wire+SDKs · FIXED@968899a (verified absent from fresh live frame).
+- 2026-06-08 · S1 (verb matrix) · tools/audit/verb_matrix.py vs live engine —
+  45/45 probes PASS: every system verb rejects with a DOCUMENTED reason for
+  malformed/unknown-target/unknown-item/unknown-contract, and the trivial
+  accept verbs (step/speak/shout/wait/look_at/defend) accept. No undocumented
+  rejection reasons leaked. False alarms ruled out by direct repro: demolish
+  acks unknown_target in isolation (matrix no-ack was buffered-frame timing,
+  now retried); work_for_pay + buy_food accept is legitimate state-dependent
+  behavior (worksite/market in range). · PASS.
+- 2026-06-08 · CONFIG NOTE (for the maintainer) · Eldoria sets market_radius=0, so
+  buy_food has NO spatial gate (food buyable anywhere with gold+hunger>0)
+  despite bld:stall_* decorations existing. Consider market_radius>0 if the
+  market should be a real place agents converge on.
