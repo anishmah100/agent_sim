@@ -57,13 +57,6 @@ export interface VitalsSnapshot {
   inside_building?: string;
 }
 
-export interface TraceLine {
-  tick: number;
-  action_id: string;
-  verb: string;
-  reasoning: string;
-}
-
 // One thing an agent perceived first-hand: a kill it saw (with killer +
 // victim identity) or a death scream it heard from somewhere (anonymous).
 export interface WitnessRecord {
@@ -77,7 +70,6 @@ export interface WitnessRecord {
 export interface MentalState {
   dialogue: DialogueLine[];
   mind: MindSnapshot;
-  traces: TraceLine[];
   witnesses?: WitnessRecord[];
   capture_reasoning_enabled: boolean;
   // D19 — per-pair counters keyed by the *other* agent's entity_id.

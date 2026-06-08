@@ -38,7 +38,6 @@ export interface MentalStateResponse {
     beliefs?: string;
     emotion?: string;
   };
-  traces: Array<{ tick: number; action_id: string; verb: string; reasoning: string }>;
   // D19 — per-pair social interaction counters keyed by peer entity_id.
   peers?: Record<string, {
     trade:    number;
