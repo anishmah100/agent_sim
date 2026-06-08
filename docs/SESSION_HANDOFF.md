@@ -130,3 +130,11 @@ Verified live (#268): engine+Qwen+full-cast demo (3 Qwen + 14 rule) sustains —
 - Second-order theory-of-mind (Phase A10) — large, likely needs Claude (budget).
 - A second world scenario (Manhattan / Founding Fathers personas) — large content + persona design.
 - Auto-iteration research-loop objective — what should it optimize toward?
+
+### Observation-state audit (2026-06-08) — For the maintainer (design calls)
+Full obs = obs_id, world_tick, self{entity_id,pos(logical int),facing,extras(FULL raw),inside_building,current_action,last_action_result}, visible_entities[{entity_id,apparent_label,pos,facing,archetype,extras_summary{hp_bucket,equipped_slot,equipped_sprite,reputation,rep_bucket},doing}], visible_objects[doors], visible_items[{entity_id,sprite,pos,quantity,label}], audible, recent_self_results, known_map_summary, local_view(radius20 ASCII), world_clock, view_image.
+Flags found:
+- **Uniform archetype**: every agent entity is archetype="wanderer"; killer/survivor/avenger is bot-FSM-internal, NOT visible to others. Agents can't tell roles apart except by equipped weapon / reputation / behavior. DESIGN CALL: is that intended?
+- **reputation exposed exact to observers** (extras_summary.reputation raw number, no gossip locality). DESIGN CALL.
+- DEAD FIELDS (declared, never populated — clean up in audit): visible_entities.doing (always null), known_map_summary.named_regions/portals (always []), world_clock.weather (hardcoded "clear").
+- self.extras is an unfiltered raw dump (no whitelist) — internal keys (defending, contracts) leak into self-view; harmless now but anything added to extras shows up.
