@@ -492,6 +492,11 @@ export function App() {
           if (found) setSelectedSnapshot(found);
         }
       },
+      onInteriors: (views) => {
+        // Feed building-interior occupants so an open interior view renders
+        // the live agents inside it (HeartGold phase 4).
+        pixiHandle?.setInteriors(views);
+      },
     });
 
     // Society Pulse — poll the social-ledger graph and feed the overlay.

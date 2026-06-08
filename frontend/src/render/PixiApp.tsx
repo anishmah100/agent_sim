@@ -28,7 +28,7 @@ import { FxLayer } from "./FxLayer";
 import { RelationshipOverlay, type SocialEdge } from "./RelationshipOverlay";
 import { DayNight } from "./DayNight";
 import { HD2DStack } from "./HD2D";
-import type { AudibleEvent } from "../net/ws";
+import type { AudibleEvent, InteriorView } from "../net/ws";
 import { TILE_SIZE_PX, resetTileCache } from "./tiles";
 import { installClickToInspect, type ClickEvent } from "./input";
 import { CharacterAtlas } from "./CharacterAtlas";
@@ -41,6 +41,9 @@ export interface PixiHandle {
   viewport: Viewport;
   loadWorld(data: TileMapData): void;
   setEntities(entities: EntityState[]): void;
+  /** Feed building-interior occupants (HeartGold phase 4): when the interior
+   *  view is open for a building, render the live agents inside it. */
+  setInteriors(views: InteriorView[]): void;
   getEntities(): EntityState[];
   centerOn(tileX: number, tileY: number): void;
   fitToWorld(): void;
@@ -173,9 +176,34 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   app.stage.addChild(interior.container);
   decorations.onBuildingClick(async (ev) => {
     if (editorActive) return;
-    await interior.show(ev.sprite);
+    // Pass the footprint so live occupants can be matched to THIS building
+    // instance (HeartGold phase 4), then immediately render anyone inside.
+    await interior.show(ev.sprite, ev.x, ev.y);
+    feedInteriorOccupants();
   });
   interior.onExit(() => interior.hide());
+
+  // Latest building-interior occupants from the viewer stream + a helper that
+  // pushes the matching building's occupants into the open interior view.
+  let latestInteriors: InteriorView[] = [];
+  const feedInteriorOccupants = (): void => {
+    const cur = interior.currentBuilding();
+    if (!cur) return;
+    const sameSprite = latestInteriors.filter((v) => v.sprite === cur.sprite);
+    if (sameSprite.length === 0) {
+      interior.setOccupants([], 1, 1);
+      return;
+    }
+    // Disambiguate multiple same-sprite buildings by the door nearest the
+    // clicked footprint corner (door = footprint corner + ~fpW/2, +1).
+    let best = sameSprite[0];
+    let bestD = Infinity;
+    for (const v of sameSprite) {
+      const d = Math.abs(v.door[0] - cur.x) + Math.abs(v.door[1] - cur.y);
+      if (d < bestD) { bestD = d; best = v; }
+    }
+    interior.setOccupants(best.entities, best.width_tiles, best.height_tiles);
+  };
   if (import.meta.env.DEV) {
     (window as unknown as { __interior?: InteriorLayer }).__interior = interior;
     (window as unknown as { __viewport?: typeof viewport }).__viewport = viewport;
@@ -309,6 +337,11 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
 
     setEntities(list: EntityState[]) {
       entities.setAll(list);
+    },
+
+    setInteriors(views: InteriorView[]) {
+      latestInteriors = views;
+      feedInteriorOccupants();
     },
 
     getEntities(): EntityState[] {

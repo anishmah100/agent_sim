@@ -25,6 +25,7 @@ import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from 
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import { artCatalog } from "./ArtCatalog";
+import type { EntityState } from "./Entity";
 
 const ENGINE_URL =
   import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
@@ -375,6 +376,15 @@ export class InteriorLayer {
 
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
+  // Live-occupant rendering (HeartGold phase 4): the building currently open
+  // + the layer agent markers draw into. Set on show(), fed each viewer tick
+  // by setOccupants().
+  private occupantsBox: Container | null = null;
+  private curSprite: string | null = null;
+  private curFootprint: { x: number; y: number } | null = null;
+  private curTpl: { width: number; height: number } | null = null;
+  private occupantSprites = new Map<string, Container>();
+
   constructor(private app: Application) {
     this.container = new Container();
     this.container.label = "interior";
@@ -430,9 +440,20 @@ export class InteriorLayer {
     };
   }
 
-  async show(buildingSprite: string): Promise<void> {
+  /** The building currently open (sprite + clicked footprint corner), or null.
+   *  PixiApp uses this to feed the matching interior's live occupants. */
+  currentBuilding(): { sprite: string; x: number; y: number } | null {
+    if (!this.curSprite || !this.curFootprint) return null;
+    return { sprite: this.curSprite, x: this.curFootprint.x, y: this.curFootprint.y };
+  }
+
+  async show(buildingSprite: string, footprintX?: number, footprintY?: number): Promise<void> {
     this.clear();
+    this.curSprite = buildingSprite;
+    this.curFootprint = footprintX != null && footprintY != null
+      ? { x: footprintX, y: footprintY } : null;
     const tpl = TEMPLATES[buildingSprite] ?? COTTAGE;
+    this.curTpl = { width: tpl.width, height: tpl.height };
     await this.render(tpl, buildingSprite);
 
     // Center the interior in the screen. Pick the largest integer scale
@@ -453,10 +474,76 @@ export class InteriorLayer {
   }
 
   hide(): void {
+    this.curSprite = null;
+    this.curFootprint = null;
+    this.curTpl = null;
+    this.occupantSprites.clear();
     this.fadeOut(180, () => {
       this.container.visible = false;
       this.clear();
     });
+  }
+
+  /** Render/update the live agents inside this building. Called each viewer
+   *  tick with the engine interior's occupants + its dims; positions are
+   *  mapped proportionally from engine-interior coords onto the (larger)
+   *  hand-authored room template so an agent walking inside is visible. */
+  setOccupants(occupants: EntityState[], engineW: number, engineH: number): void {
+    if (!this.container.visible || !this.occupantsBox || !this.curTpl) return;
+    const tpl = this.curTpl;
+    const seen = new Set<string>();
+    for (const e of occupants) {
+      if (!e.pos) continue;
+      seen.add(e.entity_id);
+      // Map engine-interior tile -> template tile (keep inside the walls).
+      const ox = engineW > 1 ? e.pos[0] / (engineW - 1) : 0.5;
+      const oy = engineH > 1 ? e.pos[1] / (engineH - 1) : 0.5;
+      const tx = Math.max(1, Math.min(tpl.width - 2, Math.round(ox * (tpl.width - 1))));
+      const ty = Math.max(1, Math.min(tpl.height - 2, Math.round(oy * (tpl.height - 1))));
+      let marker = this.occupantSprites.get(e.entity_id);
+      if (!marker) {
+        marker = this.makeOccupantMarker(e);
+        this.occupantsBox.addChild(marker);
+        this.occupantSprites.set(e.entity_id, marker);
+      }
+      // Center the marker on the tile (bottom-anchored feel).
+      marker.x = tx * TILE_SIZE_PX + TILE_SIZE_PX / 2;
+      marker.y = ty * TILE_SIZE_PX + TILE_SIZE_PX;
+    }
+    // Drop markers for agents that left.
+    for (const [id, m] of [...this.occupantSprites]) {
+      if (!seen.has(id)) {
+        m.destroy();
+        this.occupantSprites.delete(id);
+      }
+    }
+  }
+
+  private makeOccupantMarker(e: EntityState): Container {
+    const c = new Container();
+    // Simple readable avatar: a rounded body + a name label. (A full
+    // character-atlas sprite is a future polish; this reads clearly at the
+    // interior's integer zoom and updates per tick as the agent walks.)
+    const body = new Graphics();
+    body.circle(0, -3, 4).fill({ color: 0xffd479 }).stroke({ color: 0x181425, width: 1 });
+    body.circle(0, -7, 2.5).fill({ color: 0xffe6b8 }).stroke({ color: 0x181425, width: 1 });
+    c.addChild(body);
+    const name = (e.display_name || e.entity_id || "").slice(0, 14);
+    if (name) {
+      const label = new Text({
+        text: name,
+        style: {
+          fontFamily: "ui-sans-serif, system-ui, sans-serif",
+          fontSize: 5, fill: 0xfff2a8,
+          stroke: { color: 0x181425, width: 2 },
+        },
+      });
+      label.resolution = 4;
+      label.anchor.set(0.5, 1);
+      label.y = -12;
+      c.addChild(label);
+    }
+    return c;
   }
 
   private fadeIn(ms: number): void {
@@ -483,6 +570,8 @@ export class InteriorLayer {
 
   private clear(): void {
     for (const c of [...this.container.children]) c.destroy();
+    this.occupantsBox = null;
+    this.occupantSprites.clear();
   }
 
   private async render(tpl: InteriorTemplate, buildingSprite: string): Promise<void> {
@@ -497,7 +586,15 @@ export class InteriorLayer {
     this.container.addChild(dim);
 
     const tileBox = new Container();
+    tileBox.sortableChildren = true;
     this.container.addChild(tileBox);
+    // Live-occupant layer sits ON TOP of tiles/props (high zIndex) so agents
+    // inside are visible walking around. Same tile coordinate space as tileBox.
+    const occupantsBox = new Container();
+    occupantsBox.label = "interior-occupants";
+    occupantsBox.zIndex = 1000;
+    tileBox.addChild(occupantsBox);
+    this.occupantsBox = occupantsBox;
 
     // Resolve every distinct tile texture we need up front, in parallel.
     const tileNames = new Set<string>([

@@ -18,6 +18,17 @@ export interface WorldSnapshot {
   entities: EntityState[];
 }
 
+/** A building interior's live occupants (HeartGold model). Sent by the engine
+ *  so the frontend can render agents INSIDE a building. */
+export interface InteriorView {
+  map_id: string;
+  sprite: string;
+  door: [number, number];
+  width_tiles: number;
+  height_tiles: number;
+  entities: EntityState[];
+}
+
 export interface AudibleEvent {
   event_id: string;
   kind: "speech" | "shout" | "whisper" | "sound";
@@ -40,14 +51,18 @@ interface ServerEnvelope {
   type: "world_snapshot";
   snapshot?: WorldSnapshot;
   audible?: AudibleEvent[];
+  interiors?: InteriorView[];
 }
+
+export type InteriorsListener = (views: InteriorView[]) => void;
 
 export function connectViewer(opts: {
   onSnapshot: WorldSnapshotListener;
   onAudible?: AudibleListener;
   onConnState?: ConnStateListener;
+  onInteriors?: InteriorsListener;
 }): ViewerClient {
-  const { onSnapshot, onAudible, onConnState } = opts;
+  const { onSnapshot, onAudible, onConnState, onInteriors } = opts;
   let ws: WebSocket | null = null;
   let reconnectAttempt = 0;
   let closed = false;
@@ -75,6 +90,9 @@ export function connectViewer(opts: {
           if (env.audible && env.audible.length && onAudible) {
             onAudible(env.audible);
           }
+          // Always notify (even empty) so the interior view clears when the
+          // last occupant leaves.
+          if (onInteriors) onInteriors(env.interiors ?? []);
         }
       } catch (e) {
         console.warn("ws parse:", e);
