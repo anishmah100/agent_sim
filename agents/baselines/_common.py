@@ -30,6 +30,7 @@ from agent_sim_sdk import (
     VisibleItem,
 )
 from agents.common.nav import NavGrid
+from agents.common.motor import Goal, MotorController
 
 
 log = logging.getLogger("agents.baselines")
@@ -136,6 +137,14 @@ class ArchetypeBot:
     # Agent-side navigation: the static walkability grid, fetched once.
     engine_url: str = "http://127.0.0.1:8080"
     _nav: Optional[NavGrid] = None
+    # Two-rate motor layer (see docs/AGENT_MOVEMENT_REDESIGN.md): the FSM
+    # (deliberation) sets `goal` + fires direct verbs; the motor (reflex)
+    # turns the standing goal into one N/S/E/W step per observation, with
+    # last-seen memory so chases survive losing sight of the quarry. decide()
+    # returns a direct verb (attack/pickup/speak/…) to act THIS tick, or None
+    # to let the motor execute the current goal.
+    goal: Goal = field(default_factory=Goal.idle)
+    _motor: Optional[MotorController] = None
 
     def __post_init__(self) -> None:
         # Per-bot RNG seeded by entity id so different bots make
@@ -204,13 +213,21 @@ class ArchetypeBot:
                 if self._nav is None:
                     try:
                         self._nav = NavGrid.fetch(self.engine_url)
+                        self._motor = MotorController(nav=self._nav)
                     except Exception:
                         log.exception("nav grid fetch failed; will retry next tick")
+                # Reflex perception: refresh last-seen memory before deciding.
+                if self._motor is not None:
+                    self._motor.observe(obs)
                 try:
                     act = self.decide(obs)
                 except Exception:
                     log.exception("decide() raised; staying put this tick")
                     act = None
+                # If the FSM didn't fire a direct verb, the motor executes the
+                # standing goal (pursue/flee/goto) — the reflex movement loop.
+                if act is None and self._motor is not None:
+                    act = self._motor.next_step(self.goal, obs)
                 # Emit a mental note on transition.
                 if self.state != self._last_state:
                     extra = self.transition_note()
