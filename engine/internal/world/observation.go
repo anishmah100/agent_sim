@@ -663,6 +663,9 @@ func (w *World) SpawnEntity(e *Entity) {
 	if e.Extras == nil {
 		e.Extras = map[string]any{}
 	}
+	if e.CurrentMap == "" {
+		e.CurrentMap = w.MapID
+	}
 	w.entities[e.EntityID] = e
 	w.fireSpawnHook(e)
 }

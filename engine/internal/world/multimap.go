@@ -91,6 +91,7 @@ func (h *MultiMapHub) Warp(entityID, fromID, toID string, target Tile) bool {
 	e.WalkFromTile = target
 	e.WalkProgress = 1
 	e.CurrentAction = ""
+	e.CurrentMap = toID
 	to.entities[entityID] = e
 	to.occupants[target] = entityID
 	to.mu.Unlock()

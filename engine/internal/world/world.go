@@ -69,6 +69,14 @@ type Entity struct {
 	InsideBuilding string `json:"inside_building,omitempty"`
 	insideTicks    int    // remaining ticks until automatic exit
 
+	// CurrentMap — the map_id of the World this entity currently lives on.
+	// The overworld bundle map id at spawn; set to an "interior:<id>" map
+	// when the entity warps into a building interior (HeartGold multi-map
+	// model, see docs/INTERIORS_MULTIMAP_PLAN.md). Empty is treated as the
+	// overworld for backward compatibility. Phase 1: populated but not yet
+	// used for routing (single-world behavior unchanged).
+	CurrentMap string `json:"current_map,omitempty"`
+
 	// Computed render position broadcast on the wire.
 	renderPos [2]float64
 }
@@ -650,6 +658,7 @@ func Load(path string) (*World, error) {
 			WalkFromTile: tile,
 			WalkProgress: 1,
 			Extras:       fe.Extras,
+			CurrentMap:   w.MapID,
 		}
 		e.recomputeRenderPos()
 		w.entities[fe.EntityID] = e

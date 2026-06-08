@@ -181,6 +181,7 @@ func (w *World) SpawnAgentEntity(archetype, displayName string) (string, error) 
 		WalkProgress: 1,
 		Facing:       FacingS,
 		Extras:       map[string]any{},
+		CurrentMap:   w.MapID,
 	}
 	w.entities[id] = e
 	w.occupants[pos] = id
