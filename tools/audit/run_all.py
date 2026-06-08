@@ -20,6 +20,7 @@ SUITES = [
     ("S5 building e2e", "building_e2e.py", [ENGINE]),
     ("S4 combat→econ e2e", "combat_economy_e2e.py", [ENGINE]),
     ("S6 events census", "events_check.py", ["/tmp/doccap_events.jsonl", ENGINE]),
+    ("S12 security", "security_check.py", [ENGINE]),
 ]
 
 

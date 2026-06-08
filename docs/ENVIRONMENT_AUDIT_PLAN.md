@@ -318,3 +318,16 @@ For EACH verb, a row in `tools/audit/verb_matrix.py` that:
   the engine/observation side. · PASS (frontend map-switch = phase 4, pending).
   (Caught + fixed a stale-engine trap mid-test: a 48-min-old binary held :8090
   so relaunches silently failed to bind — killed by exact pid, verified uptime.)
+
+- 2026-06-08 · S4 (combat→economy e2e) · tools/audit/combat_economy_e2e.py —
+  attacker kills victim; victim's gold DROPS as coin items at the corpse and is
+  picked up (attacker 25→50). Validates fix [0] (gold conservation) end-to-end
+  live. · PASS.
+- 2026-06-08 · S9 (persistence) · engine/internal/persist TestRoundTrip (green)
+  — world load → set extras → Write → reload → Restore preserves entities +
+  extras (gold/hp). · PASS (unit). Live restart not separately run.
+- 2026-06-08 · S12 (security/adversarial) · tools/audit/security_check.py —
+  malformed register → HTTP 400; WS bad-auth-secret → no observations; engine
+  healthy after adversarial input. · PASS.
+- 2026-06-08 · run_all now covers S1/S2/S4/S5/S6/S12 — ALL GREEN on a fresh
+  engine (tools/audit/restart_sidecar.sh + run_all.py).
