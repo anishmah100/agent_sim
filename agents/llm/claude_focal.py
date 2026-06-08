@@ -107,6 +107,16 @@ class ClaudeFocalAgent:
             system=_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
+        # Budget tracking (#232): record token usage + trip the spend
+        # warnings. Best-effort; never let accounting break the agent.
+        try:
+            from tools.budget_log import record
+            u = getattr(msg, "usage", None)
+            if u is not None:
+                record(self.cfg.model, getattr(u, "input_tokens", 0),
+                       getattr(u, "output_tokens", 0), source="claude_focal")
+        except Exception:
+            pass
         # Concatenate text blocks.
         text = "".join(getattr(b, "text", "") for b in msg.content).strip()
         # Strip accidental markdown fences.
