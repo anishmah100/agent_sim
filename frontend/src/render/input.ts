@@ -90,6 +90,12 @@ function hitTestEntity(
 ): EntityState | null {
   let best: { e: EntityState; d2: number } | null = null;
   for (const e of entities) {
+    // Skip phantoms + non-clickable bodies so a click never resolves to the
+    // wrong thing (the "click Bram → inspector shows spawn_2 at top-left"
+    // bug): (a) entities parked at (0,0) are dead/disconnected husks the
+    // snapshot hasn't dropped yet; (b) items aren't inspector targets.
+    if (e.pos[0] === 0 && e.pos[1] === 0) continue;
+    if (e.archetype === "item") continue;
     // Entity centre is its tile + (0.5, 0.5). The body sprite renders
     // ABOVE the feet/logical tile, so a click on the visible torso lands
     // ~0.6 tile above the centre; bias the click down by that much so
