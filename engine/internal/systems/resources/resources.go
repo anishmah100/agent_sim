@@ -77,17 +77,21 @@ func (s *System) RegisterWith(r syscore.Registry) {
 }
 
 func (s *System) seedSpawn(w syscore.World, e syscore.Entity) {
+	// AUDIT FIX (low/[33]): honor per-world hardness tunings at seed time, the
+	// same tunings regen already reads — otherwise seeded trees/rocks ignored
+	// the world's tree_hardness/rock_hardness and regen could push them past
+	// their (default) seed value inconsistently.
 	switch e.Archetype() {
 	case "tree":
 		if _, ok := e.GetExtra("hardness"); !ok {
-			e.SetExtra("hardness", DefaultTreeHardness)
+			e.SetExtra("hardness", w.TuningInt("tree_hardness", DefaultTreeHardness))
 		}
 		if _, ok := e.GetExtra("yield"); !ok {
 			e.SetExtra("yield", []string{"wood"})
 		}
 	case "rock":
 		if _, ok := e.GetExtra("hardness"); !ok {
-			e.SetExtra("hardness", DefaultRockHardness)
+			e.SetExtra("hardness", w.TuningInt("rock_hardness", DefaultRockHardness))
 		}
 		if _, ok := e.GetExtra("yield"); !ok {
 			e.SetExtra("yield", []string{"stone"})

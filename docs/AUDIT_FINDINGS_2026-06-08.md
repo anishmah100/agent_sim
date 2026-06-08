@@ -86,7 +86,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/loot/loot.go:61-63`
 - **why:** Package doc (line 3) and verb description ('Take gold + clear inventory'/'Strip gold and inventory') frame loot as taking the body's items. The handler transfers gold via mon.Pay (line 58-60) but for inventory it merely sets the target's inventory to an empty slice (real.SetExtra("inventory", []string{})) — it spawns nothing and adds nothing to the looter's inventory. The items are silently destroyed, not looted. If this code were ever reachable (see the dead-code finding), an agent invoking loot would annihilate the victim's carried items rather than acquire them, and would do so with no inventory-cap check on the looter even conceptually. The stated 'Take everything from an adjacent dead body' behavior is not implemented.
 - **repro:** Hypothetically reach a hp==0 target with items in inventory and call loot: target.inventory becomes [] (items gone from the world), looter.inventory unchanged. The promised item transfer never happens.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [14] MEDIUM · verbalquests — propose_task has no spatial/range precondition — agents can form contracts across the entire map
 - **file:** `engine/internal/systems/verbalquests/verbalquests.go` :98-143
@@ -188,7 +188,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :585-591 and 595-613
 - **why:** service.Items returns extrasStrSlice(e,"inventory"), and the []string case of extrasStrSlice (line 601) returns the stored slice directly with no copy. Any consumer that appends to or indexes-assigns the returned slice mutates the owner's live inventory (and in-capacity appends from one entity can clobber data shared via the backing array). No current consumer corrupts it, but the contract is unsafe: callers reasonably expect a snapshot. Compare with the deliberate copy made in trade.go line 82.
 - **repro:** Call inv.Items(w, id) then append/assign into the result with spare capacity; the owning entity's inventory mutates without going through MutateEntity.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [31] LOW · property — Undeclared rejection reasons: enter_failed and exit_failed not in manifest
 - **file:** `engine/internal/systems/property/property.go:147,163 vs 293,299` :property.go:147
@@ -200,13 +200,13 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/property/property.go:271-278` :property.go:271
 - **why:** handleTransfer validates only that w.EntityByID(p.NewOwner)!=nil (line 271); it does not check the new owner's archetype or that it differs from the building/owner. An owner can transfer a building to an item entity, a building entity, or even itself. Transferring to a non-actor entity permanently strands ownership with something that can never lock/unlock/transfer it again, and transfer-to-self emits a no-op OwnershipChanged{From:x,To:x}. Additionally the locked flag is preserved across transfer, so a building can be handed off while locked, leaving the new owner able to manage it but the prior owner's lock intent silently carried over — surprising but at least owner-gated. Lower severity because it requires the owner's own action, but it is still a way to corrupt the ownership graph with invalid owners.
 - **repro:** As owner of `shed`, call transfer_ownership {target:"shed", new_owner:"shed"} or new_owner pointing at any item/building id that exists; it is accepted and OwnershipChanged is emitted, even though that target can never act on the property.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [33] LOW · resources — seedSpawn ignores per-world hardness tunings while regen honors them — trees/rocks seed at hardcoded defaults but regrow toward the tuned cap
 - **file:** `engine/internal/systems/resources/resources.go` :80
 - **why:** seedSpawn seeds hardness with the package constants DefaultTreeHardness/DefaultRockHardness (lines 80, 87), but regen caps regrowth at w.TuningInt("tree_hardness"/"rock_hardness", default) (lines 126-128). If a world sets tree_hardness=5 in rules.star, trees spawn at 3 yet regen grows them up to 5 — the spawn value and the regrowth ceiling disagree, and the same tunings are silently not applied at spawn. No current world sets these tunings, so it is latent, but it is a real inconsistency the moment a world author uses the documented tuning knobs. Fix: seedSpawn should read the same TuningInt values regen uses.
 - **repro:** Set tree_hardness=5 in a world rules file; a fresh tree seeds hardness=3 (seedSpawn ignores tuning) but regen ticks it up to 5 over time, exceeding its initial value.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [34] LOW · construction — demolish never refunds materials despite documented refund behavior
 - **file:** `engine/internal/systems/construction/construction.go` :285-317 (handler), 16-17 + 359-365 (docs/manifest)
@@ -224,13 +224,13 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/loot/loot.go:51-65`
 - **why:** The loot handler's core precondition is a target that still exists in the world with hp==0 (line 51-55). But there is NO code path that produces a persistent hp==0 entity. The only two death paths both remove the entity in the same operation that zeroes hp: combat DealDamage sets hp=0 then calls w.RemoveEntity(targetID) (combat.go:351-443), and vitals starvation sets hp=0 then w.RemoveEntity(id) (vitals.go:108-112). By the time any agent could issue a loot action on a later tick, w.EntityByID(p.Target) returns nil and the handler short-circuits with reason 'unknown_target' (line 39-41). The verb can therefore never succeed against a legitimately killed entity. The loot system is effectively non-functional, and worse, combat already drops the corpse's gold+inventory+equipped as ground 'item' entities (combat.go:386-424) which agents recover via the inventory pickup verb — so loot is both unreachable AND redundant with the actual recovery mechanic.
 - **repro:** Agent A attacks agent B to hp 0. Combat's DealDamage removes B from the world the same tick and spawns its loot as ground items. On any subsequent tick, A issues {verb:'loot', target:'B'}; EntityByID('B') is nil -> result.Reason='unknown_target', Accepted=false. There is no sequence of legal world events that leaves a hp==0 entity present for loot to act on.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [37] LOW · loot — loot ignores MoneyService.Pay's (ok, reason) return and always reports Accepted=true
 - **file:** `engine/internal/systems/loot/loot.go:58-64`
 - **why:** MoneyService.Pay returns (ok bool, reason string) (money.go:61). The loot handler discards both: it calls mon.Pay(...) (line 59) without checking success, then unconditionally sets res.Accepted = true (line 64). In the current flow the source balance equals the amount so Pay would succeed, but if money semantics ever change (e.g. transfer fees, frozen accounts, or the from-entity being concurrently removed making Pay return false 'unknown_target'), loot would falsely report success with no gold actually moved and no GoldTransferred event, desyncing the result log from world state. The handler also does no nil-check that GetService("money") is non-nil before the type assertion (line 57), so a world that registers loot without money panics rather than rejecting.
 - **repro:** Configure a world with loot but not money: w.GetService("money") returns nil, the .(money.MoneyService) assertion panics on the first loot action. Or have Pay return false in any future scenario: res.Accepted stays true despite no transfer.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [38] LOW · vitals — HungerSpike crossing event is lost on the tick the agent crosses the threshold AND dies
 - **file:** `engine/internal/systems/vitals/vitals.go:100-137`

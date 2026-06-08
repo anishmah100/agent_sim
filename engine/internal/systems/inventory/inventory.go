@@ -613,7 +613,12 @@ func extrasStrSlice(e syscore.Entity, k string) []string {
 	}
 	switch x := v.(type) {
 	case []string:
-		return x
+		// AUDIT FIX (low/[30]): return a COPY, not the live backing slice —
+		// callers (Items(), resolveMaterials, etc.) must not be able to alias
+		// and mutate an entity's inventory out from under MutateEntity.
+		out := make([]string, len(x))
+		copy(out, x)
+		return out
 	case []any:
 		out := make([]string, 0, len(x))
 		for _, item := range x {

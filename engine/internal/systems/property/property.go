@@ -268,7 +268,11 @@ func (s *System) handleTransfer(w syscore.World, e syscore.Entity, env *syscore.
 		res.Reason = "not_owner"
 		return res
 	}
-	if w.EntityByID(p.NewOwner) == nil {
+	// AUDIT FIX (low/[32]): the new owner must be an AGENT — previously any
+	// entity (a building, an item, a tree) could be set as a building's owner,
+	// producing nonsensical ownership the access/lock checks then trusted.
+	newOwner := w.EntityByID(p.NewOwner)
+	if newOwner == nil || !syscore.IsAgentArchetype(newOwner.Archetype()) {
 		res.Reason = "unknown_new_owner"
 		return res
 	}

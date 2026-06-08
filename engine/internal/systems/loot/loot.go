@@ -1,10 +1,16 @@
 // Package loot — composable Loot system.
 //
 // One verb: loot. Take everything from an adjacent dead body. Requires
-// Combat (HP check) + Money + Inventory services. Conceptually this
-// could be folded into combat ("dropping gold on death"), but keeping
-// it separate means worlds without a corpse-looting mechanic can omit
-// it without touching combat.
+// Combat (HP check) + Money + Inventory services.
+//
+// AUDIT NOTE (findings [13]/[36]): in the current engine this verb is
+// effectively UNREACHABLE. Combat (and starvation, via the same path) drop
+// the victim's gold + inventory + equipped to the ground AND remove the
+// corpse on the same tick a death occurs, so by the time an agent could loot,
+// EntityByID(target) is nil → unknown_target. Death loot is therefore
+// recovered by walking over the ground drops (pickup), not by this verb. The
+// verb is kept for worlds that DON'T remove corpses immediately (a future
+// "corpses linger N ticks" option) and to keep the service wiring intact.
 package loot
 
 import (
@@ -56,7 +62,12 @@ func (s *System) handleLoot(w syscore.World, e syscore.Entity, env *syscore.Acti
 
 	mon := w.GetService("money").(money.MoneyService)
 	if bal := mon.Balance(w, p.Target); bal > 0 {
-		mon.Pay(w, p.Target, e.ID(), bal, "loot")
+		// AUDIT FIX (low/[37]): honor Pay's (ok, reason) — previously ignored,
+		// so a failed transfer still reported Accepted=true (looted nothing).
+		if ok, reason := mon.Pay(w, p.Target, e.ID(), bal, "loot"); !ok {
+			res.Reason = reason
+			return res
+		}
 	}
 	w.MutateEntity(p.Target, func(real syscore.Entity) {
 		real.SetExtra("inventory", []string{})
