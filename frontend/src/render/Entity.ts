@@ -155,7 +155,7 @@ const CHARACTER_ROTATION = [
   "iron_guard", "child", "cloaked_wanderer",
 ];
 
-function pickCharacterId(state: EntityState): string {
+export function pickCharacterId(state: EntityState): string {
   // If the engine sent a known character archetype, use it directly.
   if (CHARACTER_ROTATION.includes(state.archetype)) return state.archetype;
   // Otherwise hash on entity_id for stable assignment.

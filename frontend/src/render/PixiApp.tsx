@@ -259,6 +259,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   void CharacterAtlas.load().then(
     (atlas) => {
       entities.setAtlas(atlas);
+      interior.setAtlas(atlas); // interior occupants use the same sprites
       console.log(`character atlas loaded: ${atlas.list().length} characters`);
     },
     (err) => {

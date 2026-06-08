@@ -21,11 +21,12 @@
 //   - Fade in over 220 ms
 //   - Click the framed door at the bottom to leave (or press ESC)
 
-import { Application, Assets, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
+import { AnimatedSprite, Application, Assets, Container, Graphics, Sprite, Text, Texture } from "pixi.js";
 import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import { artCatalog } from "./ArtCatalog";
-import type { EntityState } from "./Entity";
+import { pickCharacterId, type EntityState } from "./Entity";
+import type { CharacterAtlas } from "./CharacterAtlas";
 
 const ENGINE_URL =
   import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
@@ -380,6 +381,7 @@ export class InteriorLayer {
   // + the layer agent markers draw into. Set on show(), fed each viewer tick
   // by setOccupants().
   private occupantsBox: Container | null = null;
+  private atlas: CharacterAtlas | null = null;
   private curSprite: string | null = null;
   private curFootprint: { x: number; y: number } | null = null;
   private curTpl: { width: number; height: number } | null = null;
@@ -519,15 +521,38 @@ export class InteriorLayer {
     }
   }
 
+  /** Inject the character atlas so interior occupants render with the SAME
+   *  character sprites as the overworld (not a placeholder). */
+  setAtlas(atlas: CharacterAtlas | null): void {
+    this.atlas = atlas;
+  }
+
   private makeOccupantMarker(e: EntityState): Container {
     const c = new Container();
-    // Simple readable avatar: a rounded body + a name label. (A full
-    // character-atlas sprite is a future polish; this reads clearly at the
-    // interior's integer zoom and updates per tick as the agent walks.)
-    const body = new Graphics();
-    body.circle(0, -3, 4).fill({ color: 0xffd479 }).stroke({ color: 0x181425, width: 1 });
-    body.circle(0, -7, 2.5).fill({ color: 0xffe6b8 }).stroke({ color: 0x181425, width: 1 });
-    c.addChild(body);
+    // Real character sprite from the atlas — identical to the overworld
+    // EntityLayer so an agent looks the same inside as out. Falls back to a
+    // simple avatar only if the atlas hasn't loaded yet.
+    const spec = this.atlas?.get(pickCharacterId(e));
+    if (spec) {
+      // Drop shadow at the feet (matches overworld JRPG polish).
+      const shadow = new Graphics();
+      shadow.ellipse(0, -1, 5, 1.6).fill({ color: 0x000000, alpha: 0.32 });
+      c.addChild(shadow);
+      const sprite = new AnimatedSprite(spec.anims.walk_down);
+      sprite.animationSpeed = 0.13;
+      sprite.loop = true;
+      sprite.anchor.set(0.5, 1); // bottom-center: foot pixel at y=0
+      const TARGET_DISPLAY_HEIGHT = 24; // 1.5 tiles, same as overworld
+      sprite.scale.set(TARGET_DISPLAY_HEIGHT / spec.ref_frame_h);
+      sprite.texture.source.scaleMode = "nearest";
+      sprite.play();
+      c.addChild(sprite);
+    } else {
+      const body = new Graphics();
+      body.circle(0, -3, 4).fill({ color: 0xffd479 }).stroke({ color: 0x181425, width: 1 });
+      body.circle(0, -7, 2.5).fill({ color: 0xffe6b8 }).stroke({ color: 0x181425, width: 1 });
+      c.addChild(body);
+    }
     const name = (e.display_name || e.entity_id || "").slice(0, 14);
     if (name) {
       const label = new Text({
@@ -540,7 +565,8 @@ export class InteriorLayer {
       });
       label.resolution = 4;
       label.anchor.set(0.5, 1);
-      label.y = -12;
+      // Sit above the ~24px-tall character sprite (foot at y=0).
+      label.y = this.atlas ? -26 : -12;
       c.addChild(label);
     }
     return c;
