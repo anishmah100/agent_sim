@@ -8,6 +8,7 @@ package systems_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
@@ -141,6 +142,32 @@ func TestComposable_BuyFoodSpendsGoldAndCutsHunger(t *testing.T) {
 	h, _ := wa.EntityByID("hero").GetExtra("hunger")
 	if hf, _ := h.(float64); hf >= 0.8 {
 		t.Fatalf("hunger should drop after buy_food, got %v", h)
+	}
+}
+
+func TestComposable_CookUpgradesRawFood(t *testing.T) {
+	wa, reg := boot(t)
+	hero := wa.EntityByID("hero")
+	hero.SetExtra("inventory", []string{"item:fish_raw#1"})
+	res := reg.Handle(wa, hero, &syscore.ActionEnvelope{
+		ActionID: "1", Verb: "cook", Raw: []byte(`{"item":"item:fish_raw#1"}`),
+	})
+	if !res.Accepted {
+		t.Fatalf("cook should accept: %s", res.Reason)
+	}
+	invRaw, _ := wa.EntityByID("hero").GetExtra("inventory")
+	inv, _ := invRaw.([]string)
+	hasCooked := false
+	for _, it := range inv {
+		if strings.Contains(it, "fish_cooked") {
+			hasCooked = true
+		}
+		if strings.Contains(it, "fish_raw") {
+			t.Errorf("raw fish should be consumed by cook, still present: %v", inv)
+		}
+	}
+	if !hasCooked {
+		t.Errorf("cook should yield fish_cooked, got %v", inv)
 	}
 }
 

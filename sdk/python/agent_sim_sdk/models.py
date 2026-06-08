@@ -224,6 +224,14 @@ class Eat(_Action):
     item: str
 
 
+class Cook(_Action):
+    """Turn a raw food item in inventory into its cooked form (higher
+    satiety), e.g. fish_raw -> fish_cooked (Inventory system). Reasons:
+    not_in_inventory / not_cookable."""
+    verb: Literal["cook"] = "cook"
+    item: str
+
+
 class MentalNote(BaseModel):
     """D14 — generic, architecture-agnostic mental-state record.
     PRIVATE: never relayed to other agents; visible only to the
@@ -417,7 +425,7 @@ Action = Annotated[
     Union[
         # Base verbs.
         Step, Speak, Whisper, Shout, LookAt, Interact,
-        Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
+        Pickup, Drop, Eat, Cook, Equip, Give, Attack, Defend, Heal, Wait,
         # Composable-system verbs (session 2).
         Pay, WorkForPay, BuyFood, Trade, Loot,
         Chop, Mine, Forage,

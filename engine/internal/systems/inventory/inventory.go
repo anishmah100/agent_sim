@@ -7,6 +7,7 @@ package inventory
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
@@ -131,6 +132,7 @@ func (s *System) RegisterWith(r syscore.Registry) {
 	r.Verb("equip", s.handleEquip)
 	r.Verb("give", s.handleGive)
 	r.Verb("eat", s.handleEat) // D22
+	r.Verb("cook", s.handleCook)
 	r.OnEntitySpawn(s.seedSpawn)
 	r.Service("inventory", InventoryService(&service{}))
 	r.Manifest(s.manifest())
@@ -182,6 +184,49 @@ func (s *System) handleEat(w syscore.World, e syscore.Entity, env *syscore.Actio
 		Hunger:  next,
 	})
 	w.SetEntityAction(e.ID(), "interact", 18) // use animation
+	res.Accepted = true
+	return res
+}
+
+// cookRecipes — raw food kind → cooked food kind. Cooking upgrades a raw
+// ingredient in inventory into a more filling cooked dish (see foodSatiety:
+// fish_raw 0.2 → fish_cooked 0.55). Extend as cooked foods are added.
+var cookRecipes = map[string]string{
+	"fish_raw": "fish_cooked",
+}
+
+// handleCook — turn a raw food item in inventory into its cooked form
+// (higher satiety). Instant; no location gate yet. Reasons:
+//   - bad_params / not_in_inventory
+//   - not_cookable: the item has no cooking recipe
+func (s *System) handleCook(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
+	res := syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	var p struct {
+		Item string `json:"item"`
+	}
+	if err := json.Unmarshal(env.Raw, &p); err != nil {
+		res.Reason = "bad_params"
+		return res
+	}
+	inv := extrasStrSlice(e, "inventory")
+	if indexOf(inv, p.Item) < 0 {
+		res.Reason = "not_in_inventory"
+		return res
+	}
+	cooked, ok := cookRecipes[itemKindFromID(p.Item)]
+	if !ok {
+		res.Reason = "not_cookable"
+		return res
+	}
+	cookedID := fmt.Sprintf("item:%s#%d", cooked, w.Tick())
+	w.MutateEntity(e.ID(), func(real syscore.Entity) {
+		cur := extrasStrSlice(real, "inventory")
+		if i := indexOf(cur, p.Item); i >= 0 {
+			cur[i] = cookedID
+			real.SetExtra("inventory", cur)
+		}
+	})
+	w.SetEntityAction(e.ID(), "interact", 18)
 	res.Accepted = true
 	return res
 }
@@ -479,6 +524,10 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"},"item":{"type":"string"}},"required":["target","item"]}`),
 				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "not_in_inventory"},
 				EmitsEvents:      []string{"ItemTransferred"},
+			},
+			{Verb: "cook", Description: "Turn a raw food item in inventory into its cooked, more-filling form (e.g. fish_raw -> fish_cooked).",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"item":{"type":"string"}},"required":["item"]}`),
+				RejectionReasons: []string{"bad_params", "not_in_inventory", "not_cookable"},
 			},
 		},
 		StateFields: []manifest.StateFieldDecl{
