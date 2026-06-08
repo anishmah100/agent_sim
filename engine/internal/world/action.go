@@ -114,6 +114,21 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			res.Reason = "blocked"
 			return res
 		}
+		// AUDIT FIX (medium/[20]): track a per-entity step counter so
+		// walk_distance quests (which read extras["steps"]) can complete —
+		// nothing wrote this before, making that quest kind impossible.
+		if sv, ok := e.Extras["steps"]; ok {
+			if n, ok2 := sv.(int); ok2 {
+				e.Extras["steps"] = n + 1
+			} else {
+				e.Extras["steps"] = 1
+			}
+		} else {
+			if e.Extras == nil {
+				e.Extras = map[string]any{}
+			}
+			e.Extras["steps"] = 1
+		}
 		res.Accepted = true
 	case "speak":
 		var p struct {

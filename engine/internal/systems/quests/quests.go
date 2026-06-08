@@ -23,11 +23,26 @@
 package quests
 
 import (
+	"github.com/anishmah100/agent_sim/engine/internal/core/eventbus"
 	"github.com/anishmah100/agent_sim/engine/internal/core/manifest"
 	syscore "github.com/anishmah100/agent_sim/engine/internal/core/systems"
 )
 
 const QuestCheckInterval = 60 // ticks (1s @ 60Hz)
+
+// QuestRewarded — emitted when a quest pays out. AUDIT FIX (medium/[21]):
+// quest rewards mint gold/items/HP; without an event they were invisible to
+// the runlog + economy audit (a silent gold source).
+type QuestRewarded struct {
+	Entity  string
+	Gold    int
+	HP      int
+	Item    string
+}
+
+func (QuestRewarded) Kind() string { return "QuestRewarded" }
+
+var _ eventbus.Event = QuestRewarded{}
 
 type System struct{}
 
@@ -57,6 +72,10 @@ func (s *System) tick(w syscore.World, tick uint64) {
 		if len(qs) == 0 {
 			continue
 		}
+		// NOTE (audit [22]): advance() mutates these quest maps in place. This
+		// is safe because OnTick runs under the world WRITE lock, and the only
+		// lock-free reader (the published snapshot) deep-copies nested extras
+		// (copyExtras / B4), so no reader ever sees a half-written quest map.
 		anyDone := false
 		for _, q := range qs {
 			if asBool(q["done"]) {
@@ -133,12 +152,15 @@ func (s *System) reward(w syscore.World, entityID string, r map[string]any) {
 	if r == nil {
 		return
 	}
+	gold := asInt(r["gold"])
+	hp := asInt(r["hp"])
+	item, _ := r["item"].(string)
 	w.MutateEntity(entityID, func(real syscore.Entity) {
-		if g := asInt(r["gold"]); g > 0 {
+		if gold > 0 {
 			cur, _ := real.GetExtra("gold")
-			real.SetExtra("gold", asInt(cur)+g)
+			real.SetExtra("gold", asInt(cur)+gold)
 		}
-		if hp := asInt(r["hp"]); hp > 0 {
+		if hp > 0 {
 			curV, _ := real.GetExtra("hp")
 			maxV, _ := real.GetExtra("max_hp")
 			cur, max := asInt(curV), asInt(maxV)
@@ -148,13 +170,17 @@ func (s *System) reward(w syscore.World, entityID string, r map[string]any) {
 			}
 			real.SetExtra("hp", n)
 		}
-		if item, ok := r["item"].(string); ok && item != "" {
+		if item != "" {
 			invV, _ := real.GetExtra("inventory")
 			inv := asStrings(invV)
 			inv = append(inv, item)
 			real.SetExtra("inventory", inv)
 		}
 	})
+	// AUDIT FIX (medium/[21]): make the payout observable in the runlog.
+	if gold > 0 || hp > 0 || item != "" {
+		w.QueueEvent(QuestRewarded{Entity: entityID, Gold: gold, HP: hp, Item: item})
+	}
 }
 
 func (s *System) manifest() manifest.SystemDeclaration {

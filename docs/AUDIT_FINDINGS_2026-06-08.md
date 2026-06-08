@@ -128,19 +128,19 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **file:** `engine/internal/systems/quests/quests.go:112-118`
 - **why:** advance() for kind "walk_distance" reads e.GetExtra("steps") and compares to goal, and the manifest (quests.go:157) declares `steps` as a state field "read by walk_distance quests". But a repo-wide grep shows NO system anywhere writes a `steps` extra (movement is single-tile steps executed by the engine; the only `steps_*` keys are construction's steps_done/steps_total). So asInt(v) is always 0, progress is always 0, and a walk_distance quest with any positive goal is permanently uncompletable. One of the four advertised quest kinds is dead. The doc comment header even uses "walk_distance" / "Take ten steps." as the flagship example.
 - **repro:** Seed an entity with a quest {"kind":"walk_distance","goal":10}. Move it any number of tiles. Every QuestCheckInterval the system reads extras["steps"]=0; quest never reaches done=true and reward is never granted.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [21] MEDIUM · quests — Quest reward grants gold/items/HP with no event emitted — bypasses the economy audit log and the autoresearch event trace
 - **file:** `engine/internal/systems/quests/quests.go:131-159`
 - **why:** reward() mints gold (SetExtra("gold", cur+g)), appends inventory items, and heals HP, but never calls w.QueueEvent. Peer systems treat these as event-worthy: money emits GoldTransferred/GoldSpent and construction emits ConstructionStarted/Advanced/Completed (money.go:180, construction.go:190-314). The quests manifest declares no events at all. So quest-granted gold is created out of thin air with no GoldTransferred/GoldSpent record — it desyncs any consumer that reconstructs balances from the event stream (the autoresearch loop's "log EVERYTHING" requirement, leaderboards, economy audits). Gold is effectively created without a ledger entry.
 - **repro:** Complete any quest with reward.gold>0. Diff the entity's gold balance against the sum of GoldTransferred/GoldSpent events for that entity: the quest reward amount is missing from the event log.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [22] MEDIUM · quests — Quest objects seeded as native []map[string]any are shared by reference with the lock-free observation snapshot → concurrent map read/write crash
 - **file:** `engine/internal/systems/quests/quests.go:60-91`
 - **why:** asQuests() (quests.go:166-170) explicitly supports `quests` stored as a Go-native []map[string]any. advance() mutates those quest maps in place (q["progress"]=, q["done"]=true) during tick under the world write lock. But publishSnapshot()->copyExtras()->deepCopyExtraValue (observation.go:306-327) only deep-copies map[string]any, []any, and []string — it has NO case for []map[string]any, so that slice and its inner maps fall through to `default: return v` and are shared by reference into the lock-free self-observation snapshot (snapshot.go:58, observation.go:50 copy ALL extras including `quests`). The obs builder then reads those quest maps with no world lock while the next tick's advance() writes them → the exact "concurrent map read and map write" fatal the B4 deep-copy fix was meant to eliminate. JSON-loaded scenarios dodge it (they yield []any), but the type asQuests advertises does not.
 - **repro:** Seed an entity's extras["quests"] as []map[string]any{{...}} (the first type asQuests handles). Run with self-observation snapshots being built each tick while the quests tick advances progress. Under -race (or in production) you get a concurrent map read/write panic because deepCopyExtraValue returns the live quest map by reference.
-- **status:** [ ] open
+- **status:** [x] FIXED
 
 ## [23] LOW · combat — attack/heal have no self-target guard; an agent can attack itself, credit itself a kill, and trigger its own death-drop
 - **file:** `engine/internal/systems/combat/combat.go:116-165,341-365`
