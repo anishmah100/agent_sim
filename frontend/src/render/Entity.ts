@@ -79,6 +79,23 @@ const WORLD_OBJECT_ARCHETYPES = new Set([
 // Map a world-object entity to a sprite id, then resolve via the art
 // catalog. The mapping reads entity_id when an archetype has subtypes
 // (tree_oak_1 → tree_oak, rock_iron_1 → boulder_iron_ore).
+// Some monetary item kinds are referenced by the engine/MONEY_KINDS but
+// have no texture file in v2_items_master_v2 (coin_pouch, coins_jumbo_pile,
+// gem_diamond). Without an alias they 404 and hit the wood_log fallback —
+// i.e. "coins rendered as logs". Map each to a visually-correct sibling
+// texture that DOES exist so coins always read as coins/gems.
+const ITEM_SPRITE_ALIASES: Record<string, string> = {
+  "item:coin_pouch": "item:coins_small_pile",
+  "item:coins_jumbo_pile": "item:coins_large_pile",
+  "item:gem_diamond": "item:gem_sapphire",
+};
+
+// True when a sprite id is a coin/gem/treasure kind — used to pick a
+// monetary fallback texture instead of wood_log when art is missing.
+function isMonetarySpriteId(id: string): boolean {
+  return /coin|gem|gold|pouch|pile|chalice|treasure/i.test(id);
+}
+
 function worldObjectSpriteId(e: EntityState): string {
   const id = e.entity_id;
   switch (e.archetype) {
@@ -104,7 +121,7 @@ function worldObjectSpriteId(e: EntityState): string {
       // promote_scattered_items_to_entities.py + handleDrop). Falls
       // back to wood_log only if extras are completely missing.
       const sprite = (e as any).extras?.sprite as string | undefined;
-      if (sprite) return sprite;
+      if (sprite) return ITEM_SPRITE_ALIASES[sprite] ?? sprite;
       return "item:wood_log";
     }
   }
@@ -751,7 +768,12 @@ export class EntityLayer {
       // square" bug) — fall back to a known-good generic item sprite, and
       // if THAT fails too, recolor the placeholder to a small neutral
       // item dot so it never reads as a broken black box.
-      const fallback = `${ENGINE_URL}/art/processed/v2_items_master_v2/wood_log.png`;
+      // Monetary items fall back to a COIN texture, never wood_log, so a
+      // coin/gem with missing art never renders as a log.
+      const monetary = e.archetype === "item" && isMonetarySpriteId(worldObjectSpriteId(e));
+      const fallback = monetary
+        ? `${ENGINE_URL}/art/processed/v2_items_master_v2/coins_small_pile.png`
+        : `${ENGINE_URL}/art/processed/v2_items_master_v2/wood_log.png`;
       Assets.load<Texture>(fallback).then(place).catch((err) => {
         console.warn(`world-object sprite + fallback failed for ${e.entity_id}:`, err);
         placeholder.clear();
