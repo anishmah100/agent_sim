@@ -373,6 +373,17 @@ func (w *World) tryExitInterior(e *Entity, env *ActionEnvelope) ActionResult {
 		Target:     e.interiorReturnTile,
 		unloadFrom: w.MapID,
 	})
+	// AUDIT/phase-5: emit ExitedBuilding so interior exits are paired with
+	// their EnteredBuilding in the event log. This runs on the INTERIOR world
+	// (no scenario/bus of its own), so route the hook through the overworld
+	// (primary), whose bus the historian watches. The building sprite is
+	// encoded in the interior map id.
+	if w.hub != nil {
+		if pw := w.hub.Primary(); pw != nil && pw.onBuildingExited != nil {
+			sprite, _ := ParseInteriorMapID(w.MapID)
+			pw.onBuildingExited(e.EntityID, sprite, w.tick)
+		}
+	}
 	w.SetEntityAction(e.EntityID, "interact", 20)
 	w.audibleAppend(AudibleEvent{
 		EventID:   nextEventID(&w.eventSeq),
