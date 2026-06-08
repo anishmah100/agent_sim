@@ -23,6 +23,7 @@ from typing import Optional
 from agent_sim_sdk import Agent, AgentCredentials, ActionBatch
 
 from .actions import to_action
+from .motor_loop import MotorLoop
 from .prompt import build_prompt
 from .qwen_focal import _salvage_partial  # reuse truncated-JSON recovery
 
@@ -78,7 +79,12 @@ class ClaudeFocalAgent:
     accepted: int = 0
     rejected: int = 0
     entity_id: Optional[str] = None
+    engine_url: str = "http://127.0.0.1:8080"
+    _loop: MotorLoop = field(default_factory=MotorLoop)
     _client: object = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._loop.engine_url = self.engine_url
 
     def stop(self) -> None:
         self._stopped = True
@@ -115,6 +121,10 @@ class ClaudeFocalAgent:
             return _salvage_partial(text)
 
     async def run(self) -> None:
+        """Two-rate loop (see agents/llm/motor_loop.py): reflex motor steps
+        toward the standing goal every observation; the Claude call runs in
+        the background and updates the goal + fires direct verbs on return."""
+        ml = self._loop
         async with Agent(self.creds) as agent:
             async for obs in agent.observations():
                 if self._stopped:
@@ -131,55 +141,64 @@ class ClaudeFocalAgent:
                 if (self.cfg.max_cycles is not None
                         and self.cycles >= self.cfg.max_cycles):
                     return
-                self.cycles += 1
-                prompt = build_prompt(obs, self.persona, self.goal,
-                                      self._last_results, intent=self._intent)
-                t0 = time.monotonic()
-                try:
-                    decision = await asyncio.to_thread(self._call_llm, prompt)
-                except Exception as e:
-                    log.warning("[%s] Claude call failed: %s", self.creds.agent_id, e)
-                    continue
-                dt_ms = int((time.monotonic() - t0) * 1000)
-                reasoning = str(decision.get("reasoning", ""))[:200]
-                raw_actions = decision.get("actions") or []
-                actions = [a for a in (to_action(d) for d in raw_actions) if a]
-                if actions:
-                    plan = []
-                    for a in actions:
-                        if a.verb == "move" and getattr(a, "target", None):
-                            plan.append(f"move toward {tuple(a.target)}")
-                        else:
-                            plan.append(a.verb)
-                    self._intent = "; ".join(plan)[:200]
-                if not actions:
-                    log.info("[%s] cycle %d (%dms): no valid actions from %r",
-                             self.creds.agent_id, self.cycles, dt_ms, raw_actions)
-                    continue
-                log.info("[%s] cycle %d (%dms): %s | %s",
-                         self.creds.agent_id, self.cycles, dt_ms,
-                         [a.verb for a in actions], reasoning)
-                try:
-                    await agent.note(reasoning, tag="claude",
-                                     slots={"goal": self.goal,
-                                            "plan": " ".join(a.verb for a in actions)})
-                except Exception:
-                    pass
-                try:
-                    results = await agent.act_batch(
-                        ActionBatch(actions=actions, reasoning=reasoning),
-                        wait_for_acks=True, timeout=5.0)
-                except Exception as e:
-                    log.warning("[%s] act_batch failed: %s", self.creds.agent_id, e)
-                    continue
-                self._last_results = []
-                for act, res in zip(actions, results):
-                    if res is None:
-                        continue
-                    if res.accepted:
-                        self.accepted += 1
-                        self._last_results.append(f"{act.verb}: accepted")
-                    else:
-                        self.rejected += 1
-                        self._last_results.append(
-                            f"{act.verb}: {res.reason or res.reason_code or 'rejected'}")
+
+                ml.ensure_motor()
+                ml.observe(obs)
+
+                decision = ml.take_decision(obs)
+                direct_emitted = False
+                if decision is not None:
+                    direct_emitted = await self._handle_decision(agent, obs, decision)
+
+                if ml.should_deliberate(obs):
+                    self.cycles += 1
+                    prompt = build_prompt(obs, self.persona, self.goal,
+                                          self._last_results, intent=self._intent)
+                    ml.start_deliberation(prompt, self._call_llm)
+
+                if not direct_emitted:
+                    step = ml.reflex_step(obs)
+                    if step is not None:
+                        try:
+                            await agent.act_batch(ActionBatch(actions=[step]))
+                        except Exception as e:
+                            log.warning("[%s] reflex step failed: %s",
+                                        self.creds.agent_id, e)
+
+    async def _handle_decision(self, agent, obs, decision: dict) -> bool:
+        ml = self._loop
+        reasoning = str(decision.get("reasoning", ""))[:200]
+        raw_actions = decision.get("actions") or []
+        direct_dicts = ml.apply_movement(raw_actions)
+        actions = [a for a in (to_action(d) for d in direct_dicts) if a]
+        self._intent = "; ".join([str(ml.goal)] + [a.verb for a in actions])[:200]
+        log.info("[%s] cycle %d: goal=%s direct=%s | %s",
+                 self.creds.agent_id, self.cycles, ml.goal,
+                 [a.verb for a in actions], reasoning)
+        try:
+            await agent.note(reasoning, tag="claude",
+                             slots={"goal": str(ml.goal),
+                                    "plan": " ".join(a.verb for a in actions) or "move"})
+        except Exception:
+            pass
+        if not actions:
+            return False
+        try:
+            results = await agent.act_batch(
+                ActionBatch(actions=actions, reasoning=reasoning),
+                wait_for_acks=True, timeout=5.0)
+        except Exception as e:
+            log.warning("[%s] act_batch failed: %s", self.creds.agent_id, e)
+            return False
+        self._last_results = []
+        for act, res in zip(actions, results):
+            if res is None:
+                continue
+            if res.accepted:
+                self.accepted += 1
+                self._last_results.append(f"{act.verb}: accepted")
+            else:
+                self.rejected += 1
+                self._last_results.append(
+                    f"{act.verb}: {res.reason or res.reason_code or 'rejected'}")
+        return True

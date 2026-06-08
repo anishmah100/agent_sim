@@ -169,13 +169,18 @@ async def register_llm(engine: str, idx: int, brain: str = "qwen") -> Handle:
         engine, user_token="dev",
         persona={"name": name, "bio": persona, "archetype_tag": "llm"},
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
-        cadence_ms=1000)
+        # Fast obs cadence drives the reflex MOTOR loop (one step/tick toward
+        # the standing goal); the LLM deliberation rate is gated separately
+        # inside the harness (MotorLoop.deliberate_every_ticks), so a quick
+        # cadence buys smooth movement, NOT more LLM calls.
+        cadence_ms=350)
     if brain == "claude":
         from agents.llm.claude_focal import ClaudeFocalAgent
-        bot = ClaudeFocalAgent(creds=creds, persona=persona, goal=goal)
+        bot = ClaudeFocalAgent(creds=creds, persona=persona, goal=goal,
+                               engine_url=engine)
     else:
         bot = QwenFocalAgent(creds=creds, persona=persona, goal=goal,
-                             cfg=FocalConfig(timeout_s=90))
+                             cfg=FocalConfig(timeout_s=90), engine_url=engine)
     return Handle(name, "llm", creds, bot)
 
 
@@ -187,8 +192,10 @@ async def register_archetype(engine: str, arch: str, idx: int) -> Handle:
         persona={"name": name, "bio": f"rule-based {arch}",
                  "archetype_tag": arch},
         vision_mode=VisionMode.STRUCTURED, share_reasoning=True,
-        cadence_ms=1000)
-    bot = cls(creds=creds, archetype_name=arch)
+        # Match the LLM cadence so the rule-based bots' motor reflex moves at
+        # the same rate (they decide every obs; movement is one step/tick).
+        cadence_ms=350)
+    bot = cls(creds=creds, archetype_name=arch, engine_url=engine)
     return Handle(name, arch, creds, bot)
 
 

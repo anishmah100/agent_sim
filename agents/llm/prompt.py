@@ -13,7 +13,9 @@ from typing import Any
 # grammar.py's verb set. Each line is verb + when-to-use + params.
 ACTION_MENU = """\
 Actions you can take (pick 1-3 per turn):
-- move {"verb":"move","target":[x,y]} — walk toward a tile
+- pursue {"verb":"pursue","target":"<entity_id>"} — chase an agent/creature; you auto-walk toward them each tick (and keep heading to where they were last seen if they slip out of view) until you're adjacent. Set this then attack when ADJACENT.
+- flee {"verb":"flee","target":"<entity_id>"} — run away from someone; you auto-step away each tick.
+- goto {"verb":"goto","target":[x,y]} — walk to a tile; you auto-route around walls/water each tick until you arrive. Use the MAP to pick a reachable tile (a '.' cell), e.g. an item's tile to go pick it up.
 - speak {"verb":"speak","text":"..."} — say something out loud (nearby agents hear)
 - whisper {"verb":"whisper","target":"<entity_id>","text":"..."} — private message to an ADJACENT agent
 - shout {"verb":"shout","text":"..."} — loud, heard far away
@@ -34,9 +36,10 @@ Actions you can take (pick 1-3 per turn):
 
 Rules:
 - targets are ALWAYS the entity_id (e.g. "spawn_7"), never a display name.
+- MOVEMENT IS A STANDING GOAL: when you set pursue/flee/goto, the harness keeps moving you toward it automatically EVERY tick — you do NOT need to re-issue it each turn. Only change it when your intent changes. The MAP (below) shows terrain so you can pick reachable destinations and see who's behind a wall/lake.
 - RANGE: propose_task and accept_task work at ANY distance — never chase someone just to propose or accept a deal; do it from where you are. speak reaches ~8 tiles, whisper ~2 tiles.
 - pay and give work within ~3 tiles (a short reach) — you do NOT need to be exactly adjacent to pay gold or hand over an item. If a deal partner is within a few tiles, pay/give them NOW.
-- ONLY trade/attack require the target to be strictly ADJACENT (within 1 tile) — move next to them first for those.
+- ONLY trade/attack require the target to be strictly ADJACENT (within 1 tile) — pursue them first, then attack/trade once the MAP/list shows them ADJACENT.
 - you can only eat/equip items that are in YOUR inventory."""
 
 
@@ -119,6 +122,27 @@ def render_visible(obs: Any, self_pos) -> str:
             out.append(f"  {o.object_id} at {tuple(o.pos)} ({d} tiles)")
     if not out:
         return "Nothing visible nearby."
+    return "\n".join(out)
+
+
+def render_local_view(obs: Any, max_radius: int = 10) -> str:
+    """Render the egocentric ASCII map (obs.local_view) as the LLM sees the
+    screen around it. Trimmed to a `max_radius` window so the prompt stays
+    compact (the full radius-20 grid is large). '@'=you, '.'=walkable,
+    '#'=wall/building, '~'=water, 'P'=person, '$'=item, '+'=door."""
+    lv = getattr(obs, "local_view", None)
+    if lv is None or not lv.rows:
+        return ""
+    sx, sy = obs.self.pos
+    ox, oy = lv.origin
+    cx, cy = sx - ox, sy - oy  # self's row/col in the grid
+    r = max_radius
+    out = ["Local map (N up, '@'=you, '.'=open, '#'=wall, '~'=water, "
+           "'P'=person, '$'=item, '+'=door):"]
+    for ry in range(cy - r, cy + r + 1):
+        if 0 <= ry < len(lv.rows):
+            row = lv.rows[ry]
+            out.append("  " + row[max(0, cx - r):cx + r + 1])
     return "\n".join(out)
 
 
@@ -235,6 +259,9 @@ def build_prompt(obs: Any, persona: str, goal: str,
         "",
         render_visible(obs, obs.self.pos),
     ]
+    local_map = render_local_view(obs)
+    if local_map:
+        parts += ["", local_map]
     contracts = render_contracts(obs)
     if contracts:
         parts += ["", contracts]
@@ -251,8 +278,9 @@ def build_prompt(obs: Any, persona: str, goal: str,
         'Respond with JSON: {"reasoning":"<ONE short sentence, max 25 words>","actions":[<1-3 actions>]}.',
         "Pursue your goal. Be decisive — prefer concrete actions over waiting. Keep reasoning brief.",
         "IMPORTANT: pickup/eat/pay/trade/whisper/attack only work on an "
-        "ADJACENT target (1 tile). If your target is farther, just move "
-        "toward it this turn and act next turn — do NOT batch a move with "
-        "an action on a far target, it will be rejected.",
+        "ADJACENT target (1 tile). If your target is farther, set a "
+        "pursue/goto goal toward it — the harness keeps walking you there "
+        "automatically every tick, so you don't repeat it; just act (attack/"
+        "pickup/trade) on the turn the MAP/list shows the target ADJACENT.",
     ]
     return "\n".join(parts)

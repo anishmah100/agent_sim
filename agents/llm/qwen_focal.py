@@ -35,6 +35,7 @@ from agent_sim_sdk import Agent, AgentCredentials, ActionBatch
 
 from .actions import to_action
 from .grammar import FOCAL_GRAMMAR
+from .motor_loop import MotorLoop
 from .prompt import build_prompt
 
 log = logging.getLogger("agents.llm.qwen_focal")
@@ -110,6 +111,13 @@ class QwenFocalAgent:
     # Set from the first observation; lets the experiment runner map
     # this bot to its world entity without racing the /agents endpoint.
     entity_id: Optional[str] = None
+    # Two-rate motor layer: reflex movement toward a standing goal between
+    # the (slow) LLM deliberations. See agents/llm/motor_loop.py.
+    engine_url: str = "http://127.0.0.1:8080"
+    _loop: MotorLoop = field(default_factory=MotorLoop)
+
+    def __post_init__(self) -> None:
+        self._loop.engine_url = self.engine_url
 
     def stop(self) -> None:
         self._stopped = True
@@ -142,6 +150,11 @@ class QwenFocalAgent:
     # ---- runtime ----
 
     async def run(self) -> None:
+        """Two-rate loop: a fast reflex (motor steps toward the standing goal
+        every observation) and a slow deliberation (the LLM runs in the
+        background and updates the goal + fires direct verbs when it returns).
+        See agents/llm/motor_loop.py."""
+        ml = self._loop
         async with Agent(self.creds) as agent:
             async for obs in agent.observations():
                 if self._stopped:
@@ -149,10 +162,7 @@ class QwenFocalAgent:
                 if self.entity_id is None:
                     self.entity_id = obs.self.entity_id
                 # MAJ-7: stop cleanly when dead instead of looping forever
-                # calling the (expensive) LLM on a corpse whose actions are
-                # all rejected. The engine removes dead bodies so obs stop
-                # anyway; this covers the brief pre-removal window and
-                # non-combat deaths (starvation).
+                # calling the (expensive) LLM on a corpse.
                 _hp = (obs.self.extras or {}).get("hp")
                 try:
                     if _hp is not None and int(_hp) <= 0:
@@ -164,63 +174,73 @@ class QwenFocalAgent:
                 if (self.cfg.max_cycles is not None
                         and self.cycles >= self.cfg.max_cycles):
                     return
-                self.cycles += 1
-                prompt = build_prompt(obs, self.persona, self.goal,
-                                      self._last_results, intent=self._intent)
-                t0 = time.monotonic()
-                try:
-                    decision = await asyncio.to_thread(self._call_llm, prompt)
-                except Exception as e:
-                    log.warning("[%s] LLM call failed: %s",
-                                self.creds.agent_id, e)
-                    continue
-                dt_ms = int((time.monotonic() - t0) * 1000)
-                reasoning = str(decision.get("reasoning", ""))[:200]
-                raw_actions = decision.get("actions") or []
-                actions = [a for a in (to_action(d) for d in raw_actions) if a]
-                # M8: remember the actual PLAN (verbs + any move target) as
-                # next turn's intent, not the free-text reasoning. The
-                # anti-flip-flop nudge should reinforce where the agent was
-                # actually heading, not its narration (which can diverge).
-                if actions:
-                    _plan = []
-                    for a in actions:
-                        if a.verb == "move" and getattr(a, "target", None):
-                            _plan.append(f"move toward {tuple(a.target)}")
-                        else:
-                            _plan.append(a.verb)
-                    self._intent = "; ".join(_plan)[:200]
-                if not actions:
-                    log.info("[%s] cycle %d (%dms): no valid actions from %r",
-                             self.creds.agent_id, self.cycles, dt_ms, raw_actions)
-                    continue
-                log.info("[%s] cycle %d (%dms): %s | %s",
-                         self.creds.agent_id, self.cycles, dt_ms,
-                         [a.verb for a in actions], reasoning)
-                # Emit the reasoning as a mental note for the inspector.
-                try:
-                    await agent.note(reasoning, tag="llm",
-                                     slots={"goal": self.goal,
-                                            "plan": " ".join(a.verb for a in actions)})
-                except Exception:
-                    pass
-                # Submit with ack so we can feed results back next cycle.
-                try:
-                    results = await agent.act_batch(
-                        ActionBatch(actions=actions, reasoning=reasoning),
-                        wait_for_acks=True, timeout=5.0)
-                except Exception as e:
-                    log.warning("[%s] act_batch failed: %s",
-                                self.creds.agent_id, e)
-                    continue
-                self._last_results = []
-                for act, res in zip(actions, results):
-                    if res is None:
-                        continue
-                    if res.accepted:
-                        self.accepted += 1
-                        self._last_results.append(f"{act.verb}: accepted")
-                    else:
-                        self.rejected += 1
-                        reason = res.reason or res.reason_code or "rejected"
-                        self._last_results.append(f"{act.verb}: {reason}")
+
+                ml.ensure_motor()
+                ml.observe(obs)
+
+                # 1) Collect a finished background deliberation, if any, and
+                #    act on it (set goal + fire direct verbs).
+                decision = ml.take_decision(obs)
+                direct_emitted = False
+                if decision is not None:
+                    direct_emitted = await self._handle_decision(agent, obs, decision)
+
+                # 2) Kick off the next deliberation in the background if due.
+                if ml.should_deliberate(obs):
+                    self.cycles += 1
+                    prompt = build_prompt(obs, self.persona, self.goal,
+                                          self._last_results, intent=self._intent)
+                    ml.start_deliberation(prompt, self._call_llm)
+
+                # 3) Reflex movement toward the standing goal — unless we
+                #    already fired a direct verb this tick.
+                if not direct_emitted:
+                    step = ml.reflex_step(obs)
+                    if step is not None:
+                        try:
+                            await agent.act_batch(ActionBatch(actions=[step]))
+                        except Exception as e:
+                            log.warning("[%s] reflex step failed: %s",
+                                        self.creds.agent_id, e)
+
+    async def _handle_decision(self, agent, obs, decision: dict) -> bool:
+        """Apply a finished LLM decision: update the standing goal from any
+        movement verb, emit the direct verbs, record results + a mental note.
+        Returns True if a direct verb was submitted this tick."""
+        ml = self._loop
+        reasoning = str(decision.get("reasoning", ""))[:200]
+        raw_actions = decision.get("actions") or []
+        direct_dicts = ml.apply_movement(raw_actions)
+        actions = [a for a in (to_action(d) for d in direct_dicts) if a]
+        # Intent = standing movement goal + the direct verbs chosen.
+        self._intent = "; ".join([str(ml.goal)] + [a.verb for a in actions])[:200]
+        log.info("[%s] cycle %d: goal=%s direct=%s | %s",
+                 self.creds.agent_id, self.cycles, ml.goal,
+                 [a.verb for a in actions], reasoning)
+        try:
+            await agent.note(reasoning, tag="llm",
+                             slots={"goal": str(ml.goal),
+                                    "plan": " ".join(a.verb for a in actions) or "move"})
+        except Exception:
+            pass
+        if not actions:
+            return False
+        try:
+            results = await agent.act_batch(
+                ActionBatch(actions=actions, reasoning=reasoning),
+                wait_for_acks=True, timeout=5.0)
+        except Exception as e:
+            log.warning("[%s] act_batch failed: %s", self.creds.agent_id, e)
+            return False
+        self._last_results = []
+        for act, res in zip(actions, results):
+            if res is None:
+                continue
+            if res.accepted:
+                self.accepted += 1
+                self._last_results.append(f"{act.verb}: accepted")
+            else:
+                self.rejected += 1
+                reason = res.reason or res.reason_code or "rejected"
+                self._last_results.append(f"{act.verb}: {reason}")
+        return True

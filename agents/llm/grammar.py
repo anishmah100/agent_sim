@@ -20,13 +20,18 @@ root ::= "{" ws "\"reasoning\":" ws string "," ws "\"actions\":" ws action-list 
 
 action-list ::= "[" ws action ws ("," ws action ws)* "]"
 
-action ::= move-action | speak-action | whisper-action | shout-action
+action ::= goto-action | pursue-action | flee-action | step-action
+         | speak-action | whisper-action | shout-action
          | eat-action | pickup-action | equip-action | give-action
          | pay-action | trade-action | attack-action
          | propose-action | accept-action | complete-action | reject-action
          | enter-action | exit-action | wait-action
 
-move-action    ::= "{" ws "\"verb\":" ws "\"move\"" "," ws "\"target\":" ws "[" ws integer ws "," ws integer ws "]" ws "}"
+goto-action    ::= "{" ws "\"verb\":" ws "\"goto\"" "," ws "\"target\":" ws "[" ws integer ws "," ws integer ws "]" ws "}"
+pursue-action  ::= "{" ws "\"verb\":" ws "\"pursue\"" "," ws "\"target\":" ws string ws "}"
+flee-action    ::= "{" ws "\"verb\":" ws "\"flee\"" "," ws "\"target\":" ws string ws "}"
+step-action    ::= "{" ws "\"verb\":" ws "\"step\"" "," ws "\"dir\":" ws direction ws "}"
+direction      ::= "\"N\"" | "\"S\"" | "\"E\"" | "\"W\""
 speak-action   ::= "{" ws "\"verb\":" ws "\"speak\"" "," ws "\"text\":" ws string ws "}"
 whisper-action ::= "{" ws "\"verb\":" ws "\"whisper\"" "," ws "\"target\":" ws string "," ws "\"text\":" ws string ws "}"
 shout-action   ::= "{" ws "\"verb\":" ws "\"shout\"" "," ws "\"text\":" ws string ws "}"
