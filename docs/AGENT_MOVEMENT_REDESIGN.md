@@ -81,6 +81,23 @@ dynamic world** — measured live, not asserted:
   visual FX polished + beautiful, persona diversity, and the deranged-killer
   scenario. None of these are dropped.
 
+## Status vs Definition of DONE (live-verified 2026-06-07)
+- **No aimless wandering** ✓ — every agent (LLM + rule-based) pursues a legible
+  goal (pursue/flee/goto); the motor executes it each tick.
+- **Economy / free gold gets taken** ✓ — survivors gathered to 375 gold in one
+  run; coin/item pickups + GoldTransferred fire continuously; gold_moved=True.
+- **Society** ✓ — coalition contracts proposed AND accepted live
+  ("we protect each other and share food", TaskAccepted).
+- **Predation: chase + kill + flee** ✓ — fixed the equal-speed tail-chase by
+  giving predators a faster step cadence (240ms vs 350ms); a Hunter now
+  catches + kills a roaming forager in the open, and capstone runs log kills.
+- **LLM agents on the new view+goal+nav** ✓ — Qwen gathers/cooperates/proposes;
+  Claude chases→kills→loots. Both via the two-rate motor harness.
+- **Open / lower-priority polish:** agents disperse widely on the 1500² map
+  (good nav, but thins the on-screen crowd) → a tighter spawn cluster / demo
+  arena would make it visually denser; slice 7 deranged-killer set-piece;
+  slice 9 experiment re-run tagging the old regime.
+
 ## Outstanding threads — DO NOT DROP (master checklist)
 Movement redesign slices: 1 step verb ✓ · 2a walkability endpoint ✓ ·
 3 nav A* lib ✓ · 2b local ASCII view in observation (radius 20) ✓ · 4 reflex
