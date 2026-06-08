@@ -85,14 +85,14 @@ Returns the **rich affordance manifest** (Q39). Per-system declarations of verbs
       "name": "engine_base",
       "verbs": [
         {
-          "verb": "move",
+          "verb": "step",
           "params_schema": { "$schema": "...", "type": "object",
-            "properties": { "target": {"type":"array","items":{"type":"integer"},"minItems":2,"maxItems":2}, "jog": {"type":"boolean"} },
-            "required": ["target"]
+            "properties": { "dir": {"type":"string","enum":["N","S","E","W"]} },
+            "required": ["dir"]
           },
-          "preconditions": ["target must be on the map", "engine must be able to path to target"],
-          "rejection_reasons": ["unreachable", "out_of_map", "cannot_path"],
-          "examples": [ { "params": {"target": [10, 5]}, "result": "walks toward (10,5)" } ]
+          "preconditions": ["destination tile is adjacent + walkable"],
+          "rejection_reasons": ["bad_direction", "blocked_by_terrain", "blocked"],
+          "examples": [ { "params": {"dir": "E"}, "result": "moves one tile east (agent owns pathing)" } ]
         }
       ],
       "state_fields": [],
@@ -178,8 +178,8 @@ Full state every push (Q53). Cadence = whatever the bot configured (default 1000
     "pos": [10, 5],
     "facing": "S",
     "extras": { "hp": 100, "max_hp": 100, "gold": 27, ... },
-    "current_action": { "verb": "move", "eta_tick": 12356 },
-    "last_action_result": { "verb": "move", "accepted": true }
+    "current_action": { "verb": "move", "eta_tick": 12356 },  // engine walk-animation state during a step
+    "last_action_result": { "verb": "step", "accepted": true }
   },
   "visible_entities": [
     {
@@ -271,7 +271,7 @@ High-priority push (taking damage; being addressed by name). Same shape as an au
 }
 ```
 
-The shape of `target` / `jog` / etc. depends on the verb. The affordance manifest defines what each verb takes (Q39).
+The shape of `dir` / `target` / etc. depends on the verb. The affordance manifest defines what each verb takes (Q39).
 
 #### `set_cadence` (bot → engine)
 
@@ -299,7 +299,7 @@ Bots can pattern-match on these:
 - `entity_busy` — current_action conflicts (normal-priority only).
 - `forbidden` — scenario rule rejection.
 - `not_enough_gold` — economic rejection.
-- `cannot_path` — move target unreachable.
+- `blocked` / `blocked_by_terrain` — the adjacent tile a `step` targeted is occupied or non-walkable.
 - `out_of_map` — coordinate not on this map.
 - `inside_building` — entity is inside a building, can't act on the overworld.
 - `rate_limited` — action rate cap exceeded.
