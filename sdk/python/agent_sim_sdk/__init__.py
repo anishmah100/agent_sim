@@ -13,7 +13,7 @@ from .models import (
     Move, Step, Speak, Whisper, Shout, LookAt, Interact,
     Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
     MentalNote,
-    Pay, WorkForPay, Trade, Loot,
+    Pay, WorkForPay, BuyFood, Trade, Loot,
     Chop, Mine,
     Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
     PlaceBlueprint, AdvanceConstruction, Demolish,

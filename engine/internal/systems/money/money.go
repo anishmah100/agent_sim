@@ -16,7 +16,26 @@ import (
 const (
 	DefaultStartingGold = 10
 	WorkPayment         = 5
+	// Gold sink: buying a meal at the market. food_price gold buys
+	// food_relief hunger reduction. Gives gold a survival purpose so a
+	// hoard isn't inert wealth — the loop is earn/loot → buy food → live
+	// longer. Tunable per world (food_price / food_relief).
+	DefaultFoodPrice  = 6
+	DefaultFoodRelief = 0.5
 )
+
+// GoldSpent — emitted when gold leaves the economy (a sink), e.g. buying
+// a meal. Distinct from GoldTransferred (agent→agent), so the economy
+// metrics can tell circulation apart from sinks.
+type GoldSpent struct {
+	Entity string
+	Amount int
+	On     string // "food"
+}
+
+func (GoldSpent) Kind() string { return "GoldSpent" }
+
+var _ eventbus.Event = GoldSpent{}
 
 // GoldTransferred — emitted whenever gold moves between two entities.
 type GoldTransferred struct {
@@ -47,6 +66,7 @@ func (s *System) Name() string { return "money" }
 func (s *System) RegisterWith(r syscore.Registry) {
 	r.Verb("pay", s.handlePay)
 	r.Verb("work_for_pay", s.handleWork)
+	r.Verb("buy_food", s.handleBuyFood)
 	r.OnEntitySpawn(s.seedSpawn)
 	r.Service("money", MoneyService(&service{}))
 	r.Manifest(s.manifest())
@@ -109,6 +129,60 @@ func (s *System) handlePay(w syscore.World, e syscore.Entity, env *syscore.Actio
 	return res
 }
 
+// handleBuyFood — the economy's gold sink + survival loop. Spend
+// food_price gold to relieve food_relief hunger (a meal at the market).
+// Gold-gated only: the world interface doesn't expose decoration
+// proximity to verb handlers yet, so a market-stall adjacency check is a
+// future enhancement (the agent author already steers buyers toward the
+// market hub). Reasons:
+//   - not_hungry:     hunger already 0, nothing to buy
+//   - not_enough_gold: balance < food_price
+func (s *System) handleBuyFood(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
+	res := syscore.ActionResult{ActionID: env.ActionID, Verb: env.Verb}
+	price := w.TuningInt("food_price", DefaultFoodPrice)
+	relief := w.Tuning("food_relief", DefaultFoodRelief)
+
+	goldRaw, _ := e.GetExtra("gold")
+	gold := toInt(goldRaw)
+	hungerRaw, _ := e.GetExtra("hunger")
+	hunger, _ := hungerRaw.(float64)
+
+	if hunger <= 0 {
+		res.Reason = "not_hungry"
+		return res
+	}
+	if gold < price {
+		res.Reason = "not_enough_gold"
+		return res
+	}
+	next := hunger - relief
+	if next < 0 {
+		next = 0
+	}
+	w.MutateEntity(e.ID(), func(real syscore.Entity) {
+		real.SetExtra("gold", gold-price)
+		real.SetExtra("hunger", next)
+	})
+	w.QueueEvent(GoldSpent{Entity: e.ID(), Amount: price, On: "food"})
+	w.EmitSound(e.Pos(), "coin_clink")
+	w.SetEntityAction(e.ID(), "interact", 18)
+	res.Accepted = true
+	return res
+}
+
+// toInt coerces a JSON-decoded number (int or float64) to int.
+func toInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	}
+	return 0
+}
+
 func (s *System) handleWork(w syscore.World, e syscore.Entity, env *syscore.ActionEnvelope) syscore.ActionResult {
 	svc := w.GetService("money").(MoneyService)
 	svc.Grant(w, e.ID(), w.TuningInt("work_payment", WorkPayment), "work_for_pay")
@@ -133,12 +207,20 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Description:  "Perform labor (stub: just credits gold). Real version will validate a work-site.",
 				ParamsSchema: json.RawMessage(`{"type":"object","properties":{}}`),
 			},
+			{
+				Verb:             "buy_food",
+				Description:      "Buy a meal: spend food_price gold to reduce hunger by food_relief. The economy's gold sink + survival loop.",
+				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{}}`),
+				Preconditions:    []string{"hunger > 0", "self has at least food_price gold"},
+				RejectionReasons: []string{"not_hungry", "not_enough_gold"},
+				EmitsEvents:      []string{"GoldSpent"},
+			},
 		},
 		StateFields: []manifest.StateFieldDecl{
 			{Key: "gold", Type: "int", Owner: "entity.extras", PublicAtAnyDistance: false, Meaning: "current gold balance (private — only the owner sees it via self.extras)"},
 		},
 		SoundsEmitted: []manifest.SoundDecl{
-			{Kind: "coin_clink", Description: "Gold transfer.", EmittedBy: "pay verb"},
+			{Kind: "coin_clink", Description: "Gold transfer / purchase.", EmittedBy: "pay + buy_food verbs"},
 		},
 	}
 }

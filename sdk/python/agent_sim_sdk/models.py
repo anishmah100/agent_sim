@@ -297,6 +297,12 @@ class WorkForPay(_Action):
     verb: Literal["work_for_pay"] = "work_for_pay"
 
 
+class BuyFood(_Action):
+    """Buy a meal: spend food_price gold to cut hunger (Money system).
+    The economy's gold sink + survival loop."""
+    verb: Literal["buy_food"] = "buy_food"
+
+
 class Trade(_Action):
     """Atomic item-for-gold swap with an adjacent target (Trade system)."""
     verb: Literal["trade"] = "trade"
@@ -415,7 +421,7 @@ Action = Annotated[
         Move, Step, Speak, Whisper, Shout, LookAt, Interact,
         Pickup, Drop, Eat, Equip, Give, Attack, Defend, Heal, Wait,
         # Composable-system verbs (session 2).
-        Pay, WorkForPay, Trade, Loot,
+        Pay, WorkForPay, BuyFood, Trade, Loot,
         Chop, Mine,
         Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
         PlaceBlueprint, AdvanceConstruction, Demolish,

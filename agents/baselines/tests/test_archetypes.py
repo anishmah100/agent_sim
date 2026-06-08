@@ -139,6 +139,23 @@ def test_survivor_flees_armed_entity():
     assert bot.goal.kind == "flee" and bot.goal.entity_id == "killer-1"
 
 
+def test_survivor_buys_food_when_hungry_with_gold_no_food():
+    from agent_sim_sdk import BuyFood
+    bot = Survivor(creds=make_creds())
+    obs = make_obs(extras={"hp": 100, "hunger": 0.7, "inventory": [], "gold": 20})
+    act = bot.decide(obs)
+    assert isinstance(act, BuyFood), (act, bot.state)
+
+
+def test_survivor_cannot_buy_food_when_broke():
+    bot = Survivor(creds=make_creds())
+    obs = make_obs(extras={"hp": 100, "hunger": 0.7, "inventory": [], "gold": 1})
+    act = bot.decide(obs)
+    # Broke + no food in sight → falls through to a roaming step, not BuyFood.
+    from agent_sim_sdk import BuyFood
+    assert not isinstance(act, BuyFood), act
+
+
 def test_survivor_desperate_when_starving_no_food():
     bot = Survivor(creds=make_creds())
     obs = make_obs(extras={

@@ -124,6 +124,37 @@ func TestComposable_PayWithinRange(t *testing.T) {
 	}
 }
 
+func TestComposable_BuyFoodSpendsGoldAndCutsHunger(t *testing.T) {
+	wa, reg := boot(t)
+	hero := wa.EntityByID("hero")
+	hero.SetExtra("hunger", 0.8)
+	res := reg.Handle(wa, hero, &syscore.ActionEnvelope{
+		ActionID: "1", Verb: "buy_food", Raw: []byte(`{}`),
+	})
+	if !res.Accepted {
+		t.Fatalf("buy_food should accept: %s", res.Reason)
+	}
+	gold, _ := wa.EntityByID("hero").GetExtra("gold")
+	if gold != money.DefaultStartingGold-money.DefaultFoodPrice {
+		t.Fatalf("gold after buy: got %v want %d", gold, money.DefaultStartingGold-money.DefaultFoodPrice)
+	}
+	h, _ := wa.EntityByID("hero").GetExtra("hunger")
+	if hf, _ := h.(float64); hf >= 0.8 {
+		t.Fatalf("hunger should drop after buy_food, got %v", h)
+	}
+}
+
+func TestComposable_BuyFoodRejectsWhenSated(t *testing.T) {
+	wa, reg := boot(t)
+	// hero default hunger is 0 → nothing to buy.
+	res := reg.Handle(wa, wa.EntityByID("hero"), &syscore.ActionEnvelope{
+		ActionID: "1", Verb: "buy_food", Raw: []byte(`{}`),
+	})
+	if res.Accepted || res.Reason != "not_hungry" {
+		t.Fatalf("buy_food when sated should reject not_hungry, got accepted=%v reason=%s", res.Accepted, res.Reason)
+	}
+}
+
 func TestComposable_AttackEmitsEvents(t *testing.T) {
 	wa, _ := boot(t)
 	bus := wa.Bus

@@ -15,11 +15,18 @@ from typing import Optional
 
 from agent_sim_sdk import (
     Action,
+    BuyFood,
     Eat,
     Observation,
     Pay,
     Pickup,
 )
+
+# Mirror of the engine's default food_price (money.DefaultFoodPrice). The
+# bot can't read world tunings, so it uses the default to decide whether a
+# market meal is affordable; an over-optimistic buy just returns
+# not_enough_gold harmlessly.
+FOOD_PRICE = 6
 
 from agents.common.motor import Goal
 
@@ -94,8 +101,16 @@ class Survivor(ArchetypeBot):
                 # (c) walk toward closest food (motor navigates).
                 self.goal = Goal.goto(*f.pos)
                 return None
-            # (d-f) elaborate fallbacks (chop tree, trade at stall) are
-            # left for a later pass — without them, DESPERATE → death
+            # (d) no food in sight but gold in pocket → buy a meal at the
+            # market. This is the gold sink that makes accumulated wealth
+            # actually buy survival; a rich survivor no longer starves
+            # amid coins it can't eat.
+            gold = int(extras.get("gold", 0) or 0)
+            if gold >= FOOD_PRICE:
+                self.state = "EATING"
+                return BuyFood()
+            # (e-f) elaborate fallbacks (chop tree, trade at stall) are
+            # left for a later pass — without them, broke+DESPERATE → death
             # is the failure mode that flags "food economy is too tight".
             return random_walk(self, here)
 
