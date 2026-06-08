@@ -44,7 +44,7 @@ class Raider(ArchetypeBot):
         self.state = "BRAWL"
         if chebyshev(here, tuple(t.pos)) <= 1:
             return Attack(target=t.entity_id)
-        return Move(target=list(step_toward(here, tuple(t.pos))))
+        return Move(target=list(t.pos))  # full target — engine pathfinds around obstacles
 
 
 async def run_one(engine: str, i: int):

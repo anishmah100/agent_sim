@@ -58,7 +58,9 @@ async def main():
                     target = min(doors, key=lambda o: cheb(here, tuple(o.pos)))
                     tpos, tid = tuple(target.pos), target.object_id
                 if target is None:
-                    await agent.act(Move(target=step(here, (here[0] + 2, here[1] + 2))))
+                    # Head toward the village door cluster (south of spawn)
+                    # until a door enters vision.
+                    await agent.act(Move(target=step(here, (764, 878))))
                     continue
                 if cheb(here, tpos) <= 1:
                     print(f"  adjacent to building {tid} at {tpos}; calling Enter")

@@ -66,6 +66,39 @@ agents were **terrain-blind** (their observation contained only `map_id` +
   agents is removed. (NPC/autonomous movement migrated to the same nav lib or
   a clearly-scoped internal stepper.)
 
+## Definition of DONE (this round is not finished until ALL of this holds)
+The success bar is **all the emergent behavior we had before, plus a
+dynamic world** — measured live, not asserted:
+- **No aimless wandering.** Every agent is pursuing a legible goal; nobody
+  mills around doing nothing.
+- **Economy:** active trading; and **free gold/items on the ground get
+  picked up** (an idle pile near agents should not just sit there).
+- **Predation:** real chasing, killing, and fleeing — predators close on
+  prey, prey notice and run, sometimes gang up.
+- **Society:** contracts/coalitions/betrayal still emerge (parity with the
+  old regime, qualitatively).
+- **Plus the lagging todos** are also complete: combat/HP/hunger/building
+  visual FX polished + beautiful, persona diversity, and the deranged-killer
+  scenario. None of these are dropped.
+
+## Outstanding threads — DO NOT DROP (master checklist)
+Movement redesign slices: 1 step verb ✓ · 2a walkability endpoint ✓ ·
+3 nav A* lib ✓ · 2b local ASCII view in observation (radius 20) · 4 reflex
+loop + pursue/flee standing goals · 5 last-seen tracker · 6 LLM harness on
+new view+nav (try map-to-LLM vs harness-A*; Claude vs Qwen) · 7 scripted
+Hunter + LLM prey scenario · 8 remove old move/engine-pathfinding + update
+ALL docs/README/CLAUDE.md/comments · 9 re-run experiments (tag old regime).
+- **Update ALL agents** rule-based (deterministic test bots) + LLM; all must work.
+- **Cat-and-mouse rule-based smoke test** (cat catches+kills mouse) + visual.
+- **Visual-beauty pass** (parallelized): combat hit/death FX, damage numbers,
+  hunger amber, building enter/exit FX, HP bars, relationship lines — clear,
+  effective, beautiful; review renders.
+- **Persona diversity** (Vyk raider, Sela homesteader + more) so behavior splits.
+- **Deranged-killer scenario** end-to-end (chase → notice → flee → gang up).
+- **Docs/README/comments sync + dead-code removal** — standing, every step.
+- Minor/open: README status-badge/"viral hook" framing retune; Karim GitHub
+  contributor cache (data fixed; verify it cleared).
+
 ## Standing requirements (apply to EVERY step, not just the end)
 - **Docs/comments/code stay in sync as we go.** When a step changes the API
   (observation shape, action verbs), update the README, `CLAUDE.md`, the
