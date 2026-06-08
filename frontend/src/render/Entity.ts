@@ -157,6 +157,14 @@ interface RenderedEntity {
   label: Text;
   hpBar: Graphics | null;          // floating HP bar; shown only when hurt
   prevPos: [number, number];
+  // Interpolation target in PIXELS. tick() eases container.x/y toward this
+  // each frame so motion stays smooth even when WS snapshots arrive late or
+  // get skipped (which otherwise snapped the sprite across the gap — the
+  // "character jumps many tiles" teleport). A jump bigger than SNAP_PX
+  // (a respawn / cross-map move) snaps instantly instead of gliding.
+  targetX: number;
+  targetY: number;
+  interp: boolean;                 // true for agents (smooth); false for static items
   movingSince: number;             // ms — for idle detection
   hitFlashUntil: number;           // BLK-1: ms timestamp; red tint while > now
   flinchStart: number;             // ms timestamp of last hit, for flinch nudge
@@ -180,6 +188,13 @@ const HIT_FLASH_MS = 180;
 // hit, then springs home — a small but legible "that hurt" read.
 const FLINCH_MS = 170;
 const FLINCH_PX = 2.2;
+// Position interpolation: ease sprites toward the latest engine position so
+// motion stays smooth across slow/skipped WS snapshots (instead of snapping
+// the sprite — the multi-tile "teleport"). INTERP_MS is the catch-up window;
+// a per-axis jump beyond SNAP_PX is a genuine teleport (respawn / relocate)
+// and snaps instantly rather than gliding a body across the map.
+const INTERP_MS = 90;
+const SNAP_PX = TILE_SIZE_PX * 4;
 
 // BLK-1: read an entity's hp from its public extras, or null if it has
 // none (world objects / items). Used to detect damage between snapshots.
@@ -397,6 +412,28 @@ export class EntityLayer {
         re.body.x = re.bodyHomeX;
         re.body.y = re.bodyHomeY;
         re.flinchStart = 0;                  // settle; stop touching it
+      }
+      // Smooth position interpolation toward the latest engine position.
+      // Easing across frames hides slow/skipped WS snapshots that would
+      // otherwise snap the sprite (the multi-tile "teleport"). A jump
+      // larger than SNAP_PX (respawn / cross-map) is a real teleport — snap
+      // it instantly rather than gliding a body across the whole map.
+      if (re.interp) {
+        const dx = re.targetX - re.container.x;
+        const dy = re.targetY - re.container.y;
+        if (dx !== 0 || dy !== 0) {
+          if (Math.abs(dx) > SNAP_PX || Math.abs(dy) > SNAP_PX) {
+            re.container.x = re.targetX;
+            re.container.y = re.targetY;
+          } else {
+            const k = Math.min(1, (deltaMs || 16) / INTERP_MS);
+            re.container.x += dx * k;
+            re.container.y += dy * k;
+            if (Math.abs(re.targetX - re.container.x) < 0.5) re.container.x = re.targetX;
+            if (Math.abs(re.targetY - re.container.y) < 0.5) re.container.y = re.targetY;
+          }
+          re.container.zIndex = re.container.y + FOOTPRINT_H;
+        }
       }
     }
     // BLK-1: death dissolve — a readable kill beat: brief white flash →
@@ -636,6 +673,9 @@ export class EntityLayer {
       label,
       hpBar,
       prevPos: [e.pos[0], e.pos[1]],
+      targetX: wrap.x,
+      targetY: wrap.y,
+      interp: true,
       movingSince: performance.now(),
       hitFlashUntil: 0,
       flinchStart: 0,
@@ -731,6 +771,9 @@ export class EntityLayer {
       label: null as unknown as Text,  // no label for world objects
       hpBar: null,
       prevPos: [e.pos[0], e.pos[1]],
+      targetX: wrap.x,
+      targetY: wrap.y,
+      interp: false,                   // items don't walk; snap in place
       movingSince: performance.now(),
       hitFlashUntil: 0,
       flinchStart: 0,
@@ -772,7 +815,11 @@ export class EntityLayer {
     const turned = re.state.facing !== next.facing;
     const renamed = re.state.display_name !== next.display_name;
     if (moved) {
-      this.applyPos(re.container, next.pos, next.archetype);
+      // Set the interpolation TARGET (px); tick() eases the sprite there so
+      // motion is smooth across slow/skipped snapshots instead of snapping
+      // (the multi-tile teleport). Big jumps (respawn) snap in tick().
+      re.targetX = Math.round(next.pos[0] * TILE_SIZE_PX);
+      re.targetY = Math.round(next.pos[1] * TILE_SIZE_PX);
       re.movingSince = performance.now();
     }
     if (renamed) re.label.text = next.display_name ?? next.entity_id;
