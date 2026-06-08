@@ -20,7 +20,7 @@ import pytest
 
 from examples.claude_agent.harness import _action_from_dict
 from agent_sim_sdk import (
-    Move, Speak, Whisper, Shout, LookAt, Interact, Pickup, Drop, Equip,
+    Step, Speak, Whisper, Shout, LookAt, Interact, Pickup, Drop, Equip,
     Give, Pay, WorkForPay, Trade, Loot, Chop, Mine,
     Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
     Attack, Defend, Heal, Wait,
@@ -31,7 +31,7 @@ from agent_sim_sdk import (
 # Every engine verb must appear here so the contract is enforceable.
 ROUND_TRIP_CASES = [
     # Movement + social.
-    ({"verb": "move", "target": [3, 4]}, Move),
+    ({"verb": "step", "dir": "E"}, Step),
     ({"verb": "speak", "text": "hi"}, Speak),
     ({"verb": "shout", "text": "OI"}, Shout),
     ({"verb": "whisper", "target": "b", "text": "psst"}, Whisper),
@@ -79,9 +79,9 @@ def test_action_from_dict_routes_correctly(payload, cls):
     )
 
 
-def test_move_target_round_trips_as_tuple():
-    action = _action_from_dict({"verb": "move", "target": [7, 8]})
-    assert action.target == (7, 8)
+def test_step_dir_round_trips():
+    action = _action_from_dict({"verb": "step", "dir": "E"})
+    assert action.dir == "E"
 
 
 def test_speak_text_round_trips():
@@ -128,7 +128,7 @@ def test_every_engine_verb_has_a_case():
     action. The set below is the engine's verb surface; if any name
     falls through to Wait, the contract is broken."""
     engine_verbs = {
-        "move", "speak", "shout", "whisper", "look_at",
+        "step", "speak", "shout", "whisper", "look_at",
         "interact", "pickup", "drop", "equip", "give",
         "pay", "work_for_pay", "trade", "loot",
         "chop", "mine",

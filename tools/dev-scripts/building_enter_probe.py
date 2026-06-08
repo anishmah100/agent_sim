@@ -38,7 +38,7 @@ def http_json(path: str) -> dict:
 
 async def main() -> int:
     from agent_sim_sdk import (
-        Agent, ActionBatch, Interact, Move, VisionMode, register_agent,
+        Agent, ActionBatch, Interact, VisionMode, register_agent,
     )
 
     # Find a building door tile from the snapshot. The world snapshot

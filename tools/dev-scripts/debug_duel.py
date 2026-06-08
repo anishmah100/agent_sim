@@ -3,7 +3,7 @@ mechanic. Logs hunter pos, victim pos, distance, action, victim hp each
 tick so we see EXACTLY why attacks do/don't land."""
 from __future__ import annotations
 import asyncio
-from agent_sim_sdk import Agent, Attack, Move, Wait, VisionMode, register_agent
+from agent_sim_sdk import Agent, Attack, Step, Wait, VisionMode, register_agent
 
 def cheb(a,b): return max(abs(a[0]-b[0]),abs(a[1]-b[1]))
 def step(h,t):
@@ -32,7 +32,7 @@ async def hunter(creds, state):
                 # victim not visible — move toward last known
                 vp=state.get('vpos')
                 print(f"[{n}] hunter={here} victim NOT VISIBLE (known={vp}) -> move")
-                if vp: await ag.act(Move(target=list(vp)))
+                if vp: await ag.act(Step(dir=("E" if vp[0]>here[0] else "W") if vp[0]!=here[0] else ("S" if vp[1]>here[1] else "N")))
                 continue
             d=cheb(here,tuple(tgt.pos))
             if d<=1:
@@ -40,7 +40,7 @@ async def hunter(creds, state):
                 await ag.act(Attack(target=vid))
             else:
                 print(f"[{n}] hunter={here} victim={tuple(tgt.pos)} d={d} -> MOVE")
-                await ag.act(Move(target=list(tgt.pos)))
+                await ag.act(Step(dir=("E" if tgt.pos[0]>here[0] else "W") if tgt.pos[0]!=here[0] else ("S" if tgt.pos[1]>here[1] else "N")))
 
 async def main():
     eng="http://127.0.0.1:8080"

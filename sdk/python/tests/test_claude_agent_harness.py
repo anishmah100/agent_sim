@@ -106,7 +106,7 @@ def test_reflex_fires_on_low_hp():
     h.init_persona()
     batch = h.reflex(_obs(extras={"hp": 3, "gold": 10, "hunger": 0.1}))
     assert batch is not None
-    assert batch.actions[0].verb == "move"
+    assert batch.actions[0].verb == "step"
     assert "flee" in (batch.reasoning or "")
 
 

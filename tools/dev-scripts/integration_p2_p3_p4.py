@@ -48,7 +48,7 @@ def http_json(path: str) -> dict:
 
 async def main() -> int:
     from agent_sim_sdk import (
-        Agent, ActionBatch, Eat, Move, Pickup, Attack, Equip, VisionMode,
+        Agent, ActionBatch, Eat, Pickup, Attack, Equip, VisionMode,
         register_agent,
     )
 

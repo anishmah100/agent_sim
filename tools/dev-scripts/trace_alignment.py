@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio, json, urllib.request
 from agent_sim_sdk import (
     register_agent, Agent, ActionBatch, VisionMode,
-    Move, Pickup, Pay, Give, Eat, ProposeTask, AcceptTask, CompleteTask,
+    Step, Pickup, Pay, Give, Eat, ProposeTask, AcceptTask, CompleteTask,
 )
 
 import os as _os
@@ -102,7 +102,7 @@ async def main():
                 t = its[0].pos
                 dx = 1 if pos[0] < t[0] else -1 if pos[0] > t[0] else 0
                 dy = 1 if pos[1] < t[1] else -1 if pos[1] > t[1] else 0
-                await a.act_batch(ActionBatch(actions=[Move(target=[pos[0]+dx, pos[1]+dy])]))
+                await a.act_batch(ActionBatch(actions=[Step(dir=("E" if dx>0 else "W") if dx!=0 else ("S" if dy>0 else "N"))]))
             await asyncio.sleep(0.5)
 
         # ---- BEHAVIORAL LOS: walk onto an item tile, must be visible+adjacent ----
@@ -116,7 +116,7 @@ async def main():
                 oa = await first(a); cx, cy = oa.self.pos
                 if cheb((cx, cy), (tx, ty)) <= 1:
                     break
-                await a.act_batch(ActionBatch(actions=[Move(target=[tx, ty])]))
+                await a.act_batch(ActionBatch(actions=[Step(dir=("E" if tx>pos[0] else "W") if tx!=pos[0] else ("S" if ty>pos[1] else "N"))]))
                 await asyncio.sleep(0.35)
             oa = await first(a)
             still = [it for it in (getattr(oa, "visible_items", []) or []) if it.entity_id == tgt.entity_id]

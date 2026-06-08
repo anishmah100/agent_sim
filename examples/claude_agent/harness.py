@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Optional, Protocol
 
 from agent_sim_sdk import (
-    ActionBatch, Move, Speak, Shout, Whisper, LookAt, Interact, Pickup,
+    ActionBatch, Step, Speak, Shout, Whisper, LookAt, Interact, Pickup,
     Drop, Equip, Give, Pay, WorkForPay, Trade, Loot, Chop, Mine,
     Enter, Exit, Lock, Unlock, ClaimOwnership, TransferOwnership,
     Attack, Defend, Heal, Wait,
@@ -135,7 +135,7 @@ class Harness:
             # consider the threat vector.
             x, y = obs.self.pos
             return ActionBatch(
-                actions=[Move(target=(x, y - 1))],
+                actions=[Step(dir="N")],
                 reasoning="reflex: critical hp, fleeing north",
             )
         return None
@@ -176,8 +176,8 @@ def _action_from_dict(d: dict):
     verb = d.get("verb", "wait")
 
     # Movement + social.
-    if verb == "move":
-        return Move(target=tuple(d.get("target", (0, 0))))
+    if verb == "step":
+        return Step(dir=d.get("dir", "N"))
     if verb == "speak":
         return Speak(text=d.get("text", ""))
     if verb == "shout":
