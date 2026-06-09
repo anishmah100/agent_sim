@@ -96,7 +96,7 @@ the Fly deploy story in `deploy/`, and the onboarding + agent-join UI in
 
 ## Quality bar reminders (durable)
 
-- HeartGold-tier visuals — see `docs/ARCHITECTURE.md`.
+- console-grade visuals — see `docs/ARCHITECTURE.md`.
 - Engine stays dumb; scenarios stay smart — `docs/ARCHITECTURE.md` §2.
 - One process per world — multi-tenant per-process out of scope.
 - Sprite handling: one at a time, manual inspection, no folder-glob scripts (re-affirmed multiple times during the v2 art cleanup).

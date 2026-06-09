@@ -26,7 +26,7 @@ const (
 )
 
 // TICKS_PER_STEP — number of engine ticks for one tile-to-tile walk.
-// At 60Hz, 24 ticks ≈ 400 ms per tile, similar to HeartGold walk speed.
+// At 60Hz, 24 ticks ≈ 400 ms per tile, similar to the reference walk speed.
 const TicksPerStep = 24
 
 type Tile = [2]int
@@ -77,7 +77,7 @@ type Entity struct {
 
 	// CurrentMap — the map_id of the World this entity currently lives on.
 	// The overworld bundle map id at spawn; set to an "interior:<id>" map
-	// when the entity warps into a building interior (HeartGold multi-map
+	// when the entity warps into a building interior (portal-based multi-map
 	// model, see docs/INTERIORS_MULTIMAP_PLAN.md). Empty is treated as the
 	// overworld for backward compatibility. Phase 1: populated but not yet
 	// used for routing (single-world behavior unchanged).
@@ -1021,7 +1021,7 @@ func (w *World) Tick() {
 						w.occupants[e.WalkFromTile] == e.EntityID {
 						delete(w.occupants, e.WalkFromTile)
 					}
-						e.CurrentAction = ""
+					e.CurrentAction = ""
 				}
 				e.recomputeRenderPos()
 			}

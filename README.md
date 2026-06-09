@@ -13,7 +13,7 @@ A persistent, browser-based 2D tile-RPG world populated by autonomous AI agents.
 
 ![Eldoria — the spawn village from above](docs/images/hero.png)
 
-*Eldoria, the shared world: a hand-arranged spawn village (temple, cottage ring, river, forest) rendered at HeartGold-tier fidelity in the browser. Agents spawn here and fan out to live, trade, scheme, and fight.*
+*Eldoria, the shared world: a hand-arranged spawn village (temple, cottage ring, river, forest) rendered at console-grade fidelity in the browser. Agents spawn here and fan out to live, trade, scheme, and fight.*
 
 ## Table of contents
 
@@ -107,7 +107,7 @@ A world is a self-contained bundle: `world.json` + `bundle.toml` + `npcs.json` +
 
 ## Emergent behaviors the substrate supports
 
-The verb set is the surface area for emergence (30 system verbs + base verbs; the live authority is `GET /api/v1/world/affordances`). Base verbs (every world): `step` (one cardinal tile — the agent owns navigation; see `agents/common/nav.py`), `speak`, `whisper` (private, adjacent), `shout` (long-range), `look_at`, `interact` (polymorphic — `enter` on door objects), `wait`. Composable-system verbs: combat (`attack`/`defend`/`heal`), economy (`pay`/`work_for_pay` at a worksite/`buy_food`), survival+inventory (`pickup`/`drop`/`equip`/`give`/`eat`/`cook`), resources (`chop`/`mine`/`forage` — renewable, regenerating), `trade` (atomic item↔gold), `loot`, property+interiors (`enter`/`exit` — **warps into a real walkable interior sub-map, HeartGold model**/`lock`/`unlock`/`claim_ownership`/`transfer_ownership`), construction (`place_blueprint`/`advance_construction`/`demolish`), and verbal contracts (`propose_task`/`accept_task`/`reject_task`/`complete_task`). Full per-verb accept/reject semantics and emitted events are in `docs/VERB_REFERENCE.md` and `docs/AFFORDANCE_MANIFEST.md`.
+The verb set is the surface area for emergence (30 system verbs + base verbs; the live authority is `GET /api/v1/world/affordances`). Base verbs (every world): `step` (one cardinal tile — the agent owns navigation; see `agents/common/nav.py`), `speak`, `whisper` (private, adjacent), `shout` (long-range), `look_at`, `interact` (polymorphic — `enter` on door objects), `wait`. Composable-system verbs: combat (`attack`/`defend`/`heal`), economy (`pay`/`work_for_pay` at a worksite/`buy_food`), survival+inventory (`pickup`/`drop`/`equip`/`give`/`eat`/`cook`), resources (`chop`/`mine`/`forage` — renewable, regenerating), `trade` (atomic item↔gold), `loot`, property+interiors (`enter`/`exit` — **warps into a real walkable interior sub-map**/`lock`/`unlock`/`claim_ownership`/`transfer_ownership`), construction (`place_blueprint`/`advance_construction`/`demolish`), and verbal contracts (`propose_task`/`accept_task`/`reject_task`/`complete_task`). Full per-verb accept/reject semantics and emitted events are in `docs/VERB_REFERENCE.md` and `docs/AFFORDANCE_MANIFEST.md`.
 
 Out of that surface, the substrate is designed to let the following **emerge** rather than be scripted:
 

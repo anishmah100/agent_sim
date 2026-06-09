@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Building interiors (HeartGold multi-map model).
+// Building interiors (portal-based multi-map model).
 //
 // A decoration building (sprite "bld:NNN") has no entity and no authored
 // interior. When an agent enters, we lazily generate a small walled room as

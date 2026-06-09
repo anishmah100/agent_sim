@@ -4,7 +4,7 @@ The single source of truth for every pixel in the world. If an image doesn't con
 
 ## Reference target
 
-**Pokémon HeartGold / SoulSilver (DS, 2009)** — top-down with slight 3/4 perspective. Buildings show their front face; characters draw with bottom-center anchor. Bright readable palette. Crisp pixels. Clear silhouettes.
+**Classic DS-era top-down RPG (2009)** — top-down with slight 3/4 perspective. Buildings show their front face; characters draw with bottom-center anchor. Bright readable palette. Crisp pixels. Clear silhouettes.
 
 Secondary references for specific concerns:
 - **Stardew Valley** — interior room layouts, item iconography.
@@ -81,7 +81,7 @@ We slice this in `art/intake.py`. ChatGPT generates the full sheet; we cut into 
 
 We use a **fixed 32-color palette** (candidate: Endesga 32). Every asset's pixels are quantized to this palette at intake. Off-palette colors snap to nearest.
 
-Why 32 fixed: this is what HeartGold-tier pixel art uses. More colors = harder to keep cohesive. Fewer = monotonous. 32 is the sweet spot for AAA pixel art.
+Why 32 fixed: this is what console-grade pixel art uses. More colors = harder to keep cohesive. Fewer = monotonous. 32 is the sweet spot for AAA pixel art.
 
 Final palette will be committed to `art/style.json` after we lock the visual anchor (Milestone 0).
 
@@ -120,7 +120,7 @@ Item categories for the fantasy v1:
 Generate a {asset_class} spritesheet, top-down 3/4 perspective, pixel art,
 {tile_or_sprite_dims} per cell. Layout: {layout_description}.
 
-Style reference: Pokémon HeartGold / SoulSilver visual style. Crisp pixels,
+Style reference: classic DS-era top-down RPG visuals. Crisp pixels,
 no anti-aliasing on outlines, clear silhouettes.
 
 Palette: 32 fixed colors — use {palette_summary} (see attached reference).
@@ -181,7 +181,7 @@ The UI is themed to feel cohesive with the pixel world without being pixel-rende
 - `art/references/oak_tree.png` — the one perfect tree
 - `art/references/character_template.png` — the one perfect base character
 - `art/references/building_house.png` — the one perfect small house
-- `art/references/heartgold_sample.png` — a captured HeartGold screen for comparison
+- `art/references/style_sample.png` — a captured reference screen for comparison
 
 These are the visual anchors. Every subsequent generation is judged against them.
 

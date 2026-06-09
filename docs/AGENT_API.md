@@ -297,7 +297,7 @@ Bots can pattern-match on these:
 - `out_of_map` — coordinate not on this map.
 - `inside_building` — (legacy flag path only) entity is inside a building via
   the old phase-out model and tried an overworld-only verb. With the current
-  HeartGold interior model the agent is warped onto a real interior sub-map and
+  the reference interior model the agent is warped onto a real interior sub-map and
   acts normally there (walk/look/speak), so this reason isn't hit for decoration
   buildings.
 - `rate_limited` — action rate cap exceeded.
@@ -366,7 +366,7 @@ class HierarchicalBot:
 
 Researchers get the pattern out of the box; can swap their own brain logic.
 
-## Building interiors (HeartGold model)
+## Building interiors (portal sub-map model)
 
 Buildings in Eldoria are decorations with a door tile, exposed in
 `visible_objects` as `door:bld:NNN:x,y` (affordance `enter`) when the door is in

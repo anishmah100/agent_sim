@@ -602,7 +602,7 @@ export class EntityLayer {
       // Bottom-center anchor: every frame was tight-cropped, bottom
       // pixel = foot.
       sprite.anchor.set(0.5, 1);
-      // HeartGold standard: character is 1.5 tiles tall (24 world px
+      // the reference standard: character is 1.5 tiles tall (24 world px
       // on our 16 px tiles), centered horizontally on the footprint,
       // foot pixel at the bottom row of the footprint tile (y = 15
       // is the last pixel of a 16 px tile, not y = 16 which is the

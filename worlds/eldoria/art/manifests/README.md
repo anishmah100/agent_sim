@@ -40,7 +40,7 @@ One JSON manifest per processed tileset, declaring every named sprite within. Bu
    └─────────────────┘
 ```
 
-Why this works for HeartGold-style top-down:
+Why this works for the reference-style top-down:
 - Player walks AROUND the rectangular footprint
 - When the player is south of the footprint, Y-sort draws them ON TOP of the building (looks like standing in front)
 - When the player is north of the footprint, they draw BEHIND the building's roof — looks like they walked behind it

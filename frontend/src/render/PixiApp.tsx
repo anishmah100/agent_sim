@@ -41,7 +41,7 @@ export interface PixiHandle {
   viewport: Viewport;
   loadWorld(data: TileMapData): void;
   setEntities(entities: EntityState[]): void;
-  /** Feed building-interior occupants (HeartGold phase 4): when the interior
+  /** Feed building-interior occupants (interior phase 4): when the interior
    *  view is open for a building, render the live agents inside it. */
   setInteriors(views: InteriorView[]): void;
   getEntities(): EntityState[];
@@ -177,7 +177,7 @@ export async function mountPixiApp(host: HTMLElement): Promise<PixiHandle> {
   decorations.onBuildingClick(async (ev) => {
     if (editorActive) return;
     // Pass the footprint so live occupants can be matched to THIS building
-    // instance (HeartGold phase 4), then immediately render anyone inside.
+    // instance (interior phase 4), then immediately render anyone inside.
     await interior.show(ev.sprite, ev.x, ev.y);
     feedInteriorOccupants();
   });

@@ -87,7 +87,7 @@ If another world (e.g. "the salon", a future scenario) doesn't want money, it ju
 
 We ship when:
 1. A new user can sign up, fill the persona form, run the hello-world bot, and see their character walking around the town within ~10 minutes.
-2. The world looks like HeartGold (side-by-side comparison gate passed).
+2. The world looks like the reference (side-by-side comparison gate passed).
 3. ≥10 example agents running concurrently produce visible emergent drama (talking, fighting, trading) for at least 1 hour without engine errors.
 4. Spectator mode is fluid: pan + zoom across the 1000×1000 map at 60fps in a modern browser.
 5. The story feed shows correct, complete recent history for every agent.

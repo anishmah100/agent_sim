@@ -124,7 +124,7 @@ What this means:
   map** by remembering successive `local_view` windows as it explores — like a
   person walking an unfamiliar city, not one handed a street map.
 - Building **interiors are separate sub-maps** reached by `enter`-ing a door
-  (HeartGold model); an agent only perceives an interior's tiles once it's
+  (portal sub-map model); an agent only perceives an interior's tiles once it's
   inside. Doors appear in `visible_objects` when in vision + line-of-sight.
 - No street names / named regions / portal index are provided.
 

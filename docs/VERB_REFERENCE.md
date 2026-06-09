@@ -277,7 +277,7 @@ Take gold + clear inventory from an adjacent **corpse** (HP 0). Emits
 `enter {target}` / `exit {}` — step into / out of a building. For Eldoria's
 **decoration buildings** the target is the door object id from
 `visible_objects` (`door:bld:NNN:x,y`); entering **warps the agent into a
-separate interior sub-map** (HeartGold model — see
+separate interior sub-map** (portal sub-map model — see
 `docs/INTERIORS_MULTIMAP_PLAN.md`) where it can walk around; `exit` warps it
 back to the door. Entity-backed buildings (from construction) use the same
 verbs with a building entity id. Emits `EnteredBuilding` / `ExitedBuilding`.

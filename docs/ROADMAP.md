@@ -1,6 +1,6 @@
 # ROADMAP
 
-Sequenced milestones with explicit screenshot / validation gates. Each milestone ends with a side-by-side comparison against HeartGold-tier references. **A milestone is not done unless its gate passes.**
+Sequenced milestones with explicit screenshot / validation gates. Each milestone ends with a side-by-side comparison against console-grade references. **A milestone is not done unless its gate passes.**
 
 Estimates assume one engineer (Claude) executing autonomously with periodic the maintainer review. **Total: 10–14 weeks to launch.**
 
@@ -16,12 +16,12 @@ Goal: lock the visual bar before any world is built. Establish repo + tooling.
 - Generate ONE perfect tile + tree + character + small building via ChatGPT using frozen prompts.
 - Run them through the validation pipeline (palette quantize, dim check, halo cleanup).
 - Composite them in a static PNG test scene.
-- **Side-by-side comparison vs. a HeartGold screenshot.** If gap is too large, switch to buying base tileset for Phase 1 and reserve AI for fills.
+- **Side-by-side comparison vs. a reference screenshot.** If gap is too large, switch to buying base tileset for Phase 1 and reserve AI for fills.
 - Scaffold the monorepo: `engine/`, `frontend/`, `sdk/`, `art/`, `scenarios/fantasy_town/`, `worlds/`, `schemas/`.
 - Set up CI: lint, type-check, unit tests.
 
 **Gate:**
-- `art/references/` has 4 locked anchor images + a HeartGold comp image.
+- `art/references/` has 4 locked anchor images + a reference comp image.
 - the maintainer visually approves the anchor.
 - Monorepo builds; CI runs.
 
@@ -43,7 +43,7 @@ Goal: a single 32×24 tile screen rendering correctly in PixiJS, end-to-end.
 **Gate:**
 - Screenshot: full world visible, can zoom 0.5×–3×, pan smoothly.
 - Pixel-perfect rendering verified at each zoom level.
-- Compare to HeartGold reference: silhouettes, palette, tile cohesion.
+- Compare to the reference: silhouettes, palette, tile cohesion.
 - Visual regression test framework in place; first set of golden PNGs committed.
 
 ---
@@ -62,7 +62,7 @@ Goal: characters walk; world has a proper day/night cycle.
 **Gate:**
 - Recording: NPC walks smoothly in 4 directions, animation feels natural.
 - Day/night cycle: no rectangle misalignment, transitions smooth.
-- Side-by-side vs. HeartGold walk + day/night.
+- Side-by-side vs. the reference walk + day/night.
 - Visual regression: snapshots at noon and midnight committed.
 
 ---
@@ -143,7 +143,7 @@ Goal: the actual launch world (small first), with scenario verbs + economy.
 **Gate:**
 - A user can spawn into the town, walk around, enter the tavern, buy bread from the baker, fight an NPC, die, respawn.
 - 10 NPCs produce visible emergent drama (gossip, trades, fights) over a 30-minute observation.
-- Side-by-side vs. HeartGold town reference.
+- Side-by-side vs. town reference.
 - Visual regression coverage for every named building.
 
 ---
@@ -169,7 +169,7 @@ Goal: users sign up, attach an agent, the world persists.
 
 ## Milestone 8 — Polish pass + visual regression hardening (Week 9)
 
-Goal: every UI element passes the HeartGold gate. Visual regression covers every screen.
+Goal: every UI element passes the style gate. Visual regression covers every screen.
 
 **Tasks:**
 - Top bar redesign with proper typography.
@@ -183,7 +183,7 @@ Goal: every UI element passes the HeartGold gate. Visual regression covers every
 **Gate:**
 - Every screen has a committed wireframe + screenshot match.
 - Visual regression CI passes for: home, world view, inspector open, story feed, login.
-- the maintainer review: "this looks like HeartGold."
+- the maintainer review: "this looks like the reference."
 
 ---
 
@@ -201,7 +201,7 @@ Goal: scale the world from 256×256 to 1000×1000. Verify chunked streaming.
 - 1000×1000 world rendered. Pan from corner to corner takes <2 seconds.
 - 200 agents running. 60Hz tick maintained.
 - 50 simultaneous viewer connections, no perceived lag.
-- Side-by-side vs. HeartGold regional map screenshots.
+- Side-by-side vs. the reference regional map screenshots.
 
 ---
 

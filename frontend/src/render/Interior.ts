@@ -7,7 +7,7 @@
 //   props{}   — furniture sprites placed at specific tile coords; some
 //               span multiple tiles (king bed = 2 tiles wide)
 //
-// Design goal (per Pokemon HeartGold): rooms should look like real
+// Design goal (classic top-down RPG): rooms should look like real
 // rooms. That means:
 //   - Top wall row uses a window-decorated wall tile (the iconic
 //     blue-square panes you see in HG interiors).
@@ -394,7 +394,7 @@ export class InteriorLayer {
 
   private keyHandler: ((e: KeyboardEvent) => void) | null = null;
 
-  // Live-occupant rendering (HeartGold phase 4): the building currently open
+  // Live-occupant rendering (interior phase 4): the building currently open
   // + the layer agent markers draw into. Set on show(), fed each viewer tick
   // by setOccupants().
   private occupantsBox: Container | null = null;

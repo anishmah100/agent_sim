@@ -38,7 +38,7 @@ var upgrader = websocket.Upgrader{
 type ViewerHub struct {
 	w *world.World
 	// hub — multi-map hub; lets the viewer broadcast building-interior
-	// occupants so the frontend can render agents inside (HeartGold).
+	// occupants so the frontend can render agents inside (portal sub-map model).
 	hub *world.MultiMapHub
 
 	mu      sync.Mutex
@@ -193,7 +193,7 @@ type viewerMessage struct {
 	Snapshot *world.WorldSnapshot `json:"snapshot,omitempty"`
 	Audible  []world.AudibleEvent `json:"audible,omitempty"`
 	// Interiors — one entry per currently-occupied building interior
-	// (HeartGold model). Lets the frontend render the live agents inside a
+	// (portal sub-map model). Lets the frontend render the live agents inside a
 	// building when the viewer follows/opens it. Empty/absent when nobody
 	// is inside anything.
 	Interiors []interiorView `json:"interiors,omitempty"`

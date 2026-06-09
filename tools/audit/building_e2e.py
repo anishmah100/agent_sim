@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit harness S5 — building interiors end-to-end (HeartGold model) live.
+"""Audit harness S5 — building interiors end-to-end (portal sub-map model) live.
 
 Drives an agent to a building door, enters, asserts it is now ON A SEPARATE
 INTERIOR MAP (small coords + walled local_view), WALKS AROUND inside (pos

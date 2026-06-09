@@ -18,7 +18,7 @@ export interface WorldSnapshot {
   entities: EntityState[];
 }
 
-/** A building interior's live occupants (HeartGold model). Sent by the engine
+/** A building interior's live occupants (portal sub-map model). Sent by the engine
  *  so the frontend can render agents INSIDE a building. */
 export interface InteriorView {
   map_id: string;

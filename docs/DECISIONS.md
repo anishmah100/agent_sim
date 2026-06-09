@@ -12,12 +12,12 @@ Round 2 of the project. Round 1 (`~/projects/province_sim/`) shipped a working s
 
 **Question:** Which reference is closest to the look you want? Cascades into tile size, art budget, sprite dims, AI gen approach.
 
-**Answer:** **Pokémon HeartGold/SoulSilver** — DS-era top-down, 16×16 tiles, ~16×24 character sprites, slight 3/4 lean. Most viable AI-gen-friendly target.
+**Answer:** **Classic DS-era top-down RPG** — 16×16 tiles, ~16×24 character sprites, slight 3/4 lean. Most viable AI-gen-friendly target.
 
 **Implications baked into plan:**
 - Tile size locked at 16×16.
 - Sprite dims locked at 16×24 with bottom-center anchor.
-- Reference screenshots from HeartGold pinned for every comparison gate.
+- Reference screenshots from the reference pinned for every comparison gate.
 
 ---
 
@@ -38,7 +38,7 @@ Round 2 of the project. Round 1 (`~/projects/province_sim/`) shipped a working s
 
 **Question:** Strict top-down, slight 3/4 lean, or full isometric?
 
-**Answer:** **3/4 lean like HeartGold.** Building façades visible. Characters drawn from slight front-3/4.
+**Answer:** **3/4 lean like the reference.** Building façades visible. Characters drawn from slight front-3/4.
 
 **Implications:**
 - Buildings are taller-than-wide multi-tile sprites with visible front faces.
@@ -235,7 +235,7 @@ the maintainer approved this plan.
 
 **Question:** Sub-maps with portals, inline (Stardew model), hybrid, or seamless?
 
-**Answer:** **Sub-maps; doors are portals.** HeartGold model.
+**Answer:** **Sub-maps; doors are portals.**
 
 **Implications:**
 - LDtk's linked-levels feature is used.
@@ -366,7 +366,7 @@ the maintainer approved this plan.
 
 ## Q30: Polish guarantee
 
-**Question (from the maintainer mid-session):** We need a CLEAR plan to reach HeartGold-tier quality. Round 1 had no path there.
+**Question (from the maintainer mid-session):** We need a CLEAR plan to reach console-grade quality. Round 1 had no path there.
 
 **Answer:** Captured in full in `docs/ARCHITECTURE.md`. Key commitments:
 1. Lock visual anchor with a real reference set BEFORE generating world art.
@@ -378,7 +378,7 @@ the maintainer approved this plan.
 7. Visual regression CI from day 1.
 8. Reference-comparison gate at every milestone.
 9. Buy or commission if 3 generation attempts don't pass the bar.
-10. The "does this look like HeartGold?" question is the gate.
+10. The "does this look like the reference?" question is the gate.
 
 ---
 

@@ -219,7 +219,7 @@ func main() {
 	}
 
 	// Multi-map hub: the overworld plus any building interiors loaded at
-	// runtime (HeartGold model). The agent hub routes each agent's
+	// runtime (portal sub-map model). The agent hub routes each agent's
 	// observations/actions to whichever map it's standing on. With only the
 	// overworld loaded, behavior is identical to the single-world engine.
 	mmhub := world.NewMultiMapHub(w)

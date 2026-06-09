@@ -17,7 +17,7 @@
 > "the agent pathfinds and emits `step`". The collision/occupancy/render-lerp
 > sections remain accurate.
 
-> Synthesized from field-tested patterns: Pokémon HeartGold (DS), Link to the Past (SNES), Stardew Valley, Tibia, and the cooperative-pathfinding literature (Silver's WHCA\*, conflict-based search). Sources at the bottom.
+> Synthesized from field-tested patterns: Pokémon (DS), Link to the Past (SNES), Stardew Valley, Tibia, and the cooperative-pathfinding literature (Silver's WHCA\*, conflict-based search). Sources at the bottom.
 
 ## Why a discrete model beats float positions
 

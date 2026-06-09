@@ -94,7 +94,7 @@ whitelist → `extras_summary`.)
   deplete, and **regenerate** every `resource_regen_interval`=1800.
 - **Events:** `ResourceHarvested`, `ResourceDepleted`. Respects the 10-slot cap.
 
-## property + interiors (HeartGold multi-map)
+## property + interiors (portal-based multi-map)
 - **Owns:** buildings as owned/lockable spaces. Verbs `enter`, `exit`, `lock`,
   `unlock`, `claim_ownership`, `transfer_ownership` (new owner must be an agent
   — audit [32]).

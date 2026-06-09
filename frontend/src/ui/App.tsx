@@ -494,7 +494,7 @@ export function App() {
       },
       onInteriors: (views) => {
         // Feed building-interior occupants so an open interior view renders
-        // the live agents inside it (HeartGold phase 4).
+        // the live agents inside it (interior phase 4).
         pixiHandle?.setInteriors(views);
       },
     });

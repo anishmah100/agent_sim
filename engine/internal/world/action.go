@@ -77,7 +77,7 @@ func (w *World) Dispatch(e *Entity, env *ActionEnvelope) ActionResult {
 			return r
 		}
 	}
-	// Exit from a building interior (HeartGold model): the agent is on an
+	// Exit from a building interior (portal sub-map model): the agent is on an
 	// interior sub-map; warp it back to the overworld door tile. Interiors
 	// carry no property system, so this is handled in core dispatch.
 	if env.Verb == "exit" && w.hub != nil && strings.HasPrefix(w.MapID, "interior:") {
@@ -317,7 +317,7 @@ func (w *World) tryEnterDecorationBuilding(e *Entity, env *ActionEnvelope) (Acti
 		radius:    8,
 	})
 
-	// HeartGold model: warp into a real interior sub-map when a hub is
+	// portal sub-map model: warp into a real interior sub-map when a hub is
 	// present. Lazily generate the building's interior (keyed by its door
 	// tile so each building instance is its own room), then queue the
 	// cross-map move for after the tick (Warp can't run under this lock).

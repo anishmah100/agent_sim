@@ -1,5 +1,5 @@
 {
-  "$comment": "Style guide as code. Every AI-generated asset is validated against this. Locked 2026-06-02. Reference: art/references/heartgold_sample.png (TBD — captured during Milestone 0).",
+  "$comment": "Style guide as code. Every AI-generated asset is validated against this. Locked 2026-06-02. Reference: art/references/style_sample.png (TBD — captured during Milestone 0).",
 
   "tile_px": 16,
   "char_sprite_px": [16, 24],
