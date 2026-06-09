@@ -62,3 +62,6 @@ worlds/*/decoration_edits.json
 
 # ── Claude Code session metadata ─────────────────────────────────────
 .claude/
+
+# Python build artifacts
+*.egg-info/
