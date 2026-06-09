@@ -26,7 +26,24 @@ import { OutlineFilter } from "pixi-filters";
 import { TILE_SIZE_PX } from "./tiles";
 import { artCatalog } from "./ArtCatalog";
 import { pickCharacterId, type EntityState } from "./Entity";
-import type { CharacterAtlas } from "./CharacterAtlas";
+import type { CharacterAtlas, CharacterAnim, CharacterSpec } from "./CharacterAtlas";
+
+// One rendered occupant inside the room.
+interface Occupant {
+  container: Container;
+  sprite: AnimatedSprite | null;
+  spec: CharacterSpec | null;
+  lastTx: number;
+  lastTy: number;
+  lastAnim: CharacterAnim;
+}
+
+// Movement delta -> walk animation (matches overworld facing).
+function dirAnim(dtx: number, dty: number): CharacterAnim | null {
+  if (dtx === 0 && dty === 0) return null;
+  if (Math.abs(dtx) >= Math.abs(dty)) return dtx > 0 ? "walk_right" : "walk_left";
+  return dty > 0 ? "walk_down" : "walk_up";
+}
 
 const ENGINE_URL =
   import.meta.env.VITE_ENGINE_URL ?? "http://127.0.0.1:8080";
@@ -385,7 +402,7 @@ export class InteriorLayer {
   private curSprite: string | null = null;
   private curFootprint: { x: number; y: number } | null = null;
   private curTpl: { width: number; height: number } | null = null;
-  private occupantSprites = new Map<string, Container>();
+  private occupants = new Map<string, Occupant>();
 
   constructor(private app: Application) {
     this.container = new Container();
@@ -479,7 +496,7 @@ export class InteriorLayer {
     this.curSprite = null;
     this.curFootprint = null;
     this.curTpl = null;
-    this.occupantSprites.clear();
+    this.occupants.clear();
     this.fadeOut(180, () => {
       this.container.visible = false;
       this.clear();
@@ -502,21 +519,31 @@ export class InteriorLayer {
       const oy = engineH > 1 ? e.pos[1] / (engineH - 1) : 0.5;
       const tx = Math.max(1, Math.min(tpl.width - 2, Math.round(ox * (tpl.width - 1))));
       const ty = Math.max(1, Math.min(tpl.height - 2, Math.round(oy * (tpl.height - 1))));
-      let marker = this.occupantSprites.get(e.entity_id);
-      if (!marker) {
-        marker = this.makeOccupantMarker(e);
-        this.occupantsBox.addChild(marker);
-        this.occupantSprites.set(e.entity_id, marker);
+      let occ = this.occupants.get(e.entity_id);
+      if (!occ) {
+        occ = this.makeOccupantMarker(e);
+        occ.lastTx = tx; occ.lastTy = ty;
+        this.occupantsBox.addChild(occ.container);
+        this.occupants.set(e.entity_id, occ);
       }
+      // Face the movement direction (like the overworld) — swap the walk
+      // animation when the tile changed.
+      const anim = dirAnim(tx - occ.lastTx, ty - occ.lastTy);
+      if (anim && occ.sprite && occ.spec && anim !== occ.lastAnim) {
+        occ.sprite.textures = occ.spec.anims[anim];
+        occ.sprite.play();
+        occ.lastAnim = anim;
+      }
+      occ.lastTx = tx; occ.lastTy = ty;
       // Center the marker on the tile (bottom-anchored feel).
-      marker.x = tx * TILE_SIZE_PX + TILE_SIZE_PX / 2;
-      marker.y = ty * TILE_SIZE_PX + TILE_SIZE_PX;
+      occ.container.x = tx * TILE_SIZE_PX + TILE_SIZE_PX / 2;
+      occ.container.y = ty * TILE_SIZE_PX + TILE_SIZE_PX;
     }
     // Drop markers for agents that left.
-    for (const [id, m] of [...this.occupantSprites]) {
+    for (const [id, occ] of [...this.occupants]) {
       if (!seen.has(id)) {
-        m.destroy();
-        this.occupantSprites.delete(id);
+        occ.container.destroy();
+        this.occupants.delete(id);
       }
     }
   }
@@ -527,12 +554,13 @@ export class InteriorLayer {
     this.atlas = atlas;
   }
 
-  private makeOccupantMarker(e: EntityState): Container {
+  private makeOccupantMarker(e: EntityState): Occupant {
     const c = new Container();
     // Real character sprite from the atlas — identical to the overworld
     // EntityLayer so an agent looks the same inside as out. Falls back to a
     // simple avatar only if the atlas hasn't loaded yet.
-    const spec = this.atlas?.get(pickCharacterId(e));
+    const spec = this.atlas?.get(pickCharacterId(e)) ?? null;
+    let animSprite: AnimatedSprite | null = null;
     if (spec) {
       // Drop shadow at the feet (matches overworld JRPG polish).
       const shadow = new Graphics();
@@ -547,6 +575,7 @@ export class InteriorLayer {
       sprite.texture.source.scaleMode = "nearest";
       sprite.play();
       c.addChild(sprite);
+      animSprite = sprite;
     } else {
       const body = new Graphics();
       body.circle(0, -3, 4).fill({ color: 0xffd479 }).stroke({ color: 0x181425, width: 1 });
@@ -569,7 +598,7 @@ export class InteriorLayer {
       label.y = this.atlas ? -26 : -12;
       c.addChild(label);
     }
-    return c;
+    return { container: c, sprite: animSprite, spec, lastTx: 0, lastTy: 0, lastAnim: "walk_down" };
   }
 
   private fadeIn(ms: number): void {
@@ -597,7 +626,7 @@ export class InteriorLayer {
   private clear(): void {
     for (const c of [...this.container.children]) c.destroy();
     this.occupantsBox = null;
-    this.occupantSprites.clear();
+    this.occupants.clear();
   }
 
   private async render(tpl: InteriorTemplate, buildingSprite: string): Promise<void> {
