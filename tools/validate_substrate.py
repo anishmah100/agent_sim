@@ -7,7 +7,7 @@ If ANY check fails, the substrate is broken — do NOT trust
 experiment results until it's green.
 
 Usage:
-    cd ~/projects/agent_sim
+    cd <repo>
     PYTHONPATH=sdk/python python3 tools/validate_substrate.py
 
 Exits 0 on green, non-zero on any failure. Prints per-check

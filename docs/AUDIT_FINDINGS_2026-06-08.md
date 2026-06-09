@@ -41,7 +41,7 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **status:** [x] FIXED (manifest)
 
 ## [6] MEDIUM · inventory — give bypasses the 10-slot inventory cap (DefaultMaxSlots) — recipient can be pushed past the documented limit
-- **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :491-495
+- **file:** `<repo>/engine/internal/systems/inventory/inventory.go` :491-495
 - **why:** DefaultMaxSlots (=10) is documented as a hard cap (lines 43-47) and pickup is the only verb that enforces it (line 283 returns inventory_full). handleGive appends to the recipient's inventory unconditionally with no length check and never returns inventory_full. An adversarial or cooperating agent can give items to a target that already holds 10, growing inventories without bound. Two agents can also ping-pong items to defeat the cap. This breaks the slot-cap invariant the rest of the system (and the LLM's mental model / render_self) assumes, and is an unbounded-growth hazard over long runs. The manifest for give doesn't even list inventory_full as a possible reason, confirming the gate was never wired here.
 - **repro:** Agent A (inventory at 10) cannot pickup more, but Agent B standing within pay_max_range can give A an 11th, 12th, ... item; each succeeds with Accepted=true and no inventory_full rejection.
 - **status:** [x] FIXED
@@ -149,43 +149,43 @@ Status legend: [ ] open · [x] fixed (commit) · [~] verified-not-a-bug · [defe
 - **status:** [x] FIXED
 
 ## [24] LOW · money — pay returns rejection reasons (not_a_target, self_target) that are not declared in its manifest
-- **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :104-110 (returns), 225 (manifest declares only bad_params/unknown_target/target_too_far/not_enough_gold)
+- **file:** `<repo>/engine/internal/systems/money/money.go` :104-110 (returns), 225 (manifest declares only bad_params/unknown_target/target_too_far/not_enough_gold)
 - **why:** handlePay can return Reason="not_a_target" (line 105, target is not an agent archetype) and Reason="self_target" (line 109, paying yourself), but the manifest's RejectionReasons for pay (line 225) lists only [bad_params, unknown_target, target_too_far, not_enough_gold]. This manifest is rendered into the agent-facing rulebook (worlds/eldoria/rulebook.json lines 458-463 confirm only the 4 declared reasons are published, and AGENT_API.md/WorldRulebook.tsx surface it to agents). An adversarial or even cooperative LLM agent that hits self_target or not_a_target receives an undocumented failure code it cannot reason about, breaking the affordance contract the whole system is built around. The svc.Pay path can also return "unknown_target" again which IS declared, so the gap is specifically the two handler-level reasons.
 - **repro:** Agent submits pay{target=<own id>, amount=1} -> handler returns Reason="self_target" (line 109), a code absent from the published pay rejection_reasons. Likewise pay{target=<a non-agent entity id>, amount=1} -> Reason="not_a_target" (line 105).
 - **status:** [x] FIXED (manifest)
 
 ## [25] LOW · money — pay manifest precondition 'target within 1 tile' contradicts the configurable pay_max_range_tiles (eldoria uses 3)
-- **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :117-124 (range logic), 224 (static precondition string)
+- **file:** `<repo>/engine/internal/systems/money/money.go` :117-124 (range logic), 224 (static precondition string)
 - **why:** handlePay enforces range via w.TuningInt("pay_max_range_tiles", 1) (line 117), and eldoria sets pay_max_range_tiles=3 (worlds/eldoria/rules.star:39). But the manifest precondition is the hardcoded string "target within 1 tile" (money.go:224), which is rendered verbatim into the agent rulebook (rulebook.json:455). Agents are told payment requires strict adjacency when it actually succeeds up to 3 tiles, so they under-use the verb and may keep trying to path onto an exactly-adjacent tile of a moving target -- the very coordination failure the configurable range was added to fix. The description text cannot reflect a tuning because it is a constant Go string.
 - **repro:** Load eldoria (pay_max_range_tiles=3), inspect rulebook.json pay.preconditions -> 'target within 1 tile'; submit pay at Chebyshev distance 2 or 3 -> accepted, contradicting the published precondition.
 - **status:** [x] FIXED
 
 ## [26] LOW · money — buy_food coin_clink/sound and event manifest accurate, but SoundDecl EmittedBy under-reports producers (Pay service drives coin_clink for loot+trade too)
-- **file:** `~/projects/agent_sim/engine/internal/systems/money/money.go` :249 (SoundDecl says 'pay + buy_food verbs'), 283 (service.Pay emits coin_clink)
+- **file:** `<repo>/engine/internal/systems/money/money.go` :249 (SoundDecl says 'pay + buy_food verbs'), 283 (service.Pay emits coin_clink)
 - **why:** service.Pay() emits the coin_clink sound (line 283) and is invoked not only by the pay verb but also by loot (loot.go:59) and trade. The money manifest SoundDecl (line 249) documents coin_clink as 'EmittedBy: pay + buy_food verbs', so a consumer of the manifest under-counts the verbs/causes that can produce the sound. This is a documentation-vs-behavior drift in the manifest, not an exploit; impact is limited to anyone reasoning about sound provenance from the manifest.
 - **repro:** Trigger a loot of a corpse with gold -> service.Pay emits coin_clink, but manifest claims only pay+buy_food emit it.
 - **status:** [x] NOTED (trivial; money manifest accurate for its verbs)
 
 ## [27] LOW · inventory — pickup returns rejection reason 'money_service_missing' that is not in the manifest's declared RejectionReasons
-- **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :272 (returned) vs 511 (declared)
+- **file:** `<repo>/engine/internal/systems/inventory/inventory.go` :272 (returned) vs 511 (declared)
 - **why:** handlePickup can return Reason="money_service_missing" (line 272) when the money service is absent, but the pickup VerbDeclaration only declares RejectionReasons {bad_params, not_an_item, target_too_far, inventory_full} (line 511). The manifest is the contract the agent SDK and LLM use to interpret rejections; an undeclared reason is unmappable by clients and violates the manifest-completeness invariant the audit checks for.
 - **repro:** Run pickup on a coin/gem kind in a world where no 'money' service is registered; the handler returns a reason not present in the manifest.
 - **status:** [x] FIXED (manifest)
 
 ## [28] LOW · inventory — give returns reasons 'not_a_target' and 'self_target' that are not in the manifest's declared RejectionReasons
-- **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :463 and 467 (returned) vs 525 (declared)
+- **file:** `<repo>/engine/internal/systems/inventory/inventory.go` :463 and 467 (returned) vs 525 (declared)
 - **why:** handleGive can return Reason="not_a_target" (target not an agent archetype, line 463) and Reason="self_target" (line 467), but the give VerbDeclaration only declares {bad_params, unknown_target, target_too_far, not_in_inventory} (line 525). These two reasons are undeclared, so clients consuming the manifest cannot map them. Same manifest-contract violation as the pickup case.
 - **repro:** give with target = a non-agent entity returns not_a_target; give with target == self returns self_target. Neither is in the declared list.
 - **status:** [x] FIXED (manifest)
 
 ## [29] LOW · inventory — handleCook can mint duplicate inventory item IDs (item:<kind>#<tick>) that collide across entities, breaking the unique-id invariant
-- **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :221
+- **file:** `<repo>/engine/internal/systems/inventory/inventory.go` :221
 - **why:** The cooked item id is built solely from the cooked kind + the current tick: fmt.Sprintf("item:%s#%d", cooked, w.Tick()). The '#<entityid>' suffix that pickup uses to keep carried items unique (see comment lines 287-296) is replaced by '#<tick>', which is not unique across entities. Two agents cooking the same raw food on the same tick produce identical inventory ids; if one later gives the cooked item to the other, the recipient now holds two identical ids, and indexOf/removeAt in eat/drop/give will always resolve to the first match, so the wrong item slot can be consumed/removed. This silently violates the documented per-item uniqueness the give/drop/eat targeting relies on.
 - **repro:** Two agents each cook fish_raw on the same tick -> both get 'item:fish_cooked#<sameTick>'; agent A gives its cooked fish to B; B now has two identical ids and a subsequent eat/give on that id targets the first occurrence regardless of which was intended.
 - **status:** [x] FIXED
 
 ## [30] LOW · inventory — Items() and extrasStrSlice return the live backing inventory slice, enabling external aliasing/corruption
-- **file:** `~/projects/agent_sim/engine/internal/systems/inventory/inventory.go` :585-591 and 595-613
+- **file:** `<repo>/engine/internal/systems/inventory/inventory.go` :585-591 and 595-613
 - **why:** service.Items returns extrasStrSlice(e,"inventory"), and the []string case of extrasStrSlice (line 601) returns the stored slice directly with no copy. Any consumer that appends to or indexes-assigns the returned slice mutates the owner's live inventory (and in-capacity appends from one entity can clobber data shared via the backing array). No current consumer corrupts it, but the contract is unsafe: callers reasonably expect a snapshot. Compare with the deliberate copy made in trade.go line 82.
 - **repro:** Call inv.Items(w, id) then append/assign into the result with spare capacity; the owning entity's inventory mutates without going through MutateEntity.
 - **status:** [x] FIXED

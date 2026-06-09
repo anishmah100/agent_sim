@@ -4,7 +4,7 @@ local Qwen on :8782. Runs a few decision cycles and asserts:
   - at least one action is accepted by the engine
 
 Run:
-    cd ~/projects/agent_sim
+    cd <repo>
     PYTHONPATH=sdk/python:. python3 agents/llm/tests/smoke_live.py
 """
 from __future__ import annotations

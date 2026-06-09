@@ -14,7 +14,7 @@ The runner refuses to start if /api/v1/debug/vision can't see items at
 the hub (the canary for the D8 class of bugs).
 
 Usage (engine must already be running, ideally with -time-mult 4):
-    cd ~/projects/agent_sim
+    cd <repo>
     PYTHONPATH=sdk/python:. python3 -m tools.experiments.run_p7_real \\
         --wall-seconds 240 --llm 3 --narrator
 
