@@ -23,6 +23,7 @@ SUITES = [
     ("S6 events census", "events_check.py", ["/tmp/doccap_events.jsonl", ENGINE]),
     ("S7 sdk parity", "sdk_parity.py", [ENGINE]),
     ("S12 security", "security_check.py", [ENGINE]),
+    ("S8 ui render", "ui_check.py", []),
 ]
 
 
