@@ -94,10 +94,9 @@ so buildings are unaffected by restore.
 
 ## Standing constraints (do not drift)
 
-- Commit author `anishmah100 <anishmah100@users.noreply.github.com>`; NEVER add a
-  Co-Authored-By Claude trailer. Every change = a new commit. No force-push.
-- Keep `.env.local` gitignored. Stay under the $25 Anthropic spend cap
-  (prefer Qwen local on :8782 for runs; reserve Claude brain for showcases).
+- Every change = a new commit; no force-push.
+- Keep `.env.local` gitignored (it holds the API key); prefer the local Qwen
+  model on :8782 for runs, reserve the hosted model for showcases.
 - Agent art: one sprite at a time, manual inspect, no batch glob scripts.
 - Send a render image each visual iteration; the human makes the taste call.
 
