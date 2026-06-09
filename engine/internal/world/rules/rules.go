@@ -5,8 +5,8 @@
 //   - Tunings   — scalar world parameters (hunger_per_tick, attack_damage…)
 //   - Items     — declarative item definitions (id, kind, props)
 //   - Verbs     — predicate + effect for novel verbs (Phase 5 wires
-//                 these into the engine's verb registry; for now the
-//                 loader just stores them as opaque Starlark callables).
+//     these into the engine's verb registry; for now the
+//     loader just stores them as opaque Starlark callables).
 //
 // Starlark was picked over Lua / custom YAML because it's:
 //   - hermetic by design (no I/O, no random, no clocks → deterministic
@@ -284,6 +284,20 @@ func (rs *RuleSet) GetBool(name string, defaultValue bool) bool {
 		return bool(b)
 	}
 	return defaultValue
+}
+
+// SetTuningFloat overrides (or creates) a tuning value at runtime. Used
+// by the engine's -tuning boot flag to tweak declarative tunings without
+// editing the bundle's rules.star (e.g. flooding item respawn for a demo).
+// Stored as a starlark.Float; GetInt narrows it to int on read.
+func (rs *RuleSet) SetTuningFloat(name string, value float64) {
+	if rs == nil {
+		return
+	}
+	if rs.tunings == nil {
+		rs.tunings = map[string]starlark.Value{}
+	}
+	rs.tunings[name] = starlark.Float(value)
 }
 
 // HasTuning reports whether the ruleset declared a tuning for this key.

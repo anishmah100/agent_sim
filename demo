@@ -1,0 +1,209 @@
+#!/usr/bin/env bash
+# demo — one command to bring the whole world to life for a showcase.
+#
+#   ./demo            build + start engine + frontend + the full mixed cast
+#                     (Qwen + Claude + rule-based agents), a live narrator,
+#                     and a world flooded with item drops. Opens the viewer.
+#   ./demo stop       stop everything the demo started.
+#   ./demo status     show what's running.
+#
+# Everything runs in the background and survives your shell exiting; PIDs are
+# tracked under .runlog/pids/ so `./demo stop` cleans up. Logs live in .runlog/.
+#
+# Requirements for the FULL experience (the demo degrades gracefully if any
+# are missing — you still get a lively rule-based world):
+#   - Go, Node/npm, Python 3 on PATH.
+#   - Qwen llama-server on :8782   -> enables the Qwen agents + narrator.
+#   - ANTHROPIC_API_KEY in .env.local -> enables the Claude agents.
+
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PIDDIR=".runlog/pids"
+mkdir -p .runlog "$PIDDIR" .runlog/demo
+
+ENGINE_ADDR="127.0.0.1:8080"
+VIEWER_URL="http://127.0.0.1:5173"
+QWEN_URL="${QWEN_URL:-http://127.0.0.1:8782/v1}"
+
+# Cast sizes (override via env): N Qwen + N Claude focal agents + rule cast.
+QWEN_AGENTS="${QWEN_AGENTS:-3}"
+CLAUDE_AGENTS="${CLAUDE_AGENTS:-2}"
+RULE_CAST="${RULE_CAST:-killer:1,survivor:3,manipulator:1,scavenger:2,avenger:2}"
+
+# Item flood — boot-time tuning overrides (no world files are mutated).
+ITEM_TUNING="${ITEM_TUNING:-respawn_cap=800,respawn_batch=24,respawn_radius=70,respawn_interval_ticks=120}"
+TIME_MULT="${TIME_MULT:-2.0}"
+
+PY="${PYTHON:-python3}"
+export PYTHONPATH="sdk/python:.${PYTHONPATH:+:$PYTHONPATH}"
+
+c_green() { printf '\033[32m%s\033[0m\n' "$*"; }
+c_yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
+c_red() { printf '\033[31m%s\033[0m\n' "$*"; }
+
+is_alive() { local pf="$1"; [[ -f "$pf" ]] && kill -0 "$(cat "$pf")" 2>/dev/null; }
+
+kill_pidfile() {
+  local pf="$1" label="$2"
+  if is_alive "$pf"; then
+    local pid; pid=$(cat "$pf")
+    pkill -P "$pid" 2>/dev/null || true
+    kill "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+    kill -9 "$pid" 2>/dev/null || true
+    echo "  stopped $label (pid $pid)"
+  fi
+  rm -f "$pf"
+}
+
+port_pids() {
+  # PIDs LISTENing on a TCP port — robust across engine builds/names.
+  local port="$1"
+  ss -ltnp 2>/dev/null | grep -E "[:.]$port " | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u
+  lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null | sort -u
+}
+
+kill_port() {
+  # Kill whatever is LISTENing on a port, regardless of process name. This
+  # is what defeats the stale-engine trap (an old build under a different
+  # name still holding :8080 so a fresh engine can't bind).
+  local port="$1" label="$2" pid
+  for pid in $(port_pids "$port" | sort -u); do
+    [[ -z "$pid" ]] && continue
+    pkill -P "$pid" 2>/dev/null || true
+    kill "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 0.3; done
+    kill -9 "$pid" 2>/dev/null || true
+    echo "  freed $label (:$port pid $pid)"
+  done
+}
+
+wait_for_url() {
+  local url="$1" deadline="$2" t=0
+  while ! curl -sf -m 2 "$url" >/dev/null 2>&1; do
+    sleep 0.3; t=$((t + 1))
+    if (( t > deadline * 3 )); then
+      c_red "  timed out waiting for $url"; return 1
+    fi
+  done
+}
+
+open_browser() {
+  local url="$1"
+  if command -v xdg-open >/dev/null 2>&1; then (xdg-open "$url" >/dev/null 2>&1 &) ; fi
+}
+
+cmd_stop() {
+  echo "==> stopping demo"
+  kill_pidfile "$PIDDIR/cast.pid" "cast"
+  kill_pidfile "$PIDDIR/narrator.pid" "narrator"
+  kill_pidfile "$PIDDIR/frontend.pid" "frontend"
+  kill_pidfile "$PIDDIR/engine.pid" "engine"
+  # Belt-and-suspenders for untracked orphans from earlier runs (any engine
+  # build/name, not just .runlog/engine — defeats the stale-engine trap).
+  kill_port "${ENGINE_ADDR##*:}" "engine"
+  kill_port 5173 "frontend"
+  pkill -f "tools.demo.run_cast" 2>/dev/null || true
+  pkill -f "tools.narrator" 2>/dev/null || true
+  c_green "==> stopped"
+}
+
+cmd_status() {
+  is_alive "$PIDDIR/engine.pid"   && echo "engine:   up (pid $(cat $PIDDIR/engine.pid))" || echo "engine:   down"
+  curl -sf -m 1 "$VIEWER_URL/" >/dev/null 2>&1 && echo "frontend: up ($VIEWER_URL)" || echo "frontend: down"
+  is_alive "$PIDDIR/cast.pid"     && echo "cast:     up (pid $(cat $PIDDIR/cast.pid))" || echo "cast:     down"
+  is_alive "$PIDDIR/narrator.pid" && echo "narrator: up (pid $(cat $PIDDIR/narrator.pid))" || echo "narrator: down"
+}
+
+cmd_start() {
+  echo "==> demo preflight"
+  command -v go  >/dev/null 2>&1 || { c_red "go not on PATH"; exit 1; }
+  command -v npm >/dev/null 2>&1 || { c_red "npm not on PATH"; exit 1; }
+  command -v "$PY" >/dev/null 2>&1 || { c_red "$PY not on PATH"; exit 1; }
+
+  # Load ANTHROPIC_API_KEY from .env.local so Claude agents + narrator see it.
+  if [[ -f .env.local ]]; then set -a; . ./.env.local; set +a; fi
+
+  local have_qwen="no" have_claude="no"
+  curl -sf -m 2 "$QWEN_URL/models" >/dev/null 2>&1 && have_qwen="yes"
+  [[ -n "${ANTHROPIC_API_KEY:-}" ]] && have_claude="yes"
+  echo "  Qwen llama-server (:8782): $have_qwen"
+  echo "  Claude API key:           $have_claude"
+  [[ "$have_qwen" == "no" ]]   && c_yellow "  -> Qwen agents + narrator LLM will be skipped (start llama-server on :8782 for the full show)."
+  [[ "$have_claude" == "no" ]] && c_yellow "  -> Claude agents will be skipped (set ANTHROPIC_API_KEY in .env.local for the full show)."
+
+  # Fresh start: stop anything already running so we boot a clean world.
+  cmd_stop >/dev/null 2>&1 || true
+  rm -rf .runlog/demo_snapshots          # boot fresh from the bundle, no stale dead agents
+  : > .runlog/events.jsonl               # clean event stream for the narrator (truncate BEFORE engine opens it)
+  : > .runlog/narrator.jsonl
+
+  echo "==> building engine"
+  ( cd engine && go build -o ../.runlog/engine ./cmd/engine )
+
+  echo "==> starting engine on $ENGINE_ADDR  (item flood + ${TIME_MULT}x time)"
+  nohup .runlog/engine \
+    -addr "$ENGINE_ADDR" \
+    -bundle worlds/eldoria \
+    -event-log .runlog/events.jsonl \
+    -snapshot-dir .runlog/demo_snapshots \
+    -snapshot-every 120s \
+    -cors-allow "http://127.0.0.1:5173,http://localhost:5173" \
+    -capture-reasoning \
+    -register-rate 200 -register-burst 200 \
+    -event-ring 16384 \
+    -time-mult "$TIME_MULT" \
+    -tuning "$ITEM_TUNING" \
+    -npc-config worlds/eldoria/npcs.json \
+    > .runlog/engine.log 2>&1 &
+  echo $! > "$PIDDIR/engine.pid"
+  wait_for_url "http://$ENGINE_ADDR/api/v1/world/info" 90 || { c_red "engine failed; see .runlog/engine.log"; exit 1; }
+  # Stale-engine guard: confirm OUR process is the one bound to the port and
+  # that the world booted fresh (low uptime). A leftover engine answering on
+  # :8080 would silently serve the wrong world with no item flood.
+  if grep -q "address already in use" .runlog/engine.log; then
+    c_red "engine could not bind :$ENGINE_ADDR — a stale engine is still holding it."
+    c_red "run ./demo stop, then ./demo start again."; exit 1
+  fi
+  if ! kill -0 "$(cat "$PIDDIR/engine.pid")" 2>/dev/null; then
+    c_red "engine process died after launch; see .runlog/engine.log"; exit 1
+  fi
+
+  echo "==> starting frontend (viewer)"
+  nohup bash -c "cd frontend && exec npm run dev" > .runlog/frontend.log 2>&1 &
+  echo $! > "$PIDDIR/frontend.pid"
+  wait_for_url "$VIEWER_URL/" 60 || { c_red "frontend failed; see .runlog/frontend.log"; exit 1; }
+
+  echo "==> starting narrator (Story Feed)"
+  nohup "$PY" -m tools.narrator \
+    --events .runlog/events.jsonl --out .runlog/narrator.jsonl \
+    --max-qwen-calls 100000 --max-claude-calls 30 \
+    > .runlog/demo/narrator.log 2>&1 &
+  echo $! > "$PIDDIR/narrator.pid"
+
+  echo "==> launching the cast: ${QWEN_AGENTS} Qwen + ${CLAUDE_AGENTS} Claude + rule-based ($RULE_CAST)"
+  nohup "$PY" -m tools.demo.run_cast \
+    --engine "http://$ENGINE_ADDR" \
+    --qwen "$QWEN_AGENTS" --claude "$CLAUDE_AGENTS" \
+    --cast "$RULE_CAST" --qwen-url "$QWEN_URL" \
+    > .runlog/demo/cast.log 2>&1 &
+  echo $! > "$PIDDIR/cast.pid"
+
+  echo
+  c_green "demo is live — open $VIEWER_URL"
+  echo "  • watch agents act:   click an agent (top-right picker) to follow + inspect its mind"
+  echo "  • read the story:      the Story Feed narrates kills, deals, betrayals as they happen"
+  echo "  • item drops:          loot floods the world; agents fight, trade, and forage over it"
+  echo "  • logs:                .runlog/demo/cast.log · .runlog/demo/narrator.log · .runlog/engine.log"
+  echo "  • stop everything:     ./demo stop"
+  open_browser "$VIEWER_URL"
+}
+
+case "${1:-start}" in
+  start)  cmd_start ;;
+  stop)   cmd_stop ;;
+  status) cmd_status ;;
+  restart) cmd_stop; cmd_start ;;
+  *) echo "usage: ./demo [start|stop|status|restart]"; exit 2 ;;
+esac

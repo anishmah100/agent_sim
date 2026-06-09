@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -41,25 +42,26 @@ const tickDuration = time.Second / tickRate
 // respawn_interval, etc.) remain invariant to multiplier.
 
 var (
-	flagAddr     = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
-	flagBundle   = flag.String("bundle", "worlds/eldoria", "world bundle directory (contains bundle.toml + world.json). Preferred over -world/-scenario.")
-	flagWorld    = flag.String("world", "", "[legacy] direct path to a world.json. If set, overrides -bundle's world.")
-	flagScenario = flag.String("scenario", "", "[legacy] scenario package id. If set, overrides bundle's scenario.")
-	flagEventLog          = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
-	flagEventMute         = flag.String("event-mute", "", "comma-separated list of event categories to drop (system, movement, combat, economy, social, agent_reasoning, world)")
-	flagCaptureReasoning  = flag.Bool("capture-reasoning", false, "engine-level enable for capturing per-action 'reasoning' traces. Per-agent share_reasoning must ALSO be true.")
-	flagRingSize  = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
-	flagNPCConfig = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn. If empty, falls back to the bundle's npcs.config (if any).")
-	flagSnapDir   = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
-	flagSnapEvery = flag.Duration("snapshot-every", 60*time.Second, "how often to write a snapshot (0 disables)")
-	flagTimeMult  = flag.Float64("time-mult", 1.0, "in-game time multiplier (D11). 1.0 = real-time; 4.0 = 4x speed (dev iteration); higher values pack more in-game minutes into each real minute. The engine scheduler tick rate is multiplied by this value.")
-	flagNarratorJSONL = flag.String("narrator-jsonl", ".runlog/narrator.jsonl", "path to the narrator's output JSONL, served by /api/v1/narrator/recent for the Story Feed UI. The narrator process (tools/narrator) writes it; the engine only reads it.")
+	flagAddr             = flag.String("addr", "127.0.0.1:8080", "HTTP+WS listen address")
+	flagBundle           = flag.String("bundle", "worlds/eldoria", "world bundle directory (contains bundle.toml + world.json). Preferred over -world/-scenario.")
+	flagWorld            = flag.String("world", "", "[legacy] direct path to a world.json. If set, overrides -bundle's world.")
+	flagScenario         = flag.String("scenario", "", "[legacy] scenario package id. If set, overrides bundle's scenario.")
+	flagEventLog         = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
+	flagEventMute        = flag.String("event-mute", "", "comma-separated list of event categories to drop (system, movement, combat, economy, social, agent_reasoning, world)")
+	flagCaptureReasoning = flag.Bool("capture-reasoning", false, "engine-level enable for capturing per-action 'reasoning' traces. Per-agent share_reasoning must ALSO be true.")
+	flagRingSize         = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
+	flagNPCConfig        = flag.String("npc-config", "", "JSON config for NPC subprocesses to spawn. If empty, falls back to the bundle's npcs.config (if any).")
+	flagSnapDir          = flag.String("snapshot-dir", "", "if set, save world snapshots to this dir and restore on boot")
+	flagSnapEvery        = flag.Duration("snapshot-every", 60*time.Second, "how often to write a snapshot (0 disables)")
+	flagTimeMult         = flag.Float64("time-mult", 1.0, "in-game time multiplier (D11). 1.0 = real-time; 4.0 = 4x speed (dev iteration); higher values pack more in-game minutes into each real minute. The engine scheduler tick rate is multiplied by this value.")
+	flagTuning           = flag.String("tuning", "", "comma-separated key=value overrides applied to the bundle's declarative tunings at boot (e.g. \"respawn_cap=800,respawn_batch=24\"). Values are parsed as floats; GetInt narrows on read. Lets the demo flood item respawn without editing rules.star.")
+	flagNarratorJSONL    = flag.String("narrator-jsonl", ".runlog/narrator.jsonl", "path to the narrator's output JSONL, served by /api/v1/narrator/recent for the Story Feed UI. The narrator process (tools/narrator) writes it; the engine only reads it.")
 
 	// Security
-	flagCORS    = flag.String("cors-allow", "", "comma-separated CORS allowlist (origins). Empty disables CORS.")
+	flagCORS      = flag.String("cors-allow", "", "comma-separated CORS allowlist (origins). Empty disables CORS.")
 	flagJWTSecret = flag.String("jwt-secret", "", "HMAC secret for verifying agent registration JWTs. Empty disables JWT (dev only).")
-	flagRegRate = flag.Float64("register-rate", 1, "registrations per second per IP (token bucket refill)")
-	flagRegBurst = flag.Int("register-burst", 5, "registrations burst per IP")
+	flagRegRate   = flag.Float64("register-rate", 1, "registrations per second per IP (token bucket refill)")
+	flagRegBurst  = flag.Int("register-burst", 5, "registrations burst per IP")
 )
 
 func main() {
@@ -108,6 +110,33 @@ func main() {
 	if bundle != nil {
 		log.Printf("bundle: %s — scenario=%s art_pack=%q",
 			bundle.Name, scenarioPkg, bundle.ArtPack)
+	}
+
+	// Boot-time tuning overrides (-tuning key=value,...). Applied to the
+	// loaded ruleset so e.g. the demo can flood item respawn without
+	// editing the bundle's rules.star.
+	if strings.TrimSpace(*flagTuning) != "" {
+		if w.Rules == nil {
+			log.Printf("-tuning ignored: world has no ruleset (legacy -world path?)")
+		} else {
+			for _, pair := range strings.Split(*flagTuning, ",") {
+				pair = strings.TrimSpace(pair)
+				if pair == "" {
+					continue
+				}
+				kv := strings.SplitN(pair, "=", 2)
+				if len(kv) != 2 {
+					log.Fatalf("-tuning: malformed override %q (want key=value)", pair)
+				}
+				key := strings.TrimSpace(kv[0])
+				val, err := strconv.ParseFloat(strings.TrimSpace(kv[1]), 64)
+				if err != nil {
+					log.Fatalf("-tuning: %q is not a number for key %q: %v", kv[1], key, err)
+				}
+				w.Rules.SetTuningFloat(key, val)
+				log.Printf("-tuning override: %s = %g", key, val)
+			}
+		}
 	}
 
 	// Restore from the latest snapshot in the snapshot dir, if one
@@ -245,14 +274,14 @@ func main() {
 	mux.HandleFunc("/api/v1/world/info", func(rw http.ResponseWriter, r *http.Request) {
 		rw.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(rw).Encode(map[string]any{
-			"name":      "agent_sim engine",
-			"version":   "0.0.2",
-			"scenario":  *flagScenario,
-			"world":     w.MapID,
+			"name":       "agent_sim engine",
+			"version":    "0.0.2",
+			"scenario":   *flagScenario,
+			"world":      w.MapID,
 			"world_dims": []int{w.WidthTiles, w.HeightTiles},
-			"tick_rate": tickRate,
-			"tick":      tick.Load(),
-			"uptime_s":  time.Since(startedAt).Seconds(),
+			"tick_rate":  tickRate,
+			"tick":       tick.Load(),
+			"uptime_s":   time.Since(startedAt).Seconds(),
 		})
 	})
 	mux.HandleFunc("/healthz", func(rw http.ResponseWriter, r *http.Request) {
@@ -271,7 +300,7 @@ func main() {
 	mux.HandleFunc("/api/v1/world/edit", wire.TileEditHandler(w))
 	mux.HandleFunc("/api/v1/world/edit_deco", wire.DecorationEditHandler(w))
 	mux.HandleFunc("/api/v1/agents", wire.AgentsListHandler(agents, w))
-	mux.HandleFunc("/api/v1/social", wire.SocialHandler(w)) // Society-Pulse graph
+	mux.HandleFunc("/api/v1/social", wire.SocialHandler(w))                 // Society-Pulse graph
 	mux.HandleFunc("/api/v1/world/walkability", wire.WalkabilityHandler(w)) // static nav grid for agent-side A*
 	// AGENT-A7 inspector → mental_state endpoint. Path includes the
 	// entity id; the handler parses it out.
