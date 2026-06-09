@@ -110,19 +110,23 @@ When an agent's observation is built, it includes built structures from the disc
 
 Rationale: realistic. You don't know about a hut someone built across the world until you walk past it.
 
-## §5 — Map knowledge
+## §5 — Map knowledge (egocentric only — there is no global map)
 
-The agent's "known map summary" gives them the **layout** of the world (street names, landmark positions, building entrances) so they can navigate intelligently. This is like a real person knowing the layout of NYC even if they can't see what's happening at every block.
+There is **no `known_map_summary`** (it was removed — it carried nothing agents
+used). The observation is strictly egocentric: the only spatial knowledge an
+agent gets is the per-tick **`local_view`** — an ASCII window of the terrain
+(radius `LocalViewRadius` = 20, a 41×41 block centred on the agent) with
+walkability glyphs (`.` walkable, `#` blocked, `~` water) plus visible
+entities/items/doors overlaid. See the `LocalView` field above.
 
-What the known map contains:
-- Tile-level walkability summary (so the agent knows where roads are).
-- Named regions (e.g. "Town Square", "Forest Clearing", "Tavern").
-- Portal locations (doors that lead to interior maps they may have visited).
-
-What it does NOT contain:
-- Who is at any of those places right now.
-- What's inside an interior they haven't been to.
-- Dynamic events.
+What this means:
+- An agent does **not** start with the world layout. It must **build its own
+  map** by remembering successive `local_view` windows as it explores — like a
+  person walking an unfamiliar city, not one handed a street map.
+- Building **interiors are separate sub-maps** reached by `enter`-ing a door
+  (HeartGold model); an agent only perceives an interior's tiles once it's
+  inside. Doors appear in `visible_objects` when in vision + line-of-sight.
+- No street names / named regions / portal index are provided.
 
 ## §6 — Persona-derived labels
 
@@ -256,8 +260,8 @@ client-side.
 - Image obs does NOT carry `audible` speech — that's still text-mode.
   Multimodal agents typically receive image + text together (image for
   spatial reasoning, text for speech + persona + goals).
-- Image obs does NOT carry the static known-map (§5). That stays
-  text-mode.
+- Image obs is a raster crop; spatial reasoning from text uses the
+  `local_view` ASCII grid (§5) instead. There is no separate known-map.
 
 The recommended default for v1 multimodal users: `mode: "both"`. They
 get the image for spatial reasoning AND the structured payload for
