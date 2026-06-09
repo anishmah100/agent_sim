@@ -35,6 +35,17 @@ State lives in `entity.Extras` (a `map[string]any`). **JSON-loaded numbers are
 `float64`**; always read numerics tolerantly (the audit fixed a bare
 `hp.(int)` that silently disabled starvation for world.json entities).
 
+**INVARIANT — `Extras` is agent-facing; engine internals must NOT live there.**
+An agent's own observation surfaces its `Extras` wholesale (`self.extras` is the
+full self-state — hp/gold/hunger/inventory/equipped/contracts/reputation/kills/
+quests/steps, all legitimately self-knowable). Transient engine-internal state
+(e.g. `insideTicks`, the interior-return tile, the one-shot transient action)
+is therefore kept as **unexported `Entity` struct fields, never in `Extras`** —
+so adding a key to `Extras` is a deliberate choice to expose it to the agent.
+Audit 2026-06-08 confirmed no internal key currently leaks into `self.extras`.
+(What OTHER agents see is separately filtered to the `publicExtraKeys`
+whitelist → `extras_summary`.)
+
 ---
 
 ## combat
