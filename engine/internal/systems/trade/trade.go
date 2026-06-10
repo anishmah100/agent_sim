@@ -60,9 +60,11 @@ func (s *System) handleTrade(w syscore.World, e syscore.Entity, env *syscore.Act
 	inv := w.GetService("inventory").(inventory.InventoryService)
 	mon := w.GetService("money").(money.MoneyService)
 
-	if !inv.Has(w, e.ID(), p.Item) {
+	if canonical := inv.Resolve(w, e.ID(), p.Item); canonical == "" {
 		res.Reason = "not_in_inventory"
 		return res
+	} else {
+		p.Item = canonical
 	}
 	// AUDIT FIX (medium/[12]): respect the buyer's 10-slot cap (D20) BEFORE
 	// any gold moves — trade could push a recipient past the cap. Checked
