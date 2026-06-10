@@ -196,10 +196,42 @@ async def c1_contract(a, b, ev):
     report("C1 contract reject (TaskRejected)", ok)
 
 
+MONETARY = ("coin", "gem")  # auto-convert to gold on pickup; never inventoried
+
+
+async def acquire_inventoriable(c):
+    """Pick up a NON-monetary item (coins/gems can't be given — use pay)."""
+    for _ in range(6):
+        await fresh_obs(c)
+        cands = [it for it in visible_items(c)
+                 if not any(m in (it.get("sprite") or "") for m in MONETARY)]
+        if not cands:
+            return None
+        pos = tuple(c.obs["self"]["pos"])
+        cands.sort(key=lambda it: max(abs(it["pos"][0] - pos[0]), abs(it["pos"][1] - pos[1])))
+        it = cands[0]
+        if not await c.step_to(tuple(it["pos"])):
+            continue
+        ack = await c.act("pickup", target=it["entity_id"])
+        if ack.get("accepted"):
+            await fresh_obs(c)
+            inv = (c.obs["self"].get("extras") or {}).get("inventory") or []
+            # Inventory stores canonical "item:<kind>#<entity_id>" ids; the
+            # agent only knows the ground-entity id it SAW. Return the seen
+            # id on purpose — downstream give/drop must resolve it (that is
+            # the contract the engine's resolveItemRef guarantees).
+            if any(x == it["entity_id"] or x.endswith("#" + it["entity_id"]) for x in inv):
+                return it["entity_id"]
+            report("C2 picked item missing from inventory", False,
+                   f"{it['entity_id']} ({it.get('sprite')}) inv={inv[:5]}")
+            return None
+    return None
+
+
 async def c2_transfer(a, b, ev):
-    item = await acquire_item(a)
+    item = await acquire_inventoriable(a)
     if not item:
-        return report("C2 give/drop", None, "no item acquirable near spawn")
+        return report("C2 give/drop", None, "no inventoriable item acquirable near spawn")
     await fresh_obs(b)
     if not await a.step_to(tuple(b.obs["self"]["pos"])):
         return report("C2 give/drop", None, "could not reach partner")
