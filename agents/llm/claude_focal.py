@@ -211,4 +211,6 @@ class ClaudeFocalAgent:
                 self.rejected += 1
                 self._last_results.append(
                     f"{act.verb}: {res.reason or res.reason_code or 'rejected'}")
+        if any(not r.endswith("accepted") for r in self._last_results):
+            log.info("[%s] acks: %s", self.creds.agent_id, self._last_results)
         return True
