@@ -37,7 +37,7 @@ __all__ = [
     "Step", "Speak", "Whisper", "Shout", "LookAt", "Interact",
     "Pickup", "Drop", "Eat", "Cook", "Equip", "Give", "Attack", "Defend", "Heal", "Wait",
     "MentalNote",
-    "Pay", "WorkForPay", "Trade", "Loot",
+    "Pay", "WorkForPay", "BuyFood", "Trade", "Loot",
     "Chop", "Mine", "Forage",
     "Enter", "Exit", "Lock", "Unlock", "ClaimOwnership", "TransferOwnership",
     "PlaceBlueprint", "AdvanceConstruction", "Demolish",

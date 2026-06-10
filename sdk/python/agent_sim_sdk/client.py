@@ -98,6 +98,9 @@ class Agent:
         # Populated by act_batch (and the legacy act); resolved by
         # _read_loop when an "action_ack" frame arrives.
         self._pending_acks: dict[str, asyncio.Future[ActionResult]] = {}
+        # Engine-reported fatal error (e.g. auth_invalid). Set by the read
+        # loop; surfaced by observations() instead of a silent dead stream.
+        self._fatal_error: Optional[str] = None
 
     async def __aenter__(self) -> "Agent":
         await self.connect()
@@ -140,6 +143,9 @@ class Agent:
             # a server/network drop still ends the reader). The bot's
             # `async for obs in agent.observations()` then exits its loop.
             if obs is _STREAM_END:
+                if self._fatal_error:
+                    raise RuntimeError(
+                        f"engine rejected connection: {self._fatal_error}")
                 return
             while True:
                 try:
@@ -151,7 +157,8 @@ class Agent:
             yield obs
 
     async def act(self, action: Action, *, timeout: float = 5.0) -> Optional[ActionResult]:
-        """Send ONE action and return the engine's ack (or None on timeout).
+        """Send ONE action and return the engine's ack. Raises
+        asyncio.TimeoutError if no ack arrives within `timeout`.
 
         Convenience wrapper around `act_batch` with `wait_for_acks=True` — so
         callers that inspect the result (`res.accepted`) actually get one. The
@@ -313,6 +320,14 @@ class Agent:
             if mtype == "action_ack":
                 self._dispatch_ack(msg)
                 continue
+            if msg.get("error"):
+                # Engine refused us (auth_invalid / auth_required / ...).
+                # Without this the frame was silently dropped and a bad
+                # secret produced an empty observation stream with no clue.
+                self._fatal_error = str(msg["error"])
+                logging.getLogger("agent_sim_sdk").error(
+                    "engine error frame: %s — closing stream", msg["error"])
+                return
             if mtype != "observation":
                 # Future: dispatch world_event_notify here.
                 continue
