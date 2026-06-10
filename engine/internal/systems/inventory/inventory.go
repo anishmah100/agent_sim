@@ -119,6 +119,9 @@ type InventoryService interface {
 	HasAll(world syscore.World, entityID string, itemIDs []string) bool
 	Consume(world syscore.World, entityID string, itemIDs []string) (ok bool, reason string)
 	Items(world syscore.World, entityID string) []string
+	// Resolve maps an agent-supplied item reference (canonical inventory id,
+	// pre-pickup ground-entity id, or bare kind) to the canonical id, or "".
+	Resolve(world syscore.World, entityID, ref string) string
 }
 
 type System struct{}
@@ -155,11 +158,12 @@ func (s *System) handleEat(w syscore.World, e syscore.Entity, env *syscore.Actio
 		return res
 	}
 	inv := extrasStrSlice(e, "inventory")
-	idx := indexOf(inv, p.Item)
+	idx := resolveItemRef(inv, p.Item)
 	if idx < 0 {
 		res.Reason = "not_in_inventory"
 		return res
 	}
+	p.Item = inv[idx]
 	sat, isFood := satietyForItem(p.Item)
 	if !isFood {
 		res.Reason = "not_food"
@@ -210,10 +214,12 @@ func (s *System) handleCook(w syscore.World, e syscore.Entity, env *syscore.Acti
 		return res
 	}
 	inv := extrasStrSlice(e, "inventory")
-	if indexOf(inv, p.Item) < 0 {
+	cidx := resolveItemRef(inv, p.Item)
+	if cidx < 0 {
 		res.Reason = "not_in_inventory"
 		return res
 	}
+	p.Item = inv[cidx]
 	cooked, ok := cookRecipes[itemKindFromID(p.Item)]
 	if !ok {
 		res.Reason = "not_cookable"
@@ -261,7 +267,11 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 		return res
 	}
 	item := w.EntityByID(p.Target)
-	if item == nil || item.Archetype() != "item" {
+	if item == nil {
+		res.Reason = "unknown_target"
+		return res
+	}
+	if item.Archetype() != "item" {
 		res.Reason = "not_an_item"
 		return res
 	}
@@ -345,11 +355,12 @@ func (s *System) handleDrop(w syscore.World, e syscore.Entity, env *syscore.Acti
 		return res
 	}
 	inv := extrasStrSlice(e, "inventory")
-	idx := indexOf(inv, p.Item)
+	idx := resolveItemRef(inv, p.Item)
 	if idx < 0 {
 		res.Reason = "not_in_inventory"
 		return res
 	}
+	p.Item = inv[idx]
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
 		cur := extrasStrSlice(real, "inventory")
 		real.SetExtra("inventory", removeAt(cur, idx))
@@ -430,9 +441,11 @@ func (s *System) handleEquip(w syscore.World, e syscore.Entity, env *syscore.Act
 		return res
 	}
 	inv := extrasStrSlice(e, "inventory")
-	if indexOf(inv, p.Item) < 0 {
+	if eidx := resolveItemRef(inv, p.Item); eidx < 0 {
 		res.Reason = "not_in_inventory"
 		return res
+	} else {
+		p.Item = inv[eidx]
 	}
 	slot := p.Slot
 	if slot == "" {
@@ -487,11 +500,12 @@ func (s *System) handleGive(w syscore.World, e syscore.Entity, env *syscore.Acti
 		return res
 	}
 	myInv := extrasStrSlice(e, "inventory")
-	idx := indexOf(myInv, p.Item)
+	idx := resolveItemRef(myInv, p.Item)
 	if idx < 0 {
 		res.Reason = "not_in_inventory"
 		return res
 	}
+	p.Item = myInv[idx]
 	// AUDIT FIX (medium/[6]): respect the recipient's 10-slot cap (D20) —
 	// give could push a target past the cap that pickup enforces.
 	if len(extrasStrSlice(target, "inventory")) >= DefaultMaxSlots {
@@ -568,6 +582,20 @@ func (s *service) Has(w syscore.World, entityID, itemID string) bool {
 	return indexOf(extrasStrSlice(e, "inventory"), itemID) >= 0
 }
 
+// Resolve maps an agent-supplied item reference (canonical id, pre-pickup
+// ground-entity id, or bare kind) to the canonical inventory id, or "".
+func (s *service) Resolve(w syscore.World, entityID, ref string) string {
+	e := w.EntityByID(entityID)
+	if e == nil {
+		return ""
+	}
+	inv := extrasStrSlice(e, "inventory")
+	if i := resolveItemRef(inv, ref); i >= 0 {
+		return inv[i]
+	}
+	return ""
+}
+
 func (s *service) HasAll(w syscore.World, entityID string, itemIDs []string) bool {
 	e := w.EntityByID(entityID)
 	if e == nil {
@@ -634,6 +662,35 @@ func extrasStrSlice(e syscore.Entity, k string) []string {
 func indexOf(s []string, item string) int {
 	for i, x := range s {
 		if x == item {
+			return i
+		}
+	}
+	return -1
+}
+
+// resolveItemRef finds the inventory slot for an agent-supplied item
+// reference. Slots hold canonical ids "item:<kind>#<seq>", but agents
+// legitimately know an item by the GROUND ENTITY id they saw before
+// pickup (the "#<seq>" suffix) or by its bare kind — pickup rewrites
+// the id, and demanding the rewritten form made give/drop/eat fail
+// with not_in_inventory for every agent that didn't re-read its
+// inventory between pickup and use. Accepts, in order: exact id,
+// ground-entity id, "item:<kind>" / bare kind (first match).
+func resolveItemRef(inv []string, ref string) int {
+	if ref == "" {
+		return -1
+	}
+	if i := indexOf(inv, ref); i >= 0 {
+		return i
+	}
+	for i, x := range inv {
+		if strings.HasSuffix(x, "#"+ref) {
+			return i
+		}
+	}
+	kind := strings.TrimPrefix(ref, "item:")
+	for i, x := range inv {
+		if itemKindFromID(x) == kind {
 			return i
 		}
 	}

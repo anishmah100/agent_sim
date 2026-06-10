@@ -479,8 +479,9 @@ class ActionBatch(BaseModel):
     """A receding-horizon batch of 1–3 actions plus a free-text
     reasoning trace, as the tactical brain emits each cycle.
 
-    The engine consumes actions serially; if any fails, the rest are
-    dropped — the brain re-plans next cycle. See
+    The engine consumes actions serially and acks EACH one independently —
+    a rejected action does NOT stop the rest of the batch (every ack
+    carries its own accepted/reason; the brain re-plans next cycle). See
     docs/AGENT_ARCHITECTURE_PLAN.md §"Layer 3 / Tactical brain".
     """
 

@@ -23,6 +23,7 @@ from agent_sim_sdk import (
     ActionBatch,
     Agent,
     AgentCredentials,
+    Drop,
     Step,
     Pickup,
     Observation,
@@ -156,8 +157,13 @@ class ArchetypeBot:
     def __post_init__(self) -> None:
         # Per-bot RNG seeded by entity id so different bots make
         # different random choices. Deterministic across reruns when
-        # the agent_id is held fixed.
-        self.rng = random.Random(hash((self.archetype_name, self.creds.agent_id)) & 0xFFFFFFFF)
+        # the agent_id is held fixed. (Built-in hash() is salted per
+        # process, which silently broke that promise — use a stable
+        # digest instead.)
+        import hashlib
+        seed_src = f"{self.archetype_name}:{self.creds.agent_id}".encode()
+        self.rng = random.Random(int.from_bytes(
+            hashlib.sha256(seed_src).digest()[:4], "big"))
 
     # ----- subclass extension point -----
 
@@ -218,6 +224,16 @@ class ArchetypeBot:
                         # Mental notes are best-effort; never crash decide.
                         log.exception("mental_note send failed")
                     self._last_state = self.state
+                # AUDIT FIX (high): at the 10-slot cap a non-monetary pickup
+                # is rejected (inventory_full) forever and the FSM re-issues
+                # it every tick — the bot freezes for the rest of the run.
+                # Make room by dropping the lowest-priority slot instead;
+                # the pickup retries next tick. Monetary pickups bypass the
+                # cap (they auto-convert to gold) and are left alone.
+                if isinstance(act, Pickup):
+                    swap = self._make_room_if_full(act, obs)
+                    if swap is not None:
+                        act = swap
                 if act is not None:
                     try:
                         await agent.act_batch(ActionBatch(actions=[act]))
@@ -227,6 +243,30 @@ class ArchetypeBot:
     def stop(self) -> None:
         """Cooperative stop; run() exits on the next obs."""
         self._stopped = True
+
+    # Inventory cap defense (see run()). 10 mirrors the engine's
+    # DefaultMaxSlots (inventory.go, design D20).
+    MAX_SLOTS = 10
+
+    def _make_room_if_full(self, act: Pickup, obs: Observation) -> Optional[Action]:
+        """If `act` is a pickup that would bounce off a full inventory,
+        return a Drop of the lowest-priority slot instead (junk before
+        weapons before food). None = let the pickup through."""
+        inv = list((obs.self.extras or {}).get("inventory") or [])
+        if len(inv) < self.MAX_SLOTS or not inv:
+            return None
+        target = next((it for it in obs.visible_items
+                       if it.entity_id == act.target), None)
+        if target is not None and is_money(target):
+            return None  # coins/gems auto-convert; the cap doesn't apply
+        def keep_priority(item_id: str) -> int:
+            kind = item_id.split(":", 1)[-1].split("#", 1)[0]
+            if kind in FOOD_KINDS:
+                return 2
+            if kind in WEAPON_KINDS:
+                return 1
+            return 0
+        return Drop(item=min(inv, key=keep_priority))
 
 
 # ---------------------------------------------------------------------------

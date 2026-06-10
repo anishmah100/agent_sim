@@ -502,8 +502,13 @@ func (c *agentConn) readPump() {
 		// Forget the registry entry too so the entity tile slot is
 		// released for future register() calls — without this, the
 		// next bot to register sees the dead body as "taken" until
-		// the engine restarts.
-		delete(c.hub.registry, c.rec.Secret)
+		// the engine restarts. Guarded by stillOwner: a STOMPED
+		// connection's teardown must not purge the secret its live
+		// replacement is still using (unguarded, same-secret re-auth
+		// was one-shot — the next reconnect got auth_invalid).
+		if stillOwner {
+			delete(c.hub.registry, c.rec.Secret)
+		}
 		c.hub.mu.Unlock()
 		// Closing c.send AFTER closedAt+done are set lets any in-flight
 		// sender bail out via trySend's c.closedAt check.
@@ -541,7 +546,16 @@ func (c *agentConn) handleMessage(raw []byte) {
 	switch hdr.Type {
 	case "action":
 		if !c.allowAction() {
-			c.ack(world.ActionResult{Accepted: false, Reason: "rate_limited"})
+			// Echo action_id/verb like every other rejection path — an
+			// ack without action_id can never resolve the SDK's pending
+			// future, so wait-for-ack callers stalled the full timeout.
+			var hdr2 struct {
+				ActionID string `json:"action_id"`
+				Verb     string `json:"verb"`
+			}
+			_ = json.Unmarshal(raw, &hdr2)
+			c.ack(world.ActionResult{ActionID: hdr2.ActionID, Verb: hdr2.Verb,
+				Accepted: false, Reason: "rate_limited"})
 			return
 		}
 		var env world.ActionEnvelope
