@@ -115,6 +115,13 @@ def run_arm(arm: str, rep: int, out_dir: Path, args) -> dict:
     finally:
         stop_engine(engine)
 
+    # Archive the raw event log into the run dir — the next run truncates
+    # EVENTS, and the reasoning traces are the qualitative half of the study.
+    try:
+        (run_dir / "events.jsonl").write_bytes(EVENTS.read_bytes())
+    except OSError:
+        log.warning("could not archive events.jsonl for %s_r%d", arm, rep)
+
     score_file = run_dir / "score.json"
     score = json.loads(score_file.read_text()) if score_file.exists() else {}
     summary_file = run_dir / "summary.json"
