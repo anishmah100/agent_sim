@@ -261,7 +261,11 @@ func (s *System) handlePickup(w syscore.World, e syscore.Entity, env *syscore.Ac
 		return res
 	}
 	item := w.EntityByID(p.Target)
-	if item == nil || item.Archetype() != "item" {
+	if item == nil {
+		res.Reason = "unknown_target"
+		return res
+	}
+	if item.Archetype() != "item" {
 		res.Reason = "not_an_item"
 		return res
 	}
