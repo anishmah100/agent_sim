@@ -99,11 +99,32 @@ Scenario + WinCondition + Scorer + agent-facing menu/goal. The abstraction is
 "done" when game #2 drops in without touching engine core (also Phase-2 Starlark
 scenarios were planned but not built — today a new game is a Go package + recompile).
 
-## Open / next
+## The tape (single source of truth) — decided 2026-06-10
 
-- Correctness-pass methodology (the two fidelity chains): per-verb live assertion
-  matrix + a runtime "referee" + resume the 13-subsystem adversarial code audit
-  (run id `wf_78151fe8-48c`) + the symmetry test above.
+All measurement (observers) and verification (referee) read one append-only
+stream: `actions → world-effects → per-agent perceptions → events`. Stream-pure
+consumers run LIVE (viewer + live observers + referee) and OFFLINE (analysis,
+retroactive observers, replay) off the same record. **Gap found in code:** the
+current tape is world EVENTS only (`-event-log` via the historian + reasoning
+traces + narrator). Per-agent PERCEPTIONS are computed and sent over WS but NOT
+recorded — so the referee cannot check "did B receive the whisper" today.
+**Phase-0 task #1 = complete the tape: log each agent's delivered observation.**
+The engine already computes it; just persist it. One add unlocks the
+perception-fidelity gap + the referee + stream-pure observers.
+
+## Phase 0 — correctness pass (game-agnostic, FIRST), ranked
+
+1. Complete the tape (log per-agent perceptions) — lynchpin for the rest.
+2. Per-verb chain matrix (extend `paths_e2e`) asserting all four links incl. the
+   perception link.
+3. Invariants (gold/entity conservation, enter↔exit event pairing).
+4. Visual-fidelity oracle (combat visible, positions match, no teleport/ghost).
+5. Runtime referee (re-derive expected perception/events from the tape, diff vs.
+   what was delivered) — a fidelity-observer.
+6. Symmetry test (settles the parked determinism/fairness question empirically).
+7. Resume the 13-subsystem adversarial code audit (run id `wf_78151fe8-48c`).
+
+## Open / next (Phase 1+, after correctness pass)
 - Game #2 = power-acquisition (flagship). Doubles as the extensibility proof.
 - Known fix backlog carried in: invisible combat (visual-fidelity break), 3 FSM
   mediums, dead verbs in Eldoria (chop/mine/forage/property have no entities).
