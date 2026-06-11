@@ -47,6 +47,7 @@ var (
 	flagWorld            = flag.String("world", "", "[legacy] direct path to a world.json. If set, overrides -bundle's world.")
 	flagScenario         = flag.String("scenario", "", "[legacy] scenario package id. If set, overrides bundle's scenario.")
 	flagEventLog         = flag.String("event-log", "", "if set, append every world event to this JSONL path (autoresearch substrate)")
+	flagLogPerceptions   = flag.Bool("log-perceptions", false, "also record each agent's delivered perception (audible channel) onto the event log — the tape's perception half, needed by the referee + perception-fidelity checks. Adds volume; off by default (live demo stays lean).")
 	flagEventMute        = flag.String("event-mute", "", "comma-separated list of event categories to drop (system, movement, combat, economy, social, agent_reasoning, world)")
 	flagCaptureReasoning = flag.Bool("capture-reasoning", false, "engine-level enable for capturing per-action 'reasoning' traces. Per-agent share_reasoning must ALSO be true.")
 	flagRingSize         = flag.Int("event-ring", 4096, "in-memory event ring size served by /api/v1/world/history")
@@ -251,6 +252,16 @@ func main() {
 			Tag:      tag,
 			Slots:    slots,
 		})
+	}
+	// Tape the perception half (Phase 0.1): each agent's delivered audible
+	// channel, so the referee can diff emitted directed events against what
+	// recipients actually received. Off unless -log-perceptions is set.
+	if *flagLogPerceptions {
+		agents.OnPerception = func(entityID string, tick uint64, audible []world.AudibleEvent) {
+			heard, _ := json.Marshal(audible)
+			hist.LogPerception(tick, entityID, heard)
+		}
+		log.Printf("perception logging ON — delivered audible recorded to the tape")
 	}
 
 	// Security middleware — CORS allowlist + per-IP rate limit on

@@ -44,6 +44,7 @@ const (
 	CategoryEconomy   = "economy"
 	CategorySocial    = "social"
 	CategoryReasoning = "agent_reasoning"
+	CategoryPerception = "perception" // per-agent delivered observation (the tape's perception half)
 	CategoryWorld     = "world" // catch-all
 )
 
@@ -202,6 +203,38 @@ func (h *Historian) LogReflection(currentTick uint64, n ReflectiveNote) {
 		Tick:     currentTick,
 		Kind:     "ReflectiveNote",
 		Category: CategoryReasoning,
+		Payload:  json.RawMessage(payload),
+	})
+}
+
+// PerceptionRecord — what a single agent actually perceived this
+// observation. Today: the audible channel (speech/whisper/shout/sound
+// heard or witnessed). This is the "did the message actually get
+// delivered" half of the tape: the referee (Phase 0.5) diffs emitted
+// directed events (e.g. a whisper's EventID) against the recipient's
+// PerceptionDelivered record to catch silently-dropped interactions.
+// Heard is the pre-marshaled []world.AudibleEvent so the historian
+// stays decoupled from the world package.
+type PerceptionRecord struct {
+	EntityID string          `json:"entity_id"`
+	Heard    json.RawMessage `json:"heard"`
+}
+
+// LogPerception appends one agent's delivered perception to the tape.
+// Installed by main.go as wire.AgentHub.OnPerception, only when
+// -log-perceptions is set (it adds volume; off for the live demo).
+func (h *Historian) LogPerception(currentTick uint64, entityID string, heard json.RawMessage) {
+	if h == nil {
+		return
+	}
+	if h.filter.Disabled != nil && h.filter.Disabled[CategoryPerception] {
+		return
+	}
+	payload, _ := json.Marshal(PerceptionRecord{EntityID: entityID, Heard: heard})
+	h.appendRecord(Record{
+		Tick:     currentTick,
+		Kind:     "PerceptionDelivered",
+		Category: CategoryPerception,
 		Payload:  json.RawMessage(payload),
 	})
 }

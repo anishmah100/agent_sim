@@ -63,6 +63,13 @@ type AgentHub struct {
 	// shapes into one shape any bot can emit on its own cadence.
 	// Same layered opt-in (engine capture + per-agent share_reasoning).
 	OnMentalNote func(entityID, text, tag string, slots map[string]string)
+	// OnPerception — installed by main.go (only when -log-perceptions is
+	// set) to record each agent's DELIVERED perception (the audible
+	// channel) onto the tape. The referee (Phase 0.5) diffs emitted
+	// directed events against these to catch silently-dropped
+	// interactions. Called only on a successful send, and only when the
+	// agent actually heard/witnessed something. nil = no perception log.
+	OnPerception func(entityID string, tick uint64, audible []world.AudibleEvent)
 
 	mu       sync.Mutex
 	// agentSecret → agentRecord
@@ -468,6 +475,12 @@ func (h *AgentHub) tickObservations() {
 		}
 		if c.trySend(data) {
 			c.lastObs.Store(uint64(now))
+			// Tape the perception half: only on a real delivery, and only
+			// when the agent actually heard/witnessed something (keeps the
+			// log proportional to social events, not 60Hz × N agents).
+			if h.OnPerception != nil && len(obs.Audible) > 0 {
+				h.OnPerception(c.rec.EntityID, obs.WorldTick, obs.Audible)
+			}
 		}
 		// Backpressure / shutdown — drop silently; the agent recovers
 		// on its next cadence.
