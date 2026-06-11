@@ -31,13 +31,31 @@ open wedge is sharp, reproducible, reasoning-trace-transparent findings).
 
 ## Extensibility seam — what "a game" is
 
-A game = five parts on top of the spatial engine: (1) a bundle (map + scenario
-setup), (2) an enabled verb/system subset, (3) a win condition, (4) a scoring
-function, (5) an agent action-menu. Making those five clean-to-define is the whole
-extensibility task. Test of the abstraction: building game #2 — every place we're
-forced to touch engine-core instead of just adding a system + bundle is a logged
-abstraction leak. "Extensibility you haven't exercised is extensibility you don't
-have."
+A game = parts on top of the spatial engine: (1) a bundle (map + scenario setup),
+(2) an enabled verb/system subset, (3) a set of installed **observers**
+(measurement — see below), (4) OPTIONALLY a derived objective/win-condition,
+(5) an agent action-menu + per-agent goals (goals may be heterogeneous). Making
+these clean-to-define is the whole extensibility task. Test of the abstraction:
+building game #2 — every place we're forced to touch engine-core instead of just
+adding a system + bundle + observers is a logged abstraction leak. "Extensibility
+you haven't exercised is extensibility you don't have."
+
+### Measurement: observers, NOT a mandatory scorer (decided 2026-06-10)
+
+Not every game has an explicit win condition, and agents may optimize different
+objectives. So measurement is a **library of composable observers** — each a
+read-only function over the action/event/perception stream — rather than one
+per-game scalar score (which would hit the score-interpretability critique: "what
+does winning in an open world even mean?"). Most observers are game-agnostic and
+reusable: Gini, wealth, relationship-graph, communication-topology
+(whisper/shout/broadcast ratio — the pilot's headline metric), combat, contract,
+survival, soft-power (trust/favor-graph centrality). A game installs a subset +
+optional game-specific observers. A win condition, when present, is just a derived
+observer, never required. Agents' own goals live in the persona, decoupled from
+measurement. (This generalizes what the pilot already did — the credible finding
+was the multi-dimensional fingerprint, not a single number.) The **runtime referee
+is a fidelity-observer in this same family** — observers measure behavior, the
+referee checks faithfulness; both are read-only stream consumers.
 
 ## PARKED — determinism / fairness (revisit before first comparative run)
 
