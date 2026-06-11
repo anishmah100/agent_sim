@@ -56,6 +56,31 @@ tiebreak for same-tick conflicts + randomized seat assignment), not full lockste
 Engine RNG is already fixed-seeded (`world.go` NewPCG(1,2), `respawn.go` (7,31)),
 so randomness is not a source.
 
+## Extensibility assessment (code-grounded, 2026-06-10)
+
+**~70% there.** The hard part is built: a real `Scenario` interface
+(`Name/Verbs/Handler/OnEntitySpawn/OnTick`) + truly composable systems
+(`systems/<name>`, each scenario's `Install()` picks its system subset). So the
+enabled-system set is already per-game (a negotiation game installs
+money+trade+inventory+reputation, not combat+construction). New verb = ~one line
+through the registry. Adding a spatial game = new bundle + scenario picking its
+systems + optional new system module.
+
+The missing 30% — exactly what a benchmark needs:
+1. **Objective + scoring aren't first-class.** `Scenario` has no `WinCondition()`
+   / `Score()`; scoring lives in `tools/metrics/score_run.py`, hardcoded to
+   Eldoria metrics. Each capability-game's objective+metric is the point of the
+   game and must become part of the game definition.
+2. **Agent isn't game-aware.** `ACTION_MENU` in `agents/llm/prompt.py` is a
+   hardcoded Eldoria verb list, not derived from the world's advertised
+   `Verbs()`; personas/goals are Eldoria-shaped too. Agent must read menu+goal
+   from the game.
+
+Both gaps are fixed by building game #2 (power-acquisition): a `Game` =
+Scenario + WinCondition + Scorer + agent-facing menu/goal. The abstraction is
+"done" when game #2 drops in without touching engine core (also Phase-2 Starlark
+scenarios were planned but not built — today a new game is a Go package + recompile).
+
 ## Open / next
 
 - Correctness-pass methodology (the two fidelity chains): per-verb live assertion
