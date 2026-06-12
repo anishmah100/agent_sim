@@ -165,7 +165,7 @@ func (s *System) reward(w syscore.World, entityID string, r map[string]any) {
 			maxV, _ := real.GetExtra("max_hp")
 			cur, max := asInt(curV), asInt(maxV)
 			n := cur + hp
-			if n > max {
+			if max > 0 && n > max { // clamp ONLY with a real max_hp; max==0 zeroed hp → reward killed the agent (audit MEDIUM)
 				n = max
 			}
 			real.SetExtra("hp", n)

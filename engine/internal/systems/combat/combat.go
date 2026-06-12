@@ -325,7 +325,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Description:      "Restore HP on self or adjacent target.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}}}`),
 				Preconditions:    []string{"if target != self, target must be within 1 tile"},
-				RejectionReasons: []string{"unknown_target", "target_too_far"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "target_too_far", "target_dead"},
 			},
 		},
 		StateFields: []manifest.StateFieldDecl{
