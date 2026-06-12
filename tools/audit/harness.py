@@ -101,7 +101,12 @@ async def connect(engine: str, name: str = "Auditor",
         persona={"name": name, "bio": "audit probe", "archetype_tag": "llm", "brain": "qwen"},
         vision_mode=vision, cadence_ms=cadence_ms,
     )
-    ws = await websockets.connect(creds.ws_url)
+    # ping_interval=None: disable the client keepalive. The engine doesn't
+    # always pong idle agent sockets (known WS-keepalive gap), and audit
+    # probes sit idle while OTHER agents navigate — the default 20s ping
+    # timeout then kills an idle probe mid-test. The engine pushes
+    # observations on its own cadence, so the link stays live regardless.
+    ws = await websockets.connect(creds.ws_url, ping_interval=None)
     await ws.send(json.dumps({"auth": creds.agent_secret}))
     c = Conn(ws, creds, None)
     await c.observe()
