@@ -23,28 +23,31 @@ off by session limits (votes 0/0) and must be **re-verified, not dismissed**.
   `RegisteredAt` stamp + a 30s reaper evicts never-connected registrations past
   a 60s grace window and removes their leaked auto-spawned bodies. Unit-tested.
 
-## Unverified — NEED RE-VERIFICATION (session-limit cutoff)
+## From the cut-off batch — manually verified + FIXED (4)
 
-High-signal candidates the verifier never reached; re-run before trusting:
-- **HIGH `perception.go:127`** — viewer broadcast reads `w.audible` with no lock
-  while Tick mutates it under the write lock → data race on the audible ring.
-- **HIGH `perception.go:146`** — inside-building agents are concealed from sight,
-  but their speech/whisper/shout leaks identity + exact door position to the open
-  world (perception/privacy-fidelity — directly relevant to the correctness pass).
-- **HIGH `construction.go:158`** — `place_blueprint` occupancy check reads a stale
-  spatial index never updated on movement.
+The re-verification workflow was throttled (session, then transient server rate
+limits) twice, so I hand-verified the highest-signal candidates from code:
+- **HIGH `perception.go` audible-ring data race** — FIXED `67ffcdc` (RLock).
+- **HIGH `perception.go` inside-building speech leak** (identity + door pos) —
+  FIXED `67ffcdc` (walls block sound; regression test).
+- **MED `quests.go` HP reward kills agent w/o max_hp** — FIXED `0b37614`.
+- **LOW heal manifest reasons** — FIXED `0b37614`.
+
+## Unverified backlog (lower-signal; re-run workflow when limits clear)
+
+- **HIGH `construction.go:158`** — `place_blueprint` occupancy reads a stale
+  spatial index. (Lower live impact in eldoria — no building entities exist for
+  construction; tied to the dead-verbs design call.)
 - **HIGH `action.go:208`** — `interact{enter}` uses the legacy `InsideBuilding`
   flag instead of the portal warp → bot may get stuck inside.
-- **MED `quests.go:163`** — quest HP reward clamps HP to 0 when no `max_hp` extra
-  (reward kills the agent).
-- **MED `world.go:1041`** — auto-exit can place two entities on one tile (occupants
-  invariant) (1/2 split).
-- **MED `agent.go:531`** — no WS read/write deadline or ping keepalive → half-open
-  sockets leak the entity/slot.
+- **MED `world.go:1041`** — auto-exit can place two entities on one tile (1/2 split).
+- **MED `agent.go:531`** — no WS read/write deadline / ping keepalive (half-open
+  sockets). (The reaper now bounds the registry leak; this is the socket layer.)
 - **MED `agents/llm/motor_loop.py:96`** — salient-audible deliberation re-fires for
   the full 240-tick window (LLM token waste).
-- Plus several LOW (forage/harvest non-unique item IDs, runtime buildings not
-  marking tiles unwalkable, reject_task can't cancel, FSM sticky-state labels).
+- LOW: forage/harvest non-unique item IDs, runtime buildings not marking tiles
+  unwalkable, reject_task can't cancel, FSM sticky-state labels, SnapshotForChunks
+  Extras deep-copy, SDK error-frame UnboundLocalError.
 
 Re-verify: `Workflow({scriptPath: <audit script>, resumeFromRunId: "wf_7f280820-467"})`
-(cached confirmed agents return instantly; only the cut-off verifiers re-run).
+(cached agents return instantly; only the cut-off verifiers re-run).
