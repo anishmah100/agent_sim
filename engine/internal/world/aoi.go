@@ -61,6 +61,11 @@ func (w *World) SnapshotForChunks(chunks [][2]int) WorldSnapshot {
 	for _, e := range w.entities {
 		if inChunk(e.LogicalTile) {
 			cp := *e
+			// Deep-copy Extras (mirrors Snapshot()/publishSnapshot()): the
+			// shallow cp shares the live entity's map, so marshaling this
+			// snapshot after the RLock is released would race Tick's writes
+			// (concurrent map iteration/write). Audit (latent).
+			cp.Extras = copyExtras(e.Extras)
 			out.Entities = append(out.Entities, &cp)
 		}
 	}

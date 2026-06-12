@@ -176,7 +176,10 @@ func (s *System) handleForage(w syscore.World, e syscore.Entity, env *syscore.Ac
 		return res
 	}
 	cooldown := w.TuningInt("forage_cooldown_ticks", DefaultForageCooldown)
-	itemID := fmt.Sprintf("item:apple#%d", tick)
+	// Suffix with the ACTOR id (not just tick) so two agents foraging the same
+	// kind on the same tick don't mint colliding ids — which would alias on
+	// give/trade (audit). Matches pickup's #<entityid> uniqueness convention.
+	itemID := fmt.Sprintf("item:apple#%s_%d", e.ID(), tick)
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
 		cur := stringSlice(real, "inventory")
 		real.SetExtra("inventory", append(cur, itemID))
@@ -238,7 +241,7 @@ func (s *System) harvest(w syscore.World, e syscore.Entity, env *syscore.ActionE
 	tick := w.Tick()
 	mintedIDs := make([]string, 0, len(yields))
 	for i, kind := range yields {
-		id := fmt.Sprintf("item:%s#%d_%d", kind, tick, i)
+		id := fmt.Sprintf("item:%s#%s_%d_%d", kind, e.ID(), tick, i) // actor id → cross-entity uniqueness (audit)
 		mintedIDs = append(mintedIDs, id)
 		w.QueueEvent(ResourceHarvested{By: e.ID(), Source: src.ID(), YieldItem: id})
 	}

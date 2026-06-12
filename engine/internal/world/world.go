@@ -1038,7 +1038,18 @@ func (w *World) Tick() {
 			exited := e.InsideBuilding
 			e.InsideBuilding = ""
 			e.Facing = FacingS
-			if w.occupants[e.LogicalTile] == "" {
+			// Re-emerge at the stored door tile — but if ANOTHER entity claimed
+			// it while we were inside (concealed), relocate to the nearest free
+			// tile so we never place two entities on one cell (occupants
+			// invariant; audit). nearestWalkable already skips occupied tiles.
+			if occ := w.occupants[e.LogicalTile]; occ != "" && occ != e.EntityID {
+				if free, ok := w.nearestWalkable(e.LogicalTile, 8); ok {
+					e.LogicalTile = free
+					w.occupants[free] = e.EntityID
+				}
+				// No free tile within range: don't clobber the other entity's
+				// slot — re-emerge overlapping as a last resort (extremely rare).
+			} else {
 				w.occupants[e.LogicalTile] = e.EntityID
 			}
 			// AUDIT FIX (medium/[7]): notify on auto-exit so the building
