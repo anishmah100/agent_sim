@@ -4,7 +4,7 @@
 **11 confirmed** by both skeptics; ~20 more candidates whose verification was cut
 off by session limits (votes 0/0) and must be **re-verified, not dismissed**.
 
-## Confirmed — FIXED (10/11)
+## Confirmed — FIXED (11/11) ✓
 
 | sev | area | fix commit |
 |---|---|---|
@@ -17,14 +17,11 @@ off by session limits (votes 0/0) and must be **re-verified, not dismissed**.
 | LOW | loot manifest under-declared `not_a_target` / `not_enough_gold` | `c994174` |
 | LOW | world/info + startup log reported empty legacy `-scenario` flag, not the effective scenario | `c994174` |
 
-## Confirmed — OPEN (1/11)
+## Confirmed — OPEN: none
 
-- **MED `wire/agent.go:310` register-without-connect leak.** A register that never
-  dials `/ws/agent` (crash/network blip/aborted supervisor) leaks the registry
-  entry AND the auto-spawned body forever (cleanup only runs in readPump's
-  disconnect defer; no TTL/reaper). Matters for a 24/7 server. Fix: stamp each
-  record with a register time + reap entries with no live conn after a grace
-  window; or defer `SpawnAgentEntity` until the WS authenticates.
+- ~~MED `wire/agent.go:310` register-without-connect leak~~ — **FIXED `6866b95`**:
+  `RegisteredAt` stamp + a 30s reaper evicts never-connected registrations past
+  a 60s grace window and removes their leaked auto-spawned bodies. Unit-tested.
 
 ## Unverified — NEED RE-VERIFICATION (session-limit cutoff)
 
