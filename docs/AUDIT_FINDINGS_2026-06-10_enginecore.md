@@ -33,21 +33,28 @@ limits) twice, so I hand-verified the highest-signal candidates from code:
 - **MED `quests.go` HP reward kills agent w/o max_hp** — FIXED `0b37614`.
 - **LOW heal manifest reasons** — FIXED `0b37614`.
 
-## Unverified backlog (lower-signal; re-run workflow when limits clear)
+## From the backlog — hand-verified + FIXED (round 2, 7 more)
 
-- **HIGH `construction.go:158`** — `place_blueprint` occupancy reads a stale
-  spatial index. (Lower live impact in eldoria — no building entities exist for
-  construction; tied to the dead-verbs design call.)
-- **HIGH `action.go:208`** — `interact{enter}` uses the legacy `InsideBuilding`
-  flag instead of the portal warp → bot may get stuck inside.
-- **MED `world.go:1041`** — auto-exit can place two entities on one tile (1/2 split).
+- **SDK `client.py` UnboundLocalError on the engine-error-frame branch** (the
+  earlier loud-auth fix never actually fired) + drain loop swallowed
+  `_fatal_error` — FIXED `9843117`.
+- **MED `world.go:1041` auto-exit two-on-one-tile** — FIXED `870c127` (relocate to
+  nearest free tile).
+- **MED `resources.go` forage/harvest id collisions** (alias on give/trade) —
+  FIXED `870c127` (actor-id suffix).
+- **MED `aoi.go` SnapshotForChunks Extras race** — FIXED `870c127` (copyExtras).
+- **MED `motor_loop.py:96` salient-audible re-fires → LLM cost** — FIXED `1135921`
+  (de-dup by event_id).
+
+## Remaining backlog (low-priority / inert in eldoria)
+
+- **`construction.go:158`** (stale spatial index), **`action.go:208`**
+  (`interact{enter}` legacy flag), runtime-building-unwalkable — all
+  building/construction mechanics that **don't fire in eldoria** (no building
+  entities). Tied to the **dead-verbs design call**; fix when that's resolved.
 - **MED `agent.go:531`** — no WS read/write deadline / ping keepalive (half-open
-  sockets). (The reaper now bounds the registry leak; this is the socket layer.)
-- **MED `agents/llm/motor_loop.py:96`** — salient-audible deliberation re-fires for
-  the full 240-tick window (LLM token waste).
-- LOW: forage/harvest non-unique item IDs, runtime buildings not marking tiles
-  unwalkable, reject_task can't cancel, FSM sticky-state labels, SnapshotForChunks
-  Extras deep-copy, SDK error-frame UnboundLocalError.
-
-Re-verify: `Workflow({scriptPath: <audit script>, resumeFromRunId: "wf_7f280820-467"})`
-(cached agents return instantly; only the cut-off verifiers re-run).
+  sockets accumulate over a 24/7 run). The reaper already bounds never-connected
+  leaks; this is connected-then-half-open. Moderate socket-layer hardening.
+- LOW: `reject_task` can't cancel a proposal; baseline-FSM sticky-state labels
+  (Manipulator DEFECTING_SILENT, Killer RETREATING) — rule-bot behavior, not data
+  fidelity.
