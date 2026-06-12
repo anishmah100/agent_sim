@@ -150,10 +150,21 @@ type agentConn struct {
 // trySend pushes data onto c.send without blocking and without racing
 // against teardown. Returns true on success, false if the buffer is
 // full or the connection is shutting down.
-func (c *agentConn) trySend(data []byte) bool {
+func (c *agentConn) trySend(data []byte) (ok bool) {
 	if c.closedAt.Load() {
 		return false
 	}
+	// TOCTOU: teardown can close c.send between the check above and the
+	// select below (closedAt.Load may read false microseconds before the
+	// defer's Swap+close completes). Sending on a closed channel panics —
+	// and trySend runs on the SHARED observation loop, so one late send
+	// would crash observations for EVERY agent (audit MEDIUM). Recover so a
+	// racing send just fails (false) instead of taking the loop down.
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
 	select {
 	case <-c.done:
 		return false
@@ -392,11 +403,9 @@ func (h *AgentHub) HandleWS(rw http.ResponseWriter, r *http.Request) {
 	log.Printf("agent connect: %s (entity=%s)", rec.AgentID, rec.EntityID)
 	go c.writePump()
 	c.readPump()
-	// Clear the flag on disconnect so the NPC resumes autonomous
-	// behavior (and so a subsequent bot can re-bind without races).
-	// Route via worldFor in case the agent disconnected while inside an
-	// interior map.
-	h.worldFor(rec.EntityID).SetPlayerControlled(rec.EntityID, false)
+	// PlayerControlled is cleared in readPump's defer, guarded by
+	// stillOwner — a stomped reconnect must not clear the flag its live
+	// replacement just set (audit HIGH: agent left wandering uncontrolled).
 }
 
 // observationLoop ticks every 100 ms; for each live agent, if their
@@ -523,6 +532,14 @@ func (c *agentConn) readPump() {
 			delete(c.hub.registry, c.rec.Secret)
 		}
 		c.hub.mu.Unlock()
+		// Clear player-control on a REAL disconnect (stillOwner) so the body
+		// resumes autonomous behavior. A STOMPED connection must NOT clear it
+		// — its live replacement already set PlayerControlled=true, and an
+		// unconditional clear here left the reconnected agent uncontrolled,
+		// wandering autonomously instead of obeying its bot (audit HIGH).
+		if stillOwner {
+			c.hub.worldFor(c.rec.EntityID).SetPlayerControlled(c.rec.EntityID, false)
+		}
 		// Closing c.send AFTER closedAt+done are set lets any in-flight
 		// sender bail out via trySend's c.closedAt check.
 		close(c.send)

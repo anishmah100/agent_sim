@@ -59,10 +59,18 @@ type viewerConn struct {
 
 // trySend pushes a frame into c.send without blocking and without
 // racing against teardown. Returns true on success.
-func (c *viewerConn) trySend(data []byte) bool {
+func (c *viewerConn) trySend(data []byte) (ok bool) {
 	if c.closedAt.Load() {
 		return false
 	}
+	// Same TOCTOU as agentConn.trySend: a racing teardown can close c.send
+	// between the check and the select; recover so a late send fails (false)
+	// instead of panicking the viewer broadcast goroutine (audit MEDIUM).
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
 	select {
 	case <-c.done:
 		return false
