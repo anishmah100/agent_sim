@@ -107,6 +107,11 @@ type agentRecord struct {
 	// entity by id and expects it to persist); all other bodies are
 	// removed so 1 agent = 1 visible body.
 	BoundExplicit bool
+	// RegisteredAt — unix milliseconds when HandleRegister created this
+	// record. The reaper evicts records that never dialed /ws/agent within
+	// a grace window (previously such records — and their auto-spawned
+	// bodies — leaked forever; no TTL).
+	RegisteredAt int64
 	// ConnectedAt — unix milliseconds when the WS connect succeeded.
 	// Zero before connect. Surfaced by /api/v1/agents so the picker UI
 	// can show recency.
@@ -183,7 +188,71 @@ func NewAgentHub(ctx context.Context, w *world.World, hub *world.MultiMapHub) *A
 		live:     make(map[string]*agentConn),
 	}
 	go h.observationLoop(ctx)
+	go h.reapLoop(ctx)
 	return h
+}
+
+// reapLoop periodically evicts registrations that were created but never
+// connected (no /ws/agent dial within the grace window). Without this, a
+// register that crashes/aborts before dialing leaks BOTH the registry entry
+// and its auto-spawned body forever — there is no TTL on the register path,
+// and the only other cleanup (readPump's defer) requires a successful
+// connect+disconnect (audit MEDIUM).
+func (h *AgentHub) reapLoop(ctx context.Context) {
+	const graceMs = 60_000
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			h.reapStaleRegistrations(graceMs)
+		}
+	}
+}
+
+func (h *AgentHub) reapStaleRegistrations(graceMs int64) {
+	now := nowMs()
+	type victim struct {
+		entityID string
+		remove   bool
+	}
+	var victims []victim
+	h.mu.Lock()
+	for secret, rec := range h.registry {
+		if rec.ConnectedAt != 0 {
+			continue // connected (or once was); the disconnect path owns cleanup
+		}
+		if _, live := h.live[rec.AgentID]; live {
+			continue // a connection is active right now
+		}
+		if now-rec.RegisteredAt < graceMs {
+			continue // still within grace; the agent may yet connect
+		}
+		delete(h.registry, secret)
+		victims = append(victims, victim{
+			entityID: rec.EntityID,
+			remove:   rec.AutoSpawned && !rec.BoundExplicit && rec.EntityID != "",
+		})
+	}
+	h.mu.Unlock()
+	// Remove leaked auto-spawned bodies OUTSIDE the hub lock (takes the world
+	// write lock — mirrors readPump's disconnect cleanup). Never remove an
+	// explicitly bound body (the caller owns it).
+	removed := 0
+	for _, v := range victims {
+		if v.remove {
+			wf := h.worldFor(v.entityID)
+			wf.LockWrite()
+			wf.RemoveEntity(v.entityID)
+			wf.UnlockWrite()
+			removed++
+		}
+	}
+	if len(victims) > 0 {
+		log.Printf("reaper: evicted %d never-connected registration(s); removed %d leaked bodies", len(victims), removed)
+	}
 }
 
 // worldFor returns the World currently holding the entity (overworld or an
@@ -323,6 +392,7 @@ func (h *AgentHub) HandleRegister(rw http.ResponseWriter, r *http.Request) {
 		ShareReasoning: req.ShareReasoning,
 		AutoSpawned:    autoSpawned,
 		BoundExplicit:  boundExplicit,
+		RegisteredAt:   nowMs(),
 	}
 	h.mu.Lock()
 	h.registry[secret] = rec
