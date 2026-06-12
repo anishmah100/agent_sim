@@ -211,3 +211,63 @@ func TestComposable_AttackEmitsEvents(t *testing.T) {
 		t.Fatalf("expected 1 EntityDied event, got %d", deathCount)
 	}
 }
+
+// Regression for the audit HIGH item-duplication bug: equip must MOVE the
+// item from inventory into equipped (disjoint), so a death drops each
+// physical item exactly once instead of twice.
+func TestComposable_EquipDisjointAndDeathDropsOnce(t *testing.T) {
+	wa, reg := boot(t)
+	hero := wa.EntityByID("hero")
+	hero.SetExtra("inventory", []string{"item:sword_short#w1"})
+	hero.SetExtra("gold", 0) // isolate: no coin drop on death
+
+	res := reg.Handle(wa, hero, &syscore.ActionEnvelope{
+		ActionID: "1", Verb: "equip",
+		Raw: []byte(`{"item":"item:sword_short#w1"}`),
+	})
+	if !res.Accepted {
+		t.Fatalf("equip should accept: %s", res.Reason)
+	}
+
+	hero = wa.EntityByID("hero")
+	eqRaw, _ := hero.GetExtra("equipped")
+	if eq, _ := eqRaw.(map[string]any); eq["weapon"] != "item:sword_short#w1" {
+		t.Fatalf("weapon should be in equipped[weapon], got %#v", eqRaw)
+	}
+	if invRaw, _ := hero.GetExtra("inventory"); containsStr(invRaw, "item:sword_short#w1") {
+		t.Fatalf("equipped item still in inventory (not disjoint) — duplication root cause: %#v", invRaw)
+	}
+
+	// Death drops the weapon exactly ONCE (boot world has no other items;
+	// gold zeroed) — 2 would mean the inventory+equipped overlap dup.
+	svc := wa.GetService("combat").(combat.CombatService)
+	svc.DealDamage(wa, "hero", 999, "test", "")
+	wa.Bus.Drain(wa)
+	items := 0
+	for _, id := range wa.EntityIDs() {
+		if e := wa.EntityByID(id); e != nil && e.Archetype() == "item" {
+			items++
+		}
+	}
+	if items != 1 {
+		t.Fatalf("conservation: expected exactly 1 dropped item, got %d (duplication bug?)", items)
+	}
+}
+
+func containsStr(raw any, want string) bool {
+	switch x := raw.(type) {
+	case []string:
+		for _, s := range x {
+			if s == want {
+				return true
+			}
+		}
+	case []any:
+		for _, v := range x {
+			if s, _ := v.(string); s == want {
+				return true
+			}
+		}
+	}
+	return false
+}

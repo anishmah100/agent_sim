@@ -449,16 +449,35 @@ func (s *System) handleEquip(w syscore.World, e syscore.Entity, env *syscore.Act
 	}
 	slot := p.Slot
 	if slot == "" {
-		slot = "hand"
+		// Default to "weapon" — combat.weaponStats reads ONLY
+		// equipped["weapon"], so a bare `equip <weapon>` must land there
+		// or it grants zero combat benefit (audit HIGH).
+		slot = "weapon"
 	}
 	w.MutateEntity(e.ID(), func(real syscore.Entity) {
+		cur := extrasStrSlice(real, "inventory")
+		idx := resolveItemRef(cur, p.Item)
+		if idx < 0 {
+			return // item left inventory between check and mutate
+		}
+		canonical := cur[idx]
 		eq, _ := real.GetExtra("equipped")
 		m, _ := eq.(map[string]any)
 		if m == nil {
 			m = map[string]any{}
 		}
-		m[slot] = p.Item
+		// MOVE the item from inventory into the slot so the two
+		// collections are DISJOINT (audit HIGH): otherwise it sits in
+		// both, the death-drop spawns it twice (duplication), and
+		// drop/give leave a phantom still-equipped weapon. A displaced
+		// previously-equipped item returns to inventory.
+		cur = removeAt(cur, idx)
+		if prev, ok := m[slot].(string); ok && prev != "" {
+			cur = append(cur, prev)
+		}
+		m[slot] = canonical
 		real.SetExtra("equipped", m)
+		real.SetExtra("inventory", cur)
 	})
 	w.SetEntityAction(e.ID(), "interact", 18) // use animation
 	res.Accepted = true
