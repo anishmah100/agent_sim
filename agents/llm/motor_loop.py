@@ -59,6 +59,7 @@ class MotorLoop:
     _last_deliberate_tick: int = -10 ** 9
     _task: Optional["asyncio.Task[dict]"] = None
     _prev_visible: set = field(default_factory=set)
+    _seen_violent: set = field(default_factory=set)  # event_ids of violent audible events already deliberated on
 
     # ----- setup / perception -----
 
@@ -93,9 +94,15 @@ class MotorLoop:
         vis = {e.entity_id for e in (obs.visible_entities or [])}
         if vis - self._prev_visible:
             return True
+        # Only a NEW violent event is salient. Without this de-dup (mirroring
+        # the visible-entity set difference above), the same death_scream re-
+        # triggered an LLM deliberation every observation for its whole ~240-
+        # tick lifetime in the audible ring — pure token/cost waste (audit).
         for ev in (obs.audible or []):
             if (getattr(ev, "sound_kind", "") or ev.kind) in ("death_scream", "kill_witnessed"):
-                return True
+                eid = getattr(ev, "event_id", None)
+                if eid is None or eid not in self._seen_violent:
+                    return True
         return False
 
     def start_deliberation(self, prompt: str, call_llm: Callable[[str], dict]) -> None:
@@ -110,6 +117,13 @@ class MotorLoop:
         task, self._task = self._task, None
         self._last_deliberate_tick = obs.world_tick
         self._prev_visible = {e.entity_id for e in (obs.visible_entities or [])}
+        # Snapshot currently-audible violent events as "seen" so they don't
+        # re-trigger until a genuinely new one arrives.
+        self._seen_violent = {
+            getattr(ev, "event_id", None)
+            for ev in (obs.audible or [])
+            if (getattr(ev, "sound_kind", "") or ev.kind) in ("death_scream", "kill_witnessed")
+        }
         try:
             return task.result()
         except Exception as e:
