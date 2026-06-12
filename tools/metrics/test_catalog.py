@@ -45,9 +45,11 @@ def fixture_db(tmp_path):
         (3, 2, "EntityDied",      "combat",          {"EntityID": "goblin", "Killer": "hero"}),
         (4, 3, "GoldTransferred", "economy",         {"From": "hero", "To": "mari", "Amount": 5, "Cause": "pay"}),
         (5, 4, "GoldTransferred", "economy",         {"From": "hero", "To": "blacksmith", "Amount": 20, "Cause": "trade"}),
-        (6, 5, "Speech",          "social",          {}),
+        (6, 5, "Speech",          "social",          {"Mode": "speak"}),
         (7, 6, "Whisper",         "social",          {}),
-        (8, 7, "Shout",           "social",          {}),
+        # Shouts are emitted as a Speech event with Mode='shout', NOT a
+        # 'Shout' kind (the old fixture encoded the bug this test now guards).
+        (8, 7, "Speech",          "social",          {"Mode": "shout"}),
         (9, 8, "EntityMoved",     "movement",        {}),
     ]
     db.executemany(

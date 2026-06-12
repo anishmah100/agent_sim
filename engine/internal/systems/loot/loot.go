@@ -86,7 +86,7 @@ func (s *System) manifest() manifest.SystemDeclaration {
 				Description:      "Strip gold and inventory from an adjacent dead entity.",
 				ParamsSchema:     json.RawMessage(`{"type":"object","properties":{"target":{"type":"string"}},"required":["target"]}`),
 				Preconditions:    []string{"target within 1 tile", "target has hp == 0"},
-				RejectionReasons: []string{"bad_params", "unknown_target", "target_too_far", "target_alive"},
+				RejectionReasons: []string{"bad_params", "unknown_target", "not_a_target", "target_too_far", "target_alive", "not_enough_gold"},
 				EmitsEvents:      []string{"GoldTransferred"},
 			},
 		},

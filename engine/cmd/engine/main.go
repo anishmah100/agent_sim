@@ -287,7 +287,7 @@ func main() {
 		_ = json.NewEncoder(rw).Encode(map[string]any{
 			"name":       "agent_sim engine",
 			"version":    "0.0.2",
-			"scenario":   *flagScenario,
+			"scenario":   scenarioPkg,
 			"world":      w.MapID,
 			"world_dims": []int{w.WidthTiles, w.HeightTiles},
 			"tick_rate":  tickRate,
@@ -401,7 +401,7 @@ func main() {
 
 	go func() {
 		log.Printf("engine listening on %s (scenario=%s)",
-			*flagAddr, *flagScenario)
+			*flagAddr, scenarioPkg)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %v", err)
 		}

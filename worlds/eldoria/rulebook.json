@@ -43,7 +43,7 @@
   "tunings": [
     {
       "name": "attack_damage",
-      "value": 10
+      "value": 20
     },
     {
       "name": "defend_damage_mul",
@@ -55,7 +55,11 @@
     },
     {
       "name": "hunger_damage_above",
-      "value": 0.9
+      "value": 0.7
+    },
+    {
+      "name": "hunger_damage_interval_ticks",
+      "value": 324
     },
     {
       "name": "hunger_damage_rate",
@@ -63,7 +67,7 @@
     },
     {
       "name": "hunger_per_tick",
-      "value": 0.0008
+      "value": 0.00001
     },
     {
       "name": "max_hp",
@@ -71,15 +75,47 @@
     },
     {
       "name": "pay_max_range_tiles",
-      "value": 1
+      "value": 3
     },
     {
-      "name": "shout_muffle_radius",
-      "value": 20
+      "name": "respawn_batch",
+      "value": 12
+    },
+    {
+      "name": "respawn_cap",
+      "value": 300
+    },
+    {
+      "name": "respawn_hub_x",
+      "value": 764
+    },
+    {
+      "name": "respawn_hub_y",
+      "value": 864
+    },
+    {
+      "name": "respawn_interval_ticks",
+      "value": 180
+    },
+    {
+      "name": "respawn_radius",
+      "value": 16
     },
     {
       "name": "shout_radius",
       "value": 30
+    },
+    {
+      "name": "spawn_hub_x",
+      "value": 764
+    },
+    {
+      "name": "spawn_hub_y",
+      "value": 864
+    },
+    {
+      "name": "spawn_radius",
+      "value": 14
     },
     {
       "name": "speak_radius",
@@ -188,7 +224,8 @@
         "target_too_far",
         "not_owner",
         "broken_blueprint",
-        "missing_materials"
+        "missing_materials",
+        "no_inventory_service"
       ],
       "emits_events": [
         "ConstructionAdvanced",
@@ -206,11 +243,33 @@
       "rejection_reasons": [
         "bad_params",
         "unknown_target",
-        "target_too_far"
+        "not_a_target",
+        "self_target",
+        "target_too_far",
+        "out_of_range"
       ],
       "emits_events": [
         "DamageDealt",
         "EntityDied"
+      ]
+    },
+    {
+      "name": "buy_food",
+      "category": "common",
+      "system": "money",
+      "description": "Buy a meal: spend food_price gold to reduce hunger by food_relief. The economy's gold sink + survival loop. With market_radius\u003e0, must be at a market stall.",
+      "preconditions": [
+        "hunger \u003e 0",
+        "self has at least food_price gold",
+        "(if market_radius\u003e0) a market stall within range"
+      ],
+      "rejection_reasons": [
+        "not_hungry",
+        "not_enough_gold",
+        "no_market_nearby"
+      ],
+      "emits_events": [
+        "GoldSpent"
       ]
     },
     {
@@ -229,7 +288,8 @@
         "not_a_tree",
         "target_too_far",
         "no_yield",
-        "depleted"
+        "depleted",
+        "inventory_full"
       ],
       "emits_events": [
         "ResourceHarvested",
@@ -272,6 +332,17 @@
       ]
     },
     {
+      "name": "cook",
+      "category": "common",
+      "system": "inventory",
+      "description": "Turn a raw food item in inventory into its cooked, more-filling form (e.g. fish_raw -\u003e fish_cooked).",
+      "rejection_reasons": [
+        "bad_params",
+        "not_in_inventory",
+        "not_cookable"
+      ]
+    },
+    {
       "name": "defend",
       "category": "common",
       "system": "combat",
@@ -311,6 +382,20 @@
       ]
     },
     {
+      "name": "eat",
+      "category": "common",
+      "system": "inventory",
+      "description": "Consume a food item from inventory; subtracts its satiety from hunger (clamped at 0).",
+      "rejection_reasons": [
+        "bad_params",
+        "not_in_inventory",
+        "not_food"
+      ],
+      "emits_events": [
+        "AteFood"
+      ]
+    },
+    {
       "name": "enter",
       "category": "common",
       "system": "property",
@@ -327,7 +412,8 @@
         "not_a_building",
         "target_too_far",
         "already_inside",
-        "locked"
+        "locked",
+        "enter_failed"
       ],
       "emits_events": [
         "EnteredBuilding"
@@ -352,10 +438,33 @@
         "self is currently inside a building"
       ],
       "rejection_reasons": [
-        "not_inside"
+        "not_inside",
+        "exit_failed"
       ],
       "emits_events": [
         "ExitedBuilding"
+      ]
+    },
+    {
+      "name": "forage",
+      "category": "common",
+      "system": "resources",
+      "description": "Gather fruit (apple) from an adjacent tree/bush without felling it. Renewable food source; the source ripens again after forage_cooldown_ticks.",
+      "preconditions": [
+        "target is archetype=tree or bush",
+        "target within 1 tile",
+        "target is ripe (cooldown elapsed)"
+      ],
+      "rejection_reasons": [
+        "bad_params",
+        "unknown_target",
+        "not_forageable",
+        "target_too_far",
+        "not_ripe",
+        "inventory_full"
+      ],
+      "emits_events": [
+        "ResourceHarvested"
       ]
     },
     {
@@ -366,8 +475,11 @@
       "rejection_reasons": [
         "bad_params",
         "unknown_target",
+        "not_a_target",
+        "self_target",
         "target_too_far",
-        "not_in_inventory"
+        "not_in_inventory",
+        "inventory_full"
       ],
       "emits_events": [
         "ItemTransferred"
@@ -416,8 +528,10 @@
       "rejection_reasons": [
         "bad_params",
         "unknown_target",
+        "not_a_target",
         "target_too_far",
-        "target_alive"
+        "target_alive",
+        "not_enough_gold"
       ],
       "emits_events": [
         "GoldTransferred"
@@ -439,7 +553,8 @@
         "not_a_rock",
         "target_too_far",
         "no_yield",
-        "depleted"
+        "depleted",
+        "inventory_full"
       ],
       "emits_events": [
         "ResourceHarvested",
@@ -452,12 +567,14 @@
       "system": "money",
       "description": "Transfer gold to an adjacent entity.",
       "preconditions": [
-        "target within 1 tile",
+        "target within pay_max_range_tiles (default 1) chebyshev",
         "self has at least `amount` gold"
       ],
       "rejection_reasons": [
         "bad_params",
         "unknown_target",
+        "not_a_target",
+        "self_target",
         "target_too_far",
         "not_enough_gold"
       ],
@@ -478,8 +595,10 @@
       "rejection_reasons": [
         "bad_params",
         "not_an_item",
+        "unknown_target",
         "target_too_far",
-        "inventory_full"
+        "inventory_full",
+        "money_service_missing"
       ],
       "emits_events": [
         "ItemPicked"
@@ -500,6 +619,7 @@
         "unknown_blueprint",
         "target_too_far",
         "unwalkable",
+        "occupied",
         "no_inventory_service",
         "missing_materials",
         "spawn_failed"
@@ -513,9 +633,14 @@
       "category": "common",
       "system": "verbalquests",
       "description": "Propose a verbal contract to a known entity. Records the contract on both parties' extras.contracts.",
+      "preconditions": [
+        "target is a known agent (any distance)",
+        "non-empty terms"
+      ],
       "rejection_reasons": [
         "bad_params",
         "unknown_target",
+        "not_a_target",
         "self_target",
         "empty_terms"
       ],
@@ -551,9 +676,12 @@
       "rejection_reasons": [
         "bad_params",
         "unknown_target",
+        "not_a_target",
+        "self_target",
         "target_too_far",
         "not_in_inventory",
-        "target_not_enough_gold"
+        "target_not_enough_gold",
+        "inventory_full"
       ],
       "emits_events": [
         "GoldTransferred",
@@ -602,7 +730,16 @@
       "name": "work_for_pay",
       "category": "common",
       "system": "money",
-      "description": "Perform labor (stub: just credits gold). Real version will validate a work-site."
+      "description": "Perform labor at a worksite (any building within worksite_radius) for a wage.",
+      "preconditions": [
+        "a building within worksite_radius tiles"
+      ],
+      "rejection_reasons": [
+        "no_worksite_nearby"
+      ],
+      "emits_events": [
+        "GoldTransferred"
+      ]
     },
     {
       "name": "read",

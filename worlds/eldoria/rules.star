@@ -42,7 +42,8 @@ register_tuning("pay_max_range_tiles", 3)       # pay + give: short social range
 register_tuning("whisper_radius",      2)
 register_tuning("speak_radius",        8)
 register_tuning("shout_radius",        30)
-register_tuning("shout_muffle_radius", 20)      # outside r=20, content garbled
+# (removed shout_muffle_radius — no system ever read it; advertising a dead
+#  garbling feature to agents was a false claim. Audit MEDIUM.)
 
 # World dynamism — periodic item respawn (P4 user feedback: food
 # was rare + items were statically fixed). Every respawn_interval

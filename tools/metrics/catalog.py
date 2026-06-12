@@ -85,9 +85,13 @@ def compute_all(db_path: str) -> Metrics:
             "FROM events WHERE kind='GoldTransferred' GROUP BY cause")
 
         # Social.
-        m.speech_count  = _scalar(db, "SELECT COUNT(*) FROM events WHERE kind='Speech'")
+        # speak and shout are BOTH emitted as kind='Speech', discriminated by
+        # the Mode payload field ('speak' | 'shout'); the engine never emits a
+        # 'Shout' kind. Querying kind='Shout' silently returned 0 and let
+        # speech_count absorb shouts (audit MEDIUM). Whisper is its own kind.
+        m.speech_count  = _scalar(db, "SELECT COUNT(*) FROM events WHERE kind='Speech' AND COALESCE(json_extract(payload,'$.Mode'),'speak')<>'shout'")
         m.whisper_count = _scalar(db, "SELECT COUNT(*) FROM events WHERE kind='Whisper'")
-        m.shout_count   = _scalar(db, "SELECT COUNT(*) FROM events WHERE kind='Shout'")
+        m.shout_count   = _scalar(db, "SELECT COUNT(*) FROM events WHERE kind='Speech' AND json_extract(payload,'$.Mode')='shout'")
         m.sound_count   = _scalar(db, "SELECT COUNT(*) FROM events WHERE kind='Sound'")
 
         # Cognition.

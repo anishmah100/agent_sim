@@ -105,6 +105,15 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 		w.MutateEntity(id, func(real syscore.Entity) {
 			real.SetExtra("hunger", next)
 		})
+		// Crossing detection runs EVERY tick (hunger increments every tick),
+		// decoupled from the damage-interval gate below. The old code emitted
+		// HungerSpike only inside the damage block, so a crossing that didn't
+		// land on a damage-interval tick — ~99.7% of them at eldoria's
+		// interval=324 — was silently dropped (audit MEDIUM). The crossing
+		// (prev below → now above), not sustained starvation, is the signal.
+		if rate > 0 && curr <= above && next > above {
+			w.QueueEvent(HungerSpike{EntityID: id, Hunger: next})
+		}
 		// Damage path. Only apply on tick boundaries of `interval`,
 		// so 60 Hz × interval 324 ≈ 1 HP per 5.4 sec at rate=1.
 		if next > above && rate > 0 && damageThisTick {
@@ -147,16 +156,8 @@ func (s *System) tickHunger(w syscore.World, tick uint64) {
 				if w.InsideBuilding(id) == "" {
 					w.EmitSound(e.Pos(), "hunger_pang")
 				}
-				// Only emit on the CROSSING (prev below → now above). The
-				// previous code fired every tick the entity was above the
-				// threshold — at scale (250 entities in Eldoria) this
-				// drowned every other event in the historian (25,250 of
-				// 25,303 records in the A9 smoke). Crossings are the
-				// signal; sustained starvation is implicit in the hp
-				// trajectory.
-				if curr <= above {
-					w.QueueEvent(HungerSpike{EntityID: id, Hunger: next})
-				}
+				// (HungerSpike crossing event now emitted above, every tick,
+				// decoupled from this damage-interval gate.)
 			}
 		}
 	}
