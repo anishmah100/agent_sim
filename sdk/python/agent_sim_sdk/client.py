@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
@@ -153,6 +154,9 @@ class Agent:
                 except asyncio.QueueEmpty:
                     break
                 if obs is _STREAM_END:
+                    if self._fatal_error:
+                        raise RuntimeError(
+                            f"engine rejected connection: {self._fatal_error}")
                     return
             yield obs
 
@@ -196,7 +200,6 @@ class Agent:
         """
         if not self._ws:
             raise RuntimeError("not connected")
-        import logging
         loop = asyncio.get_running_loop()
         futures: list[asyncio.Future[ActionResult]] = []
         sent_action_ids: list[str] = []
@@ -369,7 +372,6 @@ class Agent:
             try:
                 obs = _ObservationAdapter.validate_python(payload)
             except Exception as e:
-                import logging
                 # ERROR (not WARNING) with the full error: a persistent
                 # validation failure silently blinds the agent, so it must
                 # be loud. (M4)
@@ -456,7 +458,6 @@ async def register_and_connect(
                 try:
                     act = await brain(obs)
                 except Exception as e:
-                    import logging
                     logging.getLogger("agent_sim_sdk").warning(
                         "brain raised %s — skipping this obs", e,
                     )
@@ -465,7 +466,6 @@ async def register_and_connect(
                     try:
                         await agent.act(act)
                     except Exception as e:
-                        import logging
                         logging.getLogger("agent_sim_sdk").warning(
                             "act(%s) failed: %s", type(act).__name__, e,
                         )
