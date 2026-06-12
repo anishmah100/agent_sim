@@ -15,6 +15,7 @@ type AudibleEvent struct {
 	Tick       uint64 `json:"tick"`
 	radius     int    // engine-internal; distance-of-hearing
 	whisperTo  string // engine-internal; only this entity hears
+	fromInside string // engine-internal; building the speaker was inside ("" = overworld). Sound doesn't cross the wall.
 }
 
 // emitSpeech pushes a speech event onto the ring buffer with the given
@@ -28,6 +29,7 @@ func (w *World) emitSpeech(e *Entity, kind, text string, radius int) {
 		Text:       text,
 		Tick:       w.tick,
 		radius:     radius,
+		fromInside: e.InsideBuilding,
 	})
 }
 
@@ -43,6 +45,7 @@ func (w *World) emitWhisper(speaker, target *Entity, text string) {
 		Tick:       w.tick,
 		radius:     1,
 		whisperTo:  target.EntityID,
+		fromInside: speaker.InsideBuilding,
 	})
 }
 
@@ -125,6 +128,12 @@ func formatUint64(n uint64) string {
 // Whispers are excluded — they're 1-on-1 conversation and not for
 // public consumption.
 func (w *World) RecentAudibleAll(sinceTick uint64) []AudibleEvent {
+	// RLock: the viewer broadcast goroutine calls this lock-free while Tick
+	// mutates w.audible (audibleAppend) under the write lock — a data race on
+	// the ring (audit HIGH). VisibleAudible is safe because its caller
+	// (BuildObservation) already holds the lock; this public path did not.
+	w.mu.RLock()
+	defer w.mu.RUnlock()
 	out := make([]AudibleEvent, 0, 8)
 	for _, ev := range w.audible {
 		if ev.Tick < sinceTick {
@@ -132,6 +141,9 @@ func (w *World) RecentAudibleAll(sinceTick uint64) []AudibleEvent {
 		}
 		if ev.whisperTo != "" {
 			continue
+		}
+		if ev.fromInside != "" {
+			continue // inside-building speech isn't part of the overworld bubble feed
 		}
 		out = append(out, ev)
 	}
@@ -150,6 +162,13 @@ func (w *World) VisibleAudible(e *Entity, sinceTick uint64) []AudibleEvent {
 			continue
 		}
 		if ev.whisperTo != "" && ev.whisperTo != e.EntityID {
+			continue
+		}
+		// Sound doesn't cross a building wall: an outside listener must not
+		// hear an inside speaker, nor vice versa — otherwise speech leaks the
+		// (visually concealed) speaker's identity + door position to the open
+		// world (audit HIGH). Same building → they hear each other.
+		if ev.fromInside != e.InsideBuilding {
 			continue
 		}
 		if chebyshev(e.LogicalTile, ev.FromPos) > ev.radius {

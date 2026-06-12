@@ -114,6 +114,31 @@ func TestHearing_SpeakLocal(t *testing.T) {
 	}
 }
 
+// A building wall must block sound: an outside listener must not hear an
+// inside speaker, or speech leaks the visually-concealed speaker's identity
+// + door position (audit HIGH). Same building → they hear each other.
+func TestHearing_BuildingWallBlocksSpeech(t *testing.T) {
+	w := loadTestWorld(t)
+	a := w.entities["a"]
+	b := w.entities["b"]
+	a.InsideBuilding = "tavern"
+	w.emitSpeech(a, "shout", "SECRET", 15) // in range (7 apart < 15) but walled off
+	if aud := w.VisibleAudible(b, 0); len(aud) != 0 {
+		t.Fatalf("outside B must not hear inside A's shout; got %v", aud)
+	}
+	b.InsideBuilding = "tavern" // same room now
+	w.emitSpeech(a, "shout", "SAMEROOM", 15)
+	found := false
+	for _, e := range w.VisibleAudible(b, 0) {
+		if e.Text == "SAMEROOM" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("B in the same building should hear A")
+	}
+}
+
 // Movement is the single-tile `step` verb now (the multi-tile engine-
 // pathfinding `move` verb was removed in the movement redesign). Step
 // behaviour is covered by step_test.go.
