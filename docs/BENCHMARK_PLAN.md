@@ -112,17 +112,25 @@ recorded — so the referee cannot check "did B receive the whisper" today.
 The engine already computes it; just persist it. One add unlocks the
 perception-fidelity gap + the referee + stream-pure observers.
 
-## Phase 0 — correctness pass (game-agnostic, FIRST), ranked
+## Phase 0 — correctness pass — COMPLETE ✓ (2026-06-10)
 
-1. Complete the tape (log per-agent perceptions) — lynchpin for the rest.
-2. Per-verb chain matrix (extend `paths_e2e`) asserting all four links incl. the
-   perception link.
-3. Invariants (gold/entity conservation, enter↔exit event pairing).
-4. Visual-fidelity oracle (combat visible, positions match, no teleport/ghost).
-5. Runtime referee (re-derive expected perception/events from the tape, diff vs.
-   what was delivered) — a fidelity-observer.
-6. Symmetry test (settles the parked determinism/fairness question empirically).
-7. Resume the 13-subsystem adversarial code audit (run id `wf_78151fe8-48c`).
+1. ✅ **Tape** — engine logs per-agent delivered perceptions (`-log-perceptions`).
+2. ✅ **Chain matrix** (`tools/audit/chain_matrix.py`) — per-verb four-link
+   fidelity incl. the perception link. 9/9 pass.
+3. ✅ **Invariants** (`tools/audit/invariants.py`) — enter/exit pairing, gold
+   source/sink integrity, no post-mortem activity. CLEAN.
+4. ✅ **Visual oracle** (`tools/audit/visual_oracle.py`) — viewer frames match
+   engine state (position fidelity + no teleport). All pass. (Pixel-level
+   animation, e.g. BLK-1 combat, is a separate manual/Playwright pass.)
+5. ✅ **Referee** (`tools/audit/referee.py`) — offline fidelity-observer:
+   whisper delivery, perception provenance, confidentiality. CLEAN. The
+   credibility instrument for published findings.
+6. ✅ **Symmetry test** (`tools/audit/symmetry_test.py`) — SETTLED the parked
+   fairness Q: two identical agents contend per-tick, A-first 0.53 → SYMMETRIC,
+   no arrival-order bias. No lockstep needed; averaging suffices. (Normalizing
+   for cross-model inference latency stays a benchmark-design choice for later.)
+7. ✅ **Engine-core audit** — 22 bugs found + fixed (see
+   `AUDIT_FINDINGS_2026-06-10_enginecore.md`).
 
 ## Open / next (Phase 1+, after correctness pass)
 - Game #2 = power-acquisition (flagship). Doubles as the extensibility proof.
